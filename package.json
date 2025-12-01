@@ -1,0 +1,49 @@
+{
+  "name": "cmc-chile-2025",
+  "version": "1.0.0",
+  "description": "Aplicación móvil para CMC Chile 2025 - Congreso de Mantenimiento y Confiabilidad",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "import": "scripts/importData.js",
+    "deploy": "npm run build && firebase deploy"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "date-fns": "^2.30.0",
+    "html5-qrcode": "^2.3.8",
+    "lucide-react": "^0.294.0",
+    "qrcode.react": "^3.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-qr-code": "^2.0.18",
+    "react-router-dom": "^6.30.1",
+    "recharts": "^2.15.4",
+    "sweetalert2": "^11.26.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "vite": "^7.1.12"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "author": "CMC Latinoamérica",
+  "license": "MIT",
+  "main": "firebase.js",
+  "keywords": []
+}
