@@ -1,2 +1,0 @@
-PS C:\Users\SISTEMAS\App CMC\cmc-latam-app - V2\cmc-backend> node seed_admin.js
-Admin created: d15459ad-b460-41ff-a8ae-263f858fc48c email: admin@cmc.local password: Admin123!
