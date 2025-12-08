@@ -14,34 +14,41 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// 🌍 Orígenes permitidos
 const allowedOrigins = [
-  "http://localhost:3000",
-  "https://app-cmc.web.app",
-  "https://cmc-app.onrender.com"
+  "https://app-cmc.web.app",     // Frontend en Hosting
+  "https://cmc-app.onrender.com", // Backend Render (por si Render llama a otro servicio)
+  "http://localhost:3000"         // Desarrollo local
 ];
 
+// Middleware CORS principal
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS bloqueado: " + origin));
-    }
-  },
+  origin: [
+    "https://app-cmc.web.app",
+    "http://localhost:3000"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 // =========================================
 // 🔔 Server Sent Events (SSE) para notificaciones
 // =========================================
 app.get("/events", (req, res) => {
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", "https://app-cmc.web.app");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Connection", "keep-alive");
-  res.setHeader("Access-Control-Allow-Origin", process.env.ALLOWED_ORIGINS.split(",")[0]);
   res.flushHeaders();
 
-  // Enviar ping cada 15 segundos para mantener viva la conexión
+  // ping cada 15s
   const interval = setInterval(() => {
     res.write(`data: ${JSON.stringify({ ping: Date.now() })}\n\n`);
   }, 15000);
@@ -51,7 +58,9 @@ app.get("/events", (req, res) => {
   });
 });
 
-// Rutas
+// ==========================
+// Rutas API
+// ==========================
 app.use("/auth", authRoutes);
 app.use("/agenda", agendaRoutes);
 app.use("/speakers", speakersRoutes);
