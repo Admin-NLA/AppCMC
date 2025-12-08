@@ -16,7 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // 🌍 Orígenes permitidos
 const allowedOrigins = [
-  "https://app-cmc.web.app",     // Frontend en Firebase Hosting
+  "https://app-cmc.web.app",     // Frontend en Hosting
   "https://cmc-app.onrender.com", // Backend Render (por si Render llama a otro servicio)
   "http://localhost:3000"         // Desarrollo local
 ];
