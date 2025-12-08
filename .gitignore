@@ -63,3 +63,10 @@ coverage/
 # ===========================================
 jest/
 __tests__/
+
+# Frontend env
+.vite
+.env.local
+.env.development
+.env.production
+.env
