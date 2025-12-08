@@ -68,6 +68,7 @@ app.use("/expositores", expositoresRoutes);
 app.use("/dashboard", dashboardRoutes);
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () =>
-  console.log(`🚀 CMC Backend corriendo en puerto ${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log("DB URL:", process.env.DATABASE_URL);
+  console.log(`🚀 CMC Backend corriendo en puerto ${PORT}`);
+});
