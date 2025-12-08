@@ -1,0 +1,10 @@
+{
+	"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImQxNTQ1OWFkLWI0NjAtNDFmZi1hOGFlLTI2M2Y4NThmYzQ4YyIsImVtYWlsIjoiYWRtaW5AY21jLmxvY2FsIiwicm9sIjoiYWRtaW4iLCJub21icmUiOiJBZG1pbiBDTUMiLCJpYXQiOjE3NjQxODQyOTUsImV4cCI6MTc2NDIxMzA5NX0.t1Lejr7yUn2z-jQiFBIfmFnYinTmCtSQ3c5frZ0npiA",
+	"user": {
+		"id": "d15459ad-b460-41ff-a8ae-263f858fc48c",
+		"email": "admin@cmc.local",
+		"rol": "admin",
+		"nombre": "Admin CMC",
+		"avatar": null
+	}
+}

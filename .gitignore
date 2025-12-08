@@ -1,0 +1,72 @@
+# ===========================================
+# 🔥 IGNORAR FIREBASE COMPLETAMENTE
+# ===========================================
+.firebase/
+.firebaserc
+firebase.json
+firebase-debug.log
+firebase-debug.*.log
+firebase_app.js
+firebase_auth.js
+firebase_firestore.js
+firebase-messaging-sw.js
+
+# ===========================================
+# 🔐 Environment files
+# ===========================================
+.env
+.env.local
+.env.production
+
+# ===========================================
+# 📦 Node
+# ===========================================
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===========================================
+# 🏗 Vite / React build output
+# ===========================================
+dist/
+.cache/
+.vite/
+
+# ===========================================
+# 🚀 Logs
+# ===========================================
+logs/
+*.log
+*.gz
+
+# ===========================================
+# 📁 System files
+# ===========================================
+.DS_Store
+Thumbs.db
+
+# ===========================================
+# 🔨 Build / Coverage
+# ===========================================
+coverage/
+.nyc_output/
+
+# ===========================================
+# 🔧 Lock files
+# ===========================================
+.yarn-integrity
+
+# ===========================================
+# 🧪 Test
+# ===========================================
+jest/
+__tests__/
+
+# Frontend env
+.vite
+.env.local
+.env.development
+.env.production
+.env
