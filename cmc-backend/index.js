@@ -22,18 +22,15 @@ const allowedOrigins = [
 ];
 
 // Middleware CORS principal
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("CORS bloqueado: " + origin));
-      }
-    },
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: [
+    "https://app-cmc.web.app",
+    "http://localhost:3000"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
 // =========================================
 // 🔔 Server Sent Events (SSE) para notificaciones
@@ -42,7 +39,8 @@ app.get("/events", (req, res) => {
   const origin = req.headers.origin;
 
   if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Origin", "https://app-cmc.web.app");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
 
   res.setHeader("Cache-Control", "no-cache");
