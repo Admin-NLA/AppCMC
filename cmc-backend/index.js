@@ -14,14 +14,42 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://app-cmc.web.app",
+  "https://cmc-app.onrender.com"
+];
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS.split(","),
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS bloqueado: " + origin));
+    }
+  },
+  credentials: true,
 }));
 
-// ❌ ELIMINAR ESTO COMPLETAMENTE
-// pool.connect()
+// =========================================
+// 🔔 Server Sent Events (SSE) para notificaciones
+// =========================================
+app.get("/events", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", process.env.ALLOWED_ORIGINS.split(",")[0]);
+  res.flushHeaders();
+
+  // Enviar ping cada 15 segundos para mantener viva la conexión
+  const interval = setInterval(() => {
+    res.write(`data: ${JSON.stringify({ ping: Date.now() })}\n\n`);
+  }, 15000);
+
+  req.on("close", () => {
+    clearInterval(interval);
+  });
+});
 
 // Rutas
 app.use("/auth", authRoutes);
