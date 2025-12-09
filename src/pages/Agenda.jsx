@@ -36,21 +36,16 @@ export default function Agenda() {
 
   const loadSessions = async () => {
     try {
-      const q = query(collection(db, "sessions"), orderBy("horaInicio"));
-      const snapshot = await getDocs(q);
-
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      setSessions(data);
-    } catch (error) {
-      console.error("Error al cargar sesiones:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda/sessions`);
+      const data = await res.json();
+      
+      setSessions(data.sessions || []);
+      } catch (error) {
+        console.error("Error al cargar sesiones:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
   const filterSessions = () => {
     const filtered = sessions.filter((s) => s.dia === selectedDay);
@@ -61,28 +56,26 @@ export default function Agenda() {
         Favoritos (sin recargar página)
   ========================================== */
   const toggleFavorite = async (sessionId) => {
-    if (!userProfile) return;
+  if (!userProfile) return;
 
-    try {
-      const userRef = doc(db, "users", userProfile.id);
-      const isFavorite = userProfile.agendaGuardada?.includes(sessionId);
+  try {
+    const isFavorite = userProfile.agendaGuardada?.includes(sessionId);
 
-      if (isFavorite) {
-        await updateDoc(userRef, {
-          agendaGuardada: arrayRemove(sessionId),
-        });
-      } else {
-        await updateDoc(userRef, {
-          agendaGuardada: arrayUnion(sessionId),
-        });
-      }
+    const url = isFavorite
+      ? `${import.meta.env.VITE_API_URL}/agenda/unfavorite/${sessionId}`
+      : `${import.meta.env.VITE_API_URL}/agenda/favorite/${sessionId}`;
 
-      // actualizar localmente sin reload
-      await refreshUserProfile();
-    } catch (error) {
-      console.error("Error al actualizar favorito:", error);
-    }
-  };
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: userProfile.id }),
+    });
+
+    await refreshUserProfile();
+  } catch (error) {
+    console.error("Error al actualizar favorito:", error);
+  }
+};
 
   /* ==========================================
         Scanner QR
@@ -118,28 +111,24 @@ export default function Agenda() {
 
   const handleScanSuccess = async (sessionQR) => {
     try {
-      const q = query(
-        collection(db, "sessions"),
-        where("qrCode", "==", sessionQR)
-      );
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda/checkin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          qr: sessionQR,
+          userId: userProfile.id,
+        }),
+      });
 
-      const snap = await getDocs(q);
+      const data = await res.json();
 
-      if (snap.empty) {
-        alert("Código QR no válido");
+      if (!res.ok) {
+        alert(data.message || "Código QR no válido");
         stopScanner();
         return;
       }
 
-      const docMatch = snap.docs[0];
-      const sessionRef = doc(db, "sessions", docMatch.id);
-
-      await updateDoc(sessionRef, {
-        checkIns: arrayUnion(userProfile.id),
-      });
-
-      alert(`✅ Asistencia registrada en: ${docMatch.data().titulo}`);
-
+      alert(`✅ Asistencia registrada en: ${data.session.titulo}`);
       stopScanner();
       loadSessions();
     } catch (err) {
