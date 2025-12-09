@@ -39,7 +39,7 @@ app.get("/events", (req, res) => {
   const origin = req.headers.origin;
 
   if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", "https://app-cmc.web.app");
+    res.setHeader("Access-Control-Allow-Origin", origin); // <-- dinámico
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
 
