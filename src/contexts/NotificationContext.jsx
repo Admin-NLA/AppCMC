@@ -37,9 +37,7 @@ export function NotificationProvider({ children }) {
 
   // 🔥 FIX — Usar import.meta.env en lugar de process.env
   useEffect(() => {
-    const URL =
-      import.meta.env.VITE_NOTIF_URL ||
-      "https://cmc-app.onrender.com/events";
+    const URL = import.meta.env.VITE_NOTIF_URL || "https://cmc-app.onrender.com/events";
 
     function connect() {
       try {

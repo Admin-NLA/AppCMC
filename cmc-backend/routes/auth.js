@@ -10,6 +10,9 @@ const router = Router();
 // --------------------------------------
 router.post("/login", async (req, res) => {
   try {
+    console.log("HEADERS:", req.headers);
+    console.log("RAW BODY:", req.rawBody);
+    console.log("REQ BODY:", req.body);
     console.log("LOGIN BODY:", req.body);
 
     const { email, password } = req.body;
