@@ -1,11 +1,14 @@
 import express from "express";
 import cors from "cors";
+import { sendSSE } from "./routes/notificaciones.js";
 import pool from "./db.js";
 import authRoutes from "./routes/auth.js";
 import agendaRoutes from "./routes/agenda.js";
 import speakersRoutes from "./routes/speakers.js";
 import expositoresRoutes from "./routes/expositores.js";
 import dashboardRoutes from "./routes/dashboard.js";
+import notificacionesRoutes from "./routes/notificaciones.js";
+import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js";
 
 import "dotenv/config";
 
@@ -69,9 +72,56 @@ app.use("/agenda", agendaRoutes);
 app.use("/speakers", speakersRoutes);
 app.use("/expositores", expositoresRoutes);
 app.use("/dashboard", dashboardRoutes);
+app.use("/notificaciones", notificacionesRoutes);
+
+// ==============================
+// CRON cada 60 segundos
+// ==============================
+setInterval(() => {
+  procesarNotificacionesProgramadas();
+}, 60 * 1000);
+
+console.log("⏲️  CRON de notificaciones programadas activo");
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log("DB URL:", process.env.DATABASE_URL);
   console.log(`🚀 CMC Backend corriendo en puerto ${PORT}`);
 });
+
+// ===========================
+// 🕒 CRON — Notificaciones programadas
+// Corre cada 30 segundos
+// ===========================
+setInterval(async () => {
+  try {
+    const pendientes = await pool.query(`
+      SELECT *
+      FROM notificaciones
+      WHERE activa = true
+        AND programada_para IS NOT NULL
+        AND enviada = false
+        AND programada_para <= NOW()
+    `);
+
+    if (pendientes.rows.length > 0) {
+      pendientes.rows.forEach(async (n) => {
+        console.log("⏰ Enviando notificación programada:", n.id);
+
+        // Enviar por SSE
+        sendSSE({
+          tipo: "NEW_NOTIFICATION",
+          data: n,
+        });
+
+        // Marcar como enviada
+        await pool.query(
+          `UPDATE notificaciones SET enviada = true WHERE id = $1`,
+          [n.id]
+        );
+      });
+    }
+  } catch (err) {
+    console.error("Error en CRON de notificaciones:", err);
+  }
+}, 30000); // 30 segundos
