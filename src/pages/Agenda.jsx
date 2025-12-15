@@ -10,6 +10,20 @@ import {
   QrCode,
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
+import { sedesPermitidasFromPases, sedeActivaPorFecha } from "../../cmc-backend/utils/sedeHelper.js";
+
+const pasesUsuario = userProfile?.pases || []; // ejemplo: ['CL']
+const sedesPermitidas = sedesPermitidasFromPases(pasesUsuario);
+const sedePorFecha = sedeActivaPorFecha();
+
+useEffect(() => {
+  // Si el usuario solo tiene 1 pase, fijamos selected sede automáticamente
+  if (sedesPermitidas.length === 1) {
+    setSelectedSede(sedesPermitidas[0].name);
+  } else if (!selectedSede && sedePorFecha) {
+    setSelectedSede(sedePorFecha.name);
+  }
+}, [userProfile]);
 
 export default function Agenda() {
   const { userProfile, refreshUserProfile } = useAuth(); // <— agrego refresco del perfil
@@ -36,16 +50,16 @@ export default function Agenda() {
 
   const loadSessions = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda/sessions`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda/sessions?sede=${encodeURIComponent(selectedSede)}`);
       const data = await res.json();
-      
+
       setSessions(data.sessions || []);
-      } catch (error) {
-        console.error("Error al cargar sesiones:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    } catch (error) {
+      console.error("Error al cargar sesiones:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filterSessions = () => {
     const filtered = sessions.filter((s) => s.dia === selectedDay);

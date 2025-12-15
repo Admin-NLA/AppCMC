@@ -34,24 +34,37 @@ export default function Dashboard() {
 
   const loadDashboard = async () => {
   try {
-    const statsRes = await API.get("/dashboard/stats");
+    const res = await API.get("/dashboard");
 
+    const { base, payload, role } = res.data;
+
+    // ---------- STATS GENERALES ----------
     setStats((prev) => ({
       ...prev,
-      totalSessions: statsRes.data.totalSessions,
-      speakers: statsRes.data.totalSpeakers,
-      exhibitors: statsRes.data.totalExpositores,
+      totalSessions: base.totals.sessions,
+      speakers: base.totals.speakers,
+      exhibitors: base.totals.expositores,
+
+      // asistente
+      mySessions: payload?.favorites?.length || 0,
+      myCheckIns: payload?.entradasPorDia?.length || 0,
+      myStandVisits: payload?.standVisits || 0,
     }));
 
-    const sessionsRes = await API.get("/dashboard/sessions");
-    setNextSessions(sessionsRes.data.sessions);
+    // ---------- PRÓXIMAS SESIONES ----------
+    setNextSessions(base.upcoming || []);
 
-  } catch (err) {
-    console.error("Error dashboard:", err);
-  } finally {
-    setLoading(false);
-  }
-};
+    // ---------- SPEAKER ----------
+    if (role === "speaker") {
+      setSpeakerSessions(payload.mySessions || []);
+    }
+
+    } catch (err) {
+      console.error("Error dashboard:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   if (loading || !userProfile) {

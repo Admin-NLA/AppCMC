@@ -1,91 +1,83 @@
 import { Router } from "express";
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import pool from "../db.js";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 
 const router = Router();
 
-// --------------------------------------
-// LOGIN
-// --------------------------------------
+/* ========================================================
+   POST — LOGIN
+======================================================== */
 router.post("/login", async (req, res) => {
   try {
-    console.log("HEADERS:", req.headers);
-    console.log("RAW BODY:", req.rawBody);
-    console.log("REQ BODY:", req.body);
-    console.log("LOGIN BODY:", req.body);
-
     const { email, password } = req.body;
 
-    // Buscar usuario en la tabla correcta
     const result = await pool.query(
       "SELECT * FROM users WHERE email = $1 LIMIT 1",
       [email]
     );
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ error: "Usuario no encontrado" });
+      return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
     const user = result.rows[0];
 
-    // Comparar contraseña
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) {
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
 
-    // Crear token
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        rol: user.rol,
-        nombre: user.nombre,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "8h" }
-    );
+    // 🔥 IMPORTANTE:
+    // user.pases viene de la BD como text[] o json, aquí siempre lo convertimos a array JS
+    const pases = Array.isArray(user.pases)
+      ? user.pases
+      : user.pases ? JSON.parse(user.pases) : [];
+
+    const tokenPayload = {
+      id: user.id,
+      email: user.email,
+      rol: user.rol,
+      pases: pases,        // ← MUY IMPORTANTE para agenda.js ♥
+      sedes: user.sedes || null,
+    };
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
     res.json({
+      message: "Login exitoso",
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        rol: user.rol,
-        nombre: user.nombre,
-        avatar: user.avatar_url,
-      },
+      user: tokenPayload,
     });
+
   } catch (err) {
     console.error("Login error:", err);
-    res.status(500).json({ error: "Error interno" });
+    res.status(500).json({ error: "Error en login" });
   }
 });
 
-// --------------------------------------
-// PERFIL (validar token)
-// --------------------------------------
-router.get("/me", async (req, res) => {
+/* ========================================================
+   POST — REGISTRO (opcional)
+======================================================== */
+router.post("/register", async (req, res) => {
   try {
-    const auth = req.headers.authorization;
+    const { email, password, rol } = req.body;
 
-    if (!auth) {
-      return res.status(401).json({ error: "No token provided" });
-    }
-
-    const token = auth.replace("Bearer ", "");
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const hashed = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      "SELECT id, email, rol, nombre, avatar_url FROM users WHERE id = $1",
-      [decoded.id]
+      `INSERT INTO users (email, password, rol, pases)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, email, rol, pases`,
+      [email, hashed, rol || "user", JSON.stringify([])]
     );
 
-    res.json(result.rows[0]);
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error("Auth me error:", err);
-    res.status(401).json({ error: "Token inválido" });
+    console.error("Register error:", err);
+    res.status(500).json({ error: "Error al registrar usuario" });
   }
 });
 
