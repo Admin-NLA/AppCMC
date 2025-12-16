@@ -12,28 +12,32 @@ import {
 import { Html5Qrcode } from "html5-qrcode";
 import { sedesPermitidasFromPases, sedeActivaPorFecha } from "../../cmc-backend/utils/sedeHelper.js";
 
-const pasesUsuario = userProfile?.pases || []; // ejemplo: ['CL']
-const sedesPermitidas = sedesPermitidasFromPases(pasesUsuario);
-const sedePorFecha = sedeActivaPorFecha();
-
-useEffect(() => {
-  // Si el usuario solo tiene 1 pase, fijamos selected sede automáticamente
-  if (sedesPermitidas.length === 1) {
-    setSelectedSede(sedesPermitidas[0].name);
-  } else if (!selectedSede && sedePorFecha) {
-    setSelectedSede(sedePorFecha.name);
-  }
-}, [userProfile]);
-
 export default function Agenda() {
-  const { userProfile, refreshUserProfile } = useAuth(); // <— agrego refresco del perfil
+  const { userProfile, refreshUserProfile } = useAuth();
+
   const [sessions, setSessions] = useState([]);
   const [filteredSessions, setFilteredSessions] = useState([]);
   const [selectedDay, setSelectedDay] = useState("lunes");
+  const [selectedSede, setSelectedSede] = useState(null); // ✅ FALTABA
   const [loading, setLoading] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [qrInstance, setQrInstance] = useState(null);
+
+  // 👇 AHORA sí existe userProfile
+  const pasesUsuario = userProfile?.pases || [];
+  const sedesPermitidas = sedesPermitidasFromPases(pasesUsuario);
+  const sedePorFecha = sedeActivaPorFecha();
+
+  useEffect(() => {
+    if (!userProfile) return;
+
+    if (sedesPermitidas.length === 1) {
+      setSelectedSede(sedesPermitidas[0].name);
+    } else if (!selectedSede && sedePorFecha) {
+      setSelectedSede(sedePorFecha.name);
+    }
+  }, [userProfile]);
 
   const days = ["lunes", "martes", "miercoles", "jueves"];
 

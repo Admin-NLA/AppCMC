@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import API from "../services/api";
 import { Link } from "react-router-dom";
-import { Calendar, Users, Building2, CheckCircle, Clock, TrendingUp, Award } from "lucide-react";
+import { Calendar, Users, Building2, CheckCircle, Clock, TrendingUp, Award, Bell } from "lucide-react";
 import Header from "../Components/layout/Header";
 
 // ============================================================
@@ -29,8 +29,8 @@ export default function Dashboard() {
   // Cargar dashboard
   // ---------------------------------------------
   useEffect(() => {
-    if (user) loadDashboard();
-  }, [user]);
+  if (user && userProfile) loadDashboard();
+  }, [user, userProfile]);
 
   const loadDashboard = async () => {
   try {
