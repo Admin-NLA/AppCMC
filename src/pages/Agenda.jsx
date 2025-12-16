@@ -23,6 +23,7 @@ export default function Agenda() {
   const [showScanner, setShowScanner] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [qrInstance, setQrInstance] = useState(null);
+  const days = ["lunes", "martes", "miercoles", "jueves"];
 
   // 👇 AHORA sí existe userProfile
   const pasesUsuario = userProfile?.pases || [];
@@ -39,9 +40,7 @@ export default function Agenda() {
     }
   }, [userProfile]);
 
-  const days = ["lunes", "martes", "miercoles", "jueves"];
-
-  /* ==========================================
+    /* ==========================================
         Cargar sesiones
   ========================================== */
   useEffect(() => {
