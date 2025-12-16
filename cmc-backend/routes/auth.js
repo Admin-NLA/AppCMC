@@ -23,7 +23,12 @@ router.post("/login", async (req, res) => {
 
     const user = result.rows[0];
 
-    const isMatch = await bcrypt.compare(password, password_hash);
+    if (!user.password_hash) {
+      return res.status(500).json({ error: "Usuario sin contraseña válida" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+
     if (!isMatch) {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
