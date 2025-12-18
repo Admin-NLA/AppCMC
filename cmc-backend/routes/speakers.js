@@ -1,23 +1,26 @@
+// cmc-backend/routes/speakers.js
 import { Router } from "express";
 import pool from "../db.js";
 import { authRequired } from "../utils/authMiddleware.js";
 
 const router = Router();
 
-// Obtener todos los speakers
+/* ========================================================
+   GET — LISTA COMPLETA DE SPEAKERS (PÚBLICA)
+======================================================== */
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM speakers ORDER BY nombre ASC"
-    );
+    const result = await pool.query("SELECT * FROM speakers ORDER BY nombre ASC");
     res.json(result.rows);
   } catch (err) {
-    console.error("Speakers GET error:", err);
+    console.error("Speakers error:", err);
     res.status(500).json({ error: "Error al obtener speakers" });
   }
 });
 
-// Obtener un speaker por ID
+/* ========================================================
+   GET — DETALLE DE SPEAKER POR ID (PÚBLICO)
+======================================================== */
 router.get("/:id", async (req, res) => {
   try {
     const result = await pool.query(
@@ -31,59 +34,77 @@ router.get("/:id", async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("Speakers GET ID error:", err);
+    console.error("Speaker ID error:", err);
     res.status(500).json({ error: "Error al obtener speaker" });
   }
 });
 
-// Crear speaker (solo admin)
+/* ========================================================
+   POST — CREAR SPEAKER (ADMIN + STAFF)
+======================================================== */
 router.post("/", authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== "admin") {
-      return res.status(403).json({ error: "Solo admin puede crear speakers" });
+    if (req.user.rol !== "admin" && req.user.rol !== "staff") {
+      return res.status(403).json({ error: "No autorizado para crear speakers" });
     }
 
-    const { nombre, bio, company, photo_url } = req.body;
+    const { nombre, bio, foto_url, sede, empresa } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO speakers (nombre, bio, company, photo_url)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO speakers (nombre, bio, foto_url, sede, empresa)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [nombre, bio, company, photo_url]
+      [nombre, bio, foto_url, sede, empresa]
     );
 
     res.status(201).json(result.rows[0]);
+
   } catch (err) {
-    console.error("Speakers POST error:", err);
+    console.error("Speaker create error:", err);
     res.status(500).json({ error: "Error al crear speaker" });
   }
 });
 
-// Editar speaker (solo admin)
+/* ========================================================
+   PUT — EDITAR SPEAKER
+   - ADMIN + STAFF pueden editar cualquier speaker
+   - SPEAKER solo puede editar su propio perfil
+======================================================== */
 router.put("/:id", authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== "admin") {
-      return res.status(403).json({ error: "Solo admin puede editar speakers" });
+    const { id } = req.params;
+
+    // SPEAKER solo puede editar su propio perfil
+    if (req.user.rol === "speaker" && req.user.speaker_id !== id) {
+      return res.status(403).json({ error: "Solo puedes editar tu propio perfil" });
     }
 
-    const { nombre, bio, company, photo_url } = req.body;
+    // ADMIN + STAFF pueden editar cualquier perfil
+    if (req.user.rol !== "admin" && req.user.rol !== "staff" && req.user.rol !== "speaker") {
+      return res.status(403).json({ error: "No autorizado para editar speakers" });
+    }
+
+    const { nombre, bio, foto_url, sede, empresa } = req.body;
 
     const result = await pool.query(
       `UPDATE speakers
-       SET nombre = $1, bio = $2, company = $3, photo_url = $4
-       WHERE id = $5
+       SET nombre=$1, bio=$2, foto_url=$3, sede=$4, empresa=$5
+       WHERE id=$6
        RETURNING *`,
-      [nombre, bio, company, photo_url, req.params.id]
+      [nombre, bio, foto_url, sede, empresa, id]
     );
 
     res.json(result.rows[0]);
+
   } catch (err) {
-    console.error("Speakers PUT error:", err);
-    res.status(500).json({ error: "Error al editar speaker" });
+    console.error("Speaker update error:", err);
+    res.status(500).json({ error: "Error al actualizar speaker" });
   }
 });
 
-// Eliminar speaker (solo admin)
+/* ========================================================
+   DELETE — ELIMINAR SPEAKER (SOLO ADMIN)
+======================================================== */
 router.delete("/:id", authRequired, async (req, res) => {
   try {
     if (req.user.rol !== "admin") {
@@ -93,8 +114,9 @@ router.delete("/:id", authRequired, async (req, res) => {
     await pool.query("DELETE FROM speakers WHERE id = $1", [req.params.id]);
 
     res.json({ message: "Speaker eliminado" });
+
   } catch (err) {
-    console.error("Speakers DELETE error:", err);
+    console.error("Speaker delete error:", err);
     res.status(500).json({ error: "Error al eliminar speaker" });
   }
 });

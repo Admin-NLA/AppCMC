@@ -4,10 +4,14 @@ const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
 });
 
-// Token automático por si existe
+// Token automático
 API.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  try {
+    const token = localStorage.getItem("token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  } catch (err) {
+    console.error("Error leyendo token:", err);
+  }
   return config;
 });
 

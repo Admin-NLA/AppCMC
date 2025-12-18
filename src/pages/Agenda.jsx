@@ -10,20 +10,37 @@ import {
   QrCode,
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
+import { sedesPermitidasFromPases, sedeActivaPorFecha } from "../../cmc-backend/utils/sedeHelper.js";
 
 export default function Agenda() {
-  const { userProfile, refreshUserProfile } = useAuth(); // <— agrego refresco del perfil
+  const { userProfile, refreshUserProfile } = useAuth();
+
   const [sessions, setSessions] = useState([]);
   const [filteredSessions, setFilteredSessions] = useState([]);
   const [selectedDay, setSelectedDay] = useState("lunes");
+  const [selectedSede, setSelectedSede] = useState(null); // ✅ FALTABA
   const [loading, setLoading] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [qrInstance, setQrInstance] = useState(null);
-
   const days = ["lunes", "martes", "miercoles", "jueves"];
 
-  /* ==========================================
+  // 👇 AHORA sí existe userProfile
+  const pasesUsuario = userProfile?.pases || [];
+  const sedesPermitidas = sedesPermitidasFromPases(pasesUsuario);
+  const sedePorFecha = sedeActivaPorFecha();
+
+  useEffect(() => {
+    if (!userProfile) return;
+
+    if (sedesPermitidas.length === 1) {
+      setSelectedSede(sedesPermitidas[0].name);
+    } else if (!selectedSede && sedePorFecha) {
+      setSelectedSede(sedePorFecha.name);
+    }
+  }, [userProfile]);
+
+    /* ==========================================
         Cargar sesiones
   ========================================== */
   useEffect(() => {
@@ -36,15 +53,10 @@ export default function Agenda() {
 
   const loadSessions = async () => {
     try {
-      const q = query(collection(db, "sessions"), orderBy("horaInicio"));
-      const snapshot = await getDocs(q);
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda/sessions?sede=${encodeURIComponent(selectedSede)}`);
+      const data = await res.json();
 
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      setSessions(data);
+      setSessions(data.sessions || []);
     } catch (error) {
       console.error("Error al cargar sesiones:", error);
     } finally {
@@ -61,28 +73,26 @@ export default function Agenda() {
         Favoritos (sin recargar página)
   ========================================== */
   const toggleFavorite = async (sessionId) => {
-    if (!userProfile) return;
+  if (!userProfile) return;
 
-    try {
-      const userRef = doc(db, "users", userProfile.id);
-      const isFavorite = userProfile.agendaGuardada?.includes(sessionId);
+  try {
+    const isFavorite = userProfile.agendaGuardada?.includes(sessionId);
 
-      if (isFavorite) {
-        await updateDoc(userRef, {
-          agendaGuardada: arrayRemove(sessionId),
-        });
-      } else {
-        await updateDoc(userRef, {
-          agendaGuardada: arrayUnion(sessionId),
-        });
-      }
+    const url = isFavorite
+      ? `${import.meta.env.VITE_API_URL}/agenda/unfavorite/${sessionId}`
+      : `${import.meta.env.VITE_API_URL}/agenda/favorite/${sessionId}`;
 
-      // actualizar localmente sin reload
-      await refreshUserProfile();
-    } catch (error) {
-      console.error("Error al actualizar favorito:", error);
-    }
-  };
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: userProfile.id }),
+    });
+
+    await refreshUserProfile();
+  } catch (error) {
+    console.error("Error al actualizar favorito:", error);
+  }
+};
 
   /* ==========================================
         Scanner QR
@@ -118,28 +128,24 @@ export default function Agenda() {
 
   const handleScanSuccess = async (sessionQR) => {
     try {
-      const q = query(
-        collection(db, "sessions"),
-        where("qrCode", "==", sessionQR)
-      );
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda/checkin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          qr: sessionQR,
+          userId: userProfile.id,
+        }),
+      });
 
-      const snap = await getDocs(q);
+      const data = await res.json();
 
-      if (snap.empty) {
-        alert("Código QR no válido");
+      if (!res.ok) {
+        alert(data.message || "Código QR no válido");
         stopScanner();
         return;
       }
 
-      const docMatch = snap.docs[0];
-      const sessionRef = doc(db, "sessions", docMatch.id);
-
-      await updateDoc(sessionRef, {
-        checkIns: arrayUnion(userProfile.id),
-      });
-
-      alert(`✅ Asistencia registrada en: ${docMatch.data().titulo}`);
-
+      alert(`✅ Asistencia registrada en: ${data.session.titulo}`);
       stopScanner();
       loadSessions();
     } catch (err) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import API from '../services/api';
+import { Bell } from 'lucide-react';
 import {
   Plus,
   Edit2,
@@ -66,7 +67,8 @@ export default function AdminPanel() {
     { id: 'sessions', label: 'Sesiones', icon: Calendar },
     { id: 'speakers', label: 'Speakers', icon: Users },
     { id: 'exhibitors', label: 'Expositores', icon: Building2 },
-    { id: 'surveys', label: 'Encuestas', icon: FileText }
+    { id: 'surveys', label: 'Encuestas', icon: FileText },
+    { id: 'notificaciones', label: 'Notificaciones', icon: Bell }
   ];
 
   if (!userProfile) {
@@ -155,6 +157,10 @@ export default function AdminPanel() {
                 <h3 className="text-xl font-bold mb-2">Gestor de Encuestas</h3>
                 <p className="text-gray-600">Sección en desarrollo</p>
               </div>
+            )}
+
+            {activeTab === 'notificaciones' && (
+              <AdminNotifications />
             )}
           </>
         )}
@@ -606,6 +612,145 @@ function ExhibitorsManager({ exhibitors }) {
       <Building2 size={48} className="mx-auto text-gray-400 mb-4" />
       <h3 className="text-xl font-bold mb-2">Gestor de Expositores</h3>
       <p className="text-gray-600">En desarrollo ({exhibitors.length} expositores)</p>
+    </div>
+  );
+}
+
+// ===== ADMIN NOTIFICATIONS =====
+function AdminNotifications() {
+  const [form, setForm] = useState({
+    titulo: '',
+    mensaje: '',
+    tipo: 'info',
+    rol: 'asistente',
+    sede: '',
+    enviarAhora: true,
+  });
+
+  const [sending, setSending] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      setSending(true);
+
+      await API.post('/notificaciones/admin', form);
+
+      alert('✅ Notificación enviada');
+      setForm({
+        titulo: '',
+        mensaje: '',
+        tipo: 'info',
+        rol: 'asistente',
+        sede: '',
+        enviarAhora: true,
+      });
+
+    } catch (err) {
+      console.error(err);
+      alert('❌ Error enviando notificación');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+        <Bell /> Enviar notificación
+      </h2>
+
+      <form
+        onSubmit={handleSubmit}
+        className="bg-gray-50 p-6 rounded-lg space-y-4"
+      >
+        <div>
+          <label className="block text-sm mb-1">Título *</label>
+          <input
+            type="text"
+            className="w-full px-3 py-2 border rounded-lg"
+            value={form.titulo}
+            onChange={(e) =>
+              setForm({ ...form, titulo: e.target.value })
+            }
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm mb-1">Mensaje *</label>
+          <textarea
+            rows={3}
+            className="w-full px-3 py-2 border rounded-lg"
+            value={form.mensaje}
+            onChange={(e) =>
+              setForm({ ...form, mensaje: e.target.value })
+            }
+            required
+          />
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm mb-1">Tipo</label>
+            <select
+              className="w-full px-3 py-2 border rounded-lg"
+              value={form.tipo}
+              onChange={(e) =>
+                setForm({ ...form, tipo: e.target.value })
+              }
+            >
+              <option value="info">Info</option>
+              <option value="alerta">Alerta</option>
+              <option value="sistema">Sistema</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm mb-1">Rol destino</label>
+            <select
+              className="w-full px-3 py-2 border rounded-lg"
+              value={form.rol}
+              onChange={(e) =>
+                setForm({ ...form, rol: e.target.value })
+              }
+            >
+              <option value="asistente">Asistentes</option>
+              <option value="staff">Staff</option>
+              <option value="speaker">Speakers</option>
+              <option value="expositor">Expositores</option>
+              <option value="admin">Admins</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm mb-1">
+              Sede (opcional)
+            </label>
+            <input
+              type="text"
+              placeholder="Ej. CDMX"
+              className="w-full px-3 py-2 border rounded-lg"
+              value={form.sede}
+              onChange={(e) =>
+                setForm({ ...form, sede: e.target.value })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4">
+          <button
+            type="submit"
+            disabled={sending}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
+          >
+            <Bell size={18} />
+            {sending ? 'Enviando...' : 'Enviar notificación'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

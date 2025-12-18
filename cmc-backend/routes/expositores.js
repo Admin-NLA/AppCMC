@@ -1,96 +1,148 @@
 import { Router } from "express";
 import pool from "../db.js";
+import { authRequired } from "../utils/authMiddleware.js";
 
 const router = Router();
 
-/* ============================================================
-   🟣 1. Obtener todos los expositores
-   ============================================================ */
-router.get("/", async (req, res) => {
+/* ========================================================
+   VER TODOS LOS EXPOSITORES
+   - Permitido para TODOS excepto Asistente Curso
+======================================================== */
+router.get("/", authRequired, async (req, res) => {
   try {
+    const rolApp = req.user.tipo_pase; // Curso, Sesiones, Combo, General, Expositor, Speaker, Staff
+
+    if (rolApp === "Curso") {
+      return res.status(403).json({
+        error: "Tu pase no permite ver la zona de expositores.",
+      });
+    }
+
     const result = await pool.query(
-      `SELECT id, nombre, descripcion, logo_url, stand, contact, created_at 
-       FROM expositores
-       ORDER BY nombre ASC`
+      "SELECT * FROM expositores ORDER BY nombre ASC"
     );
 
-    res.json({
-      ok: true,
-      expositores: result.rows
-    });
-
+    res.json(result.rows);
   } catch (err) {
-    console.error("Error obteniendo expositores:", err);
-    res.status(500).json({ ok: false, error: "Error interno al obtener expositores" });
+    console.error("Expositores error:", err);
+    res.status(500).json({ error: "Error al obtener expositores" });
   }
 });
 
-/* ============================================================
-   🟣 2. Crear nuevo expositor
-   ============================================================ */
-router.post("/", async (req, res) => {
+/* ========================================================
+   VER UN EXPOSITOR POR ID
+======================================================== */
+router.get("/:id", authRequired, async (req, res) => {
   try {
-    const { nombre, descripcion, logo_url, stand, contact } = req.body;
+    const result = await pool.query(
+      "SELECT * FROM expositores WHERE id=$1",
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Expositor no encontrado" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Expositor ID error:", err);
+    res.status(500).json({ error: "Error al obtener expositor" });
+  }
+});
+
+/* ========================================================
+   CREAR EXPOSITOR
+   - Solo Admin + Staff
+======================================================== */
+router.post("/", authRequired, async (req, res) => {
+  try {
+    if (req.user.rol !== "admin" && req.user.tipo_pase !== "Staff") {
+      return res.status(403).json({
+        error: "No tienes permisos para crear expositores",
+      });
+    }
+
+    const { nombre, descripcion, logo_url, stand, categoria } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO expositores (nombre, descripcion, logo_url, stand, contact)
+      `INSERT INTO expositores (nombre, descripcion, logo_url, stand, categoria)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [nombre, descripcion, logo_url, stand, contact]
+      [nombre, descripcion, logo_url, stand, categoria]
     );
 
-    res.json({
-      ok: true,
-      expositor: result.rows[0]
-    });
+    res.status(201).json(result.rows[0]);
 
   } catch (err) {
-    console.error("Error creando expositor:", err);
-    res.status(500).json({ ok: false, error: "Error interno al crear expositor" });
+    console.error("Crear expositor error:", err);
+    res.status(500).json({ error: "Error al crear expositor" });
   }
 });
 
-/* ============================================================
-   🟣 3. Actualizar expositor
-   ============================================================ */
-router.put("/:id", async (req, res) => {
+/* ========================================================
+   EDITAR EXPOSITOR
+   - Admin & Staff → pueden editar todos
+   - Expositor → solo su propio stand
+======================================================== */
+router.put("/:id", authRequired, async (req, res) => {
   try {
-    const { id } = req.params;
-    const { nombre, descripcion, logo_url, stand, contact } = req.body;
+    const expositorId = req.params.id;
+    const { nombre, descripcion, logo_url, stand, categoria } = req.body;
 
-    const result = await pool.query(
-      `UPDATE expositores
-       SET nombre=$1, descripcion=$2, logo_url=$3, stand=$4, contact=$5
-       WHERE id=$6
-       RETURNING *`,
-      [nombre, descripcion, logo_url, stand, contact, id]
-    );
+    // ADMIN + STAFF → todo permitido
+    if (req.user.rol === "admin" || req.user.tipo_pase === "Staff") {
+      const result = await pool.query(
+        `UPDATE expositores
+         SET nombre=$1, descripcion=$2, logo_url=$3, stand=$4, categoria=$5
+         WHERE id=$6 RETURNING *`,
+        [nombre, descripcion, logo_url, stand, categoria, expositorId]
+      );
 
-    res.json({
-      ok: true,
-      expositor: result.rows[0]
+      return res.json(result.rows[0]);
+    }
+
+    // EXPOSITOR → solo su stand
+    if (req.user.tipo_pase === "Expositor") {
+      const result = await pool.query(
+        `UPDATE expositores
+         SET descripcion=$1, logo_url=$2
+         WHERE id=$3 RETURNING *`,
+        [descripcion, logo_url, expositorId]
+      );
+
+      return res.json(result.rows[0]);
+    }
+
+    return res.status(403).json({
+      error: "No tienes permisos para editar expositores.",
     });
 
   } catch (err) {
-    console.error("Error actualizando expositor:", err);
-    res.status(500).json({ ok: false, error: "Error interno al actualizar expositor" });
+    console.error("Editar expositor error:", err);
+    res.status(500).json({ error: "Error al actualizar expositor" });
   }
 });
 
-/* ============================================================
-   🟣 4. Eliminar expositor
-   ============================================================ */
-router.delete("/:id", async (req, res) => {
+/* ========================================================
+   ELIMINAR EXPOSITOR
+   - Solo Admin & Staff
+======================================================== */
+router.delete("/:id", authRequired, async (req, res) => {
   try {
-    const { id } = req.params;
+    if (req.user.rol !== "admin" && req.user.tipo_pase !== "Staff") {
+      return res.status(403).json({
+        error: "No tienes permisos para eliminar expositores",
+      });
+    }
 
-    await pool.query(`DELETE FROM expositores WHERE id=$1`, [id]);
+    await pool.query("DELETE FROM expositores WHERE id=$1", [
+      req.params.id,
+    ]);
 
-    res.json({ ok: true, message: "Expositor eliminado" });
-
+    res.json({ message: "Expositor eliminado" });
   } catch (err) {
-    console.error("Error eliminando expositor:", err);
-    res.status(500).json({ ok: false, error: "Error interno al eliminar expositor" });
+    console.error("Eliminar expositor error:", err);
+    res.status(500).json({ error: "Error al eliminar expositor" });
   }
 });
 
