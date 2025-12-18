@@ -18,18 +18,23 @@ export default function Agenda() {
   const [sessions, setSessions] = useState([]);
   const [filteredSessions, setFilteredSessions] = useState([]);
   const [selectedDay, setSelectedDay] = useState("lunes");
-  const [selectedSede, setSelectedSede] = useState(null); // ✅ FALTABA
   const [loading, setLoading] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [qrInstance, setQrInstance] = useState(null);
+  const [selectedSede, setSelectedSede] = useState(null); // ✅ FALTABA
   const days = ["lunes", "martes", "miercoles", "jueves"];
 
-  // 👇 AHORA sí existe userProfile
+  // ===============================
+  // Sedes por pases del usuario
+  // ===============================
   const pasesUsuario = userProfile?.pases || [];
   const sedesPermitidas = sedesPermitidasFromPases(pasesUsuario);
   const sedePorFecha = sedeActivaPorFecha();
 
+  // ===============================
+  // Auto-selección de sede
+  // ===============================
   useEffect(() => {
     if (!userProfile) return;
 
@@ -38,7 +43,7 @@ export default function Agenda() {
     } else if (!selectedSede && sedePorFecha) {
       setSelectedSede(sedePorFecha.name);
     }
-  }, [userProfile]);
+  }, [userProfile, sedesPermitidas, sedePorFecha]);
 
     /* ==========================================
         Cargar sesiones
@@ -52,6 +57,8 @@ export default function Agenda() {
   }, [selectedDay, sessions]);
 
   const loadSessions = async () => {
+    if (!selectedSede) return;
+    
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda/sessions?sede=${encodeURIComponent(selectedSede)}`);
       const data = await res.json();

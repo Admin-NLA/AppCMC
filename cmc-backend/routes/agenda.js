@@ -8,6 +8,12 @@ import {
 
 const router = Router();
 
+// Alias para compatibilidad con frontend
+router.get("/sessions", authRequired, async (req, res, next) => {
+  req.url = "/";
+  next();
+});
+
 /* ========================================================================
    GET — AGENDA POR SEDE (PROTEGIDA, USERS + STAFF + ADMIN)
 ========================================================================= */
@@ -18,7 +24,8 @@ router.get("/", authRequired, async (req, res) => {
     // 👀 El backend espera req.user.pases
     const pases = usuario?.pases || [];
 
-    const sedesPermitidas = sedesPermitidasFromPases(pases);
+    const sedesPermitidasRaw = sedesPermitidasFromPases(pases);
+    const sedesPermitidas = sedesPermitidasRaw.map(s => s.name);
 
     if (!sedesPermitidas || sedesPermitidas.length === 0) {
       return res.status(403).json({ error: "No tienes acceso a ninguna sede." });
@@ -33,7 +40,7 @@ router.get("/", authRequired, async (req, res) => {
       // Varias sedes → puede elegir
       if (!sede) {
         const auto = sedeActivaPorFecha();
-        sede = auto || sedesPermitidas[0];
+        sede = auto?.name || sedesPermitidas[0];
       }
 
       // La sede elegida debe estar permitida
@@ -49,7 +56,22 @@ router.get("/", authRequired, async (req, res) => {
       [sede]
     );
 
-    res.json(result.rows);
+    const sessions = result.rows.map(s => ({
+      id: s.id,
+      titulo: s.title,
+      descripcion: s.description,
+      horaInicio: s.start_at,
+      horaFin: s.end_at,
+      sala: s.room,
+      tipo: s.tipo || "conferencia",
+      dia: s.dia,
+      speakerNombre: s.speaker_nombre || null,
+      sede: s.sede,
+      checkIns: s.check_ins || [],
+    }));
+
+    res.json({ sessions });
+
   } catch (err) {
     console.error("Agenda error:", err);
     res.status(500).json({ error: "Error al obtener agenda" });
@@ -146,4 +168,93 @@ router.delete("/:id", authRequired, async (req, res) => {
   }
 });
 
+/* ========================================================================
+   POST — CHECK-IN A SESIÓN
+========================================================================= */
+router.post("/checkin", authRequired, async (req, res) => {
+  try {
+    const { qr, userId } = req.body;
+
+    if (!qr || !userId) {
+      return res.status(400).json({ error: "Datos incompletos" });
+    }
+
+    // validar sesión
+    const sessionResult = await pool.query(
+      "SELECT id, title FROM agenda WHERE id = $1",
+      [qr]
+    );
+
+    if (sessionResult.rows.length === 0) {
+      return res.status(404).json({ error: "Sesión no válida" });
+    }
+
+    // evitar doble check-in
+    const exists = await pool.query(
+      `SELECT 1 FROM asistencias_sesion 
+       WHERE session_id = $1 AND user_id = $2`,
+      [qr, userId]
+    );
+
+    if (exists.rows.length > 0) {
+      return res.status(400).json({ error: "Ya registraste asistencia" });
+    }
+
+    await pool.query(
+      `INSERT INTO asistencias_sesion (session_id, user_id)
+       VALUES ($1, $2)`,
+      [qr, userId]
+    );
+
+    res.json({
+      ok: true,
+      session: sessionResult.rows[0],
+    });
+  } catch (err) {
+    console.error("Check-in error:", err);
+    res.status(500).json({ error: "Error al registrar asistencia" });
+  }
+});
+
+/* ========================================================================
+   FAVORITOS — GUARDAR SESIÓN
+========================================================================= */
+router.post("/favorite/:id", authRequired, async (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    const userId = req.user.id;
+
+    await pool.query(
+      `INSERT INTO favoritos (user_id, session_id)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [userId, sessionId]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Favorite error:", err);
+    res.status(500).json({ error: "Error al guardar favorito" });
+  }
+});
+
+/* ========================================================================
+   FAVORITOS — QUITAR SESIÓN
+========================================================================= */
+router.post("/unfavorite/:id", authRequired, async (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    const userId = req.user.id;
+
+    await pool.query(
+      `DELETE FROM favoritos WHERE user_id = $1 AND session_id = $2`,
+      [userId, sessionId]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Unfavorite error:", err);
+    res.status(500).json({ error: "Error al quitar favorito" });
+  }
+});
 export default router;
