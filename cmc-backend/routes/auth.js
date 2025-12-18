@@ -87,18 +87,19 @@ router.post("/register", async (req, res) => {
 });
 
 /* ========================================================
-   GET — PERFIL ACTUAL (auth/me)
+   GET — AUTH / ME
+   Devuelve el usuario autenticado desde el JWT
 ======================================================== */
 router.get("/me", authRequired, async (req, res) => {
   try {
-    // authMiddleware ya puso req.user desde el token
-    res.json({
+    // req.user viene del authMiddleware
+    return res.json({
       ok: true,
       user: req.user,
     });
   } catch (err) {
-    console.error("Auth me error:", err);
-    res.status(500).json({ error: "Error obteniendo perfil" });
+    console.error("Auth /me error:", err);
+    res.status(500).json({ ok: false });
   }
 });
 
