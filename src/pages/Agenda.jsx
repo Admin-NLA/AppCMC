@@ -57,19 +57,19 @@ export default function Agenda() {
   }, [selectedDay, sessions]);
 
   const loadSessions = async () => {
-    if (!selectedSede) return;
-    
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda/sessions?sede=${encodeURIComponent(selectedSede)}`);
-      const data = await res.json();
+  if (!selectedSede) return;
 
-      setSessions(data.sessions || []);
-    } catch (error) {
-      console.error("Error al cargar sesiones:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda?sede=${encodeURIComponent(selectedSede)}`
+    );
+    const data = await res.json();
+    setSessions(data || []);
+  } catch (e) {
+    console.error("Error cargando agenda", e);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const filterSessions = () => {
     const filtered = sessions.filter((s) => s.dia === selectedDay);
