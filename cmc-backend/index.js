@@ -1,9 +1,13 @@
 import express from "express";
 import cors from "cors";
-import { sendSSE } from "./routes/notificaciones.js";
-import pool from "./db.js";
+
 import authRoutes from "./routes/auth.js";
 import agendaRoutes from "./routes/agenda.js";
+
+const app = express();
+
+import { sendSSE } from "./routes/notificaciones.js";
+import pool from "./db.js";
 import speakersRoutes from "./routes/speakers.js";
 import expositoresRoutes from "./routes/expositores.js";
 import dashboardRoutes from "./routes/dashboard.js";
@@ -12,10 +16,18 @@ import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js"
 
 import "dotenv/config";
 
-const app = express();
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ==========================
+// Rutas API
+// ==========================
+app.use("/auth", authRoutes);
+app.use("/agenda", agendaRoutes);
+app.use("/speakers", speakersRoutes);
+app.use("/expositores", expositoresRoutes);
+app.use("/dashboard", dashboardRoutes);
+app.use("/notificaciones", notificacionesRoutes);
 
 // 🌍 Orígenes permitidos
 const allowedOrigins = [
@@ -63,16 +75,6 @@ app.get("/events", (req, res) => {
     clearInterval(interval);
   });
 });
-
-// ==========================
-// Rutas API
-// ==========================
-app.use("/auth", authRoutes);
-app.use("/agenda", agendaRoutes);
-app.use("/speakers", speakersRoutes);
-app.use("/expositores", expositoresRoutes);
-app.use("/dashboard", dashboardRoutes);
-app.use("/notificaciones", notificacionesRoutes);
 
 // ==============================
 // CRON cada 60 segundos
