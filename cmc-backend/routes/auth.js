@@ -86,4 +86,20 @@ router.post("/register", async (req, res) => {
   }
 });
 
+/* ========================================================
+   GET — PERFIL ACTUAL (auth/me)
+======================================================== */
+router.get("/me", authRequired, async (req, res) => {
+  try {
+    // authMiddleware ya puso req.user desde el token
+    res.json({
+      ok: true,
+      user: req.user,
+    });
+  } catch (err) {
+    console.error("Auth me error:", err);
+    res.status(500).json({ error: "Error obteniendo perfil" });
+  }
+});
+
 export default router;
