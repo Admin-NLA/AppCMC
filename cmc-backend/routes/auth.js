@@ -2,7 +2,7 @@ import { Router } from "express";
 import pool from "../db.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { authRequired } from "../utils/authMiddleware.js";
+import { authRequired } from "../utils/authMiddleware.js"; // ← 🔥 FALTABA
 
 const router = Router();
 
