@@ -2,6 +2,7 @@ import { Router } from "express";
 import pool from "../db.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { authRequired } from "../utils/authMiddleware.js"; // ← 🔥 FALTABA
 
 const router = Router();
 
@@ -83,6 +84,23 @@ router.post("/register", async (req, res) => {
   } catch (err) {
     console.error("Register error:", err);
     res.status(500).json({ error: "Error al registrar usuario" });
+  }
+});
+
+/* ========================================================
+   GET — AUTH / ME
+   Devuelve el usuario autenticado desde el JWT
+======================================================== */
+router.get("/me", authRequired, async (req, res) => {
+  try {
+    // req.user viene del authMiddleware
+    return res.json({
+      ok: true,
+      user: req.user,
+    });
+  } catch (err) {
+    console.error("Auth /me error:", err);
+    res.status(500).json({ ok: false });
   }
 });
 

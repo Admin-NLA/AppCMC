@@ -1,9 +1,13 @@
 import express from "express";
 import cors from "cors";
-import { sendSSE } from "./routes/notificaciones.js";
-import pool from "./db.js";
+
 import authRoutes from "./routes/auth.js";
 import agendaRoutes from "./routes/agenda.js";
+
+const app = express();
+
+import { sendSSE } from "./routes/notificaciones.js";
+import pool from "./db.js";
 import speakersRoutes from "./routes/speakers.js";
 import expositoresRoutes from "./routes/expositores.js";
 import dashboardRoutes from "./routes/dashboard.js";
@@ -12,17 +16,8 @@ import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js"
 
 import "dotenv/config";
 
-const app = express();
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// 🌍 Orígenes permitidos
-const allowedOrigins = [
-  "https://app-cmc.web.app",     // Frontend en Hosting
- // "https://cmc-app.onrender.com", // Backend Render (por si Render llama a otro servicio)
-  "http://localhost:3000"         // Desarrollo local
-];
 
 // Middleware CORS principal
 app.use(cors({
@@ -37,6 +32,23 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+// ==========================
+// Rutas API
+// ==========================
+app.use("/auth", authRoutes);
+app.use("/agenda", agendaRoutes);
+app.use("/speakers", speakersRoutes);
+app.use("/expositores", expositoresRoutes);
+app.use("/dashboard", dashboardRoutes);
+app.use("/notificaciones", notificacionesRoutes);
+
+// 🌍 Orígenes permitidos
+const allowedOrigins = [
+  "https://app-cmc.web.app",     // Frontend en Hosting
+ // "https://cmc-app.onrender.com", // Backend Render (por si Render llama a otro servicio)
+  "http://localhost:3000"         // Desarrollo local
+];
 
 // =========================================
 // 🔔 Server Sent Events (SSE) para notificaciones
@@ -63,16 +75,6 @@ app.get("/events", (req, res) => {
     clearInterval(interval);
   });
 });
-
-// ==========================
-// Rutas API
-// ==========================
-app.use("/auth", authRoutes);
-app.use("/agenda", agendaRoutes);
-app.use("/speakers", speakersRoutes);
-app.use("/expositores", expositoresRoutes);
-app.use("/dashboard", dashboardRoutes);
-app.use("/notificaciones", notificacionesRoutes);
 
 // ==============================
 // CRON cada 60 segundos
