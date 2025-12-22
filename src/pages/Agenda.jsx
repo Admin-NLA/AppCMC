@@ -60,15 +60,22 @@ export default function Agenda() {
   if (!selectedSede) return;
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda?sede=${encodeURIComponent(selectedSede)}`
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL}/agenda?sede=${encodeURIComponent(selectedSede)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      }
     );
+
     const data = await res.json();
     setSessions(data || []);
-  } catch (e) {
-    console.error("Error cargando agenda", e);
-  } finally {
-    setLoading(false);
-  }
+    } catch (error) {
+      console.error("Error al cargar sesiones:", error);
+    } finally {
+      setLoading(false);
+    }
 };
 
   const filterSessions = () => {
