@@ -29,7 +29,11 @@ app.use(cors({ origin: (origin, callback) => {
     else { 
       callback(null, false); }
      }, 
-     methods: ["GET", "POST", "PUT", "DELETE"], credentials: true, allowedHeaders: ["Content-Type", "Authorization"] }));
+      methods: ["GET", "POST", "PUT", "DELETE"], credentials: true, 
+      allowedHeaders: ["Content-Type", "Authorization"],
+      exposedHeaders: ["Authorization"],
+    }
+  ));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -80,12 +84,6 @@ setInterval(() => {
 
 console.log("⏲️  CRON de notificaciones programadas activo");
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log("DB URL:", process.env.DATABASE_URL);
-  console.log(`🚀 CMC Backend corriendo en puerto ${PORT}`);
-});
-
 // ===========================
 // 🕒 CRON — Notificaciones programadas
 // Corre cada 30 segundos
@@ -122,3 +120,17 @@ setInterval(async () => {
     console.error("Error en CRON de notificaciones:", err);
   }
 }, 30000); // 30 segundos
+
+// ❌ Evitar respuestas HTML (CORB killer)
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Endpoint no encontrado",
+    path: req.originalUrl,
+  });
+});
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log("DB URL:", process.env.DATABASE_URL);
+  console.log(`🚀 CMC Backend corriendo en puerto ${PORT}`);
+});
