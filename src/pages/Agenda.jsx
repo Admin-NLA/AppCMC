@@ -32,6 +32,24 @@ export default function Agenda() {
   const sedesPermitidas = sedesPermitidasFromPases(pasesUsuario);
   const sedePorFecha = sedeActivaPorFecha();
 
+  useEffect(() => {
+  loadAgenda();
+  }, []);
+
+  // LoadAgenda
+  const loadAgenda = async () => {
+  try {
+    setLoading(true);
+
+    const res = await API.get("/agenda");
+    setSessions(res.data || []);
+  } catch (err) {
+    console.error("Error cargando agenda:", err);
+  } finally {
+    setLoading(false); // 🔥 ESTO ES LO QUE TE FALTABA
+  }
+  };
+
   // ===============================
   // Auto-selección de sede
   // ===============================
