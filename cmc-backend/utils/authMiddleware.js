@@ -31,7 +31,16 @@ export function authRequired(req, res, next) {
     }
 
     // Admin siempre debe tener rol admin
-    if (user.rol !== "admin" && user.rol !== "usuario") {
+      const ROLES_VALIDOS = [
+      "admin",
+      "staff",
+      "asistente",
+      "speaker",
+      "expositor",
+      "usuario",
+    ];
+
+    if (!ROLES_VALIDOS.includes(user.rol)) {
       return res.status(400).json({
         error: "El token contiene un rol inválido.",
       });

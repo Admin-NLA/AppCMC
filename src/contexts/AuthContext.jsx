@@ -31,6 +31,7 @@ export function AuthProvider({ children }) {
 
     API.get("/auth/me")
     .then((res) => {
+      console.log("AUTH /me OK:", res.data);
       setUser(res.data.user);
       setUserProfile(res.data.user);
     })
