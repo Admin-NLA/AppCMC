@@ -4,7 +4,7 @@ import { authRequired } from "../utils/authMiddleware.js";
 import {
   sedesPermitidasFromPases,
   sedeActivaPorFecha
-} from "../utils/sedeHelper.js";
+} from "../../src/utils/sedeHelper.js";
 
 const router = Router();
 
