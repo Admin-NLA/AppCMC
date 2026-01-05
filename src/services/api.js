@@ -2,16 +2,15 @@ import axios from "axios";
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
+  withCredentials: true,
 });
 
 // Token automático
 API.interceptors.request.use((config) => {
-  try {
     const token = localStorage.getItem("token");
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-  } catch (err) {
-    console.error("Error leyendo token:", err);
-  }
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+  } 
   return config;
 });
 
