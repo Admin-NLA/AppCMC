@@ -30,10 +30,10 @@ export function AuthProvider({ children }) {
     }
 
     API.get("/auth/me")
-      .then((res) => {
-        setUser(res.data);
-        setUserProfile(res.data);
-      })
+    .then((res) => {
+      setUser(res.data.user);
+      setUserProfile(res.data.user);
+    })
       .catch(() => {
         localStorage.removeItem("token");
         setUser(null);
