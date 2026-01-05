@@ -57,10 +57,12 @@ export default function Agenda() {
     if (!userProfile) return;
 
     if (sedesPermitidas.length === 1) {
-      setSelectedSede(sedesPermitidas[0].name);
+      setSelectedSede(sedesPermitidas[0]);
     } else if (!selectedSede && sedePorFecha) {
-      setSelectedSede(sedePorFecha.name);
-    }
+      setSelectedSede(sedePorFecha);
+      } else {
+       setLoading(false);
+      }
   }, [userProfile, sedesPermitidas, sedePorFecha]);
 
   /* ==========================================
@@ -69,9 +71,21 @@ export default function Agenda() {
   useEffect(() => {
   if (selectedSede) loadSessions();
     }, [selectedSede]);
+  
+   if (!loading && !selectedSede) {
+    return (
+      <div className="text-center text-gray-500 mt-10">
+        No tienes sedes disponibles para tu usuario.
+      </div>
+    );
+  }
 
   useEffect(() => {
+  if (sessions.length > 0) {
     filterSessions();
+    } else {
+      setFilteredSessions([]);
+    }
   }, [selectedDay, sessions]);
 
   const loadSessions = async () => {
@@ -90,8 +104,13 @@ export default function Agenda() {
       }
     );
 
-    const data = await res.json();
-    setSessions(data || []);
+    if (!res.ok) {
+      setSessions([]);
+    return;
+   }
+
+   const data = await res.json();
+    setSessions(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error al cargar sesiones:", error);
     } finally {
@@ -100,7 +119,9 @@ export default function Agenda() {
 };
 
   const filterSessions = () => {
-    const filtered = sessions.filter((s) => s.dia === selectedDay);
+    const filtered = sessions.filter(
+      (s) => s.dia?.toLowerCase() === selectedDay.toLowerCase()
+    );
     setFilteredSessions(filtered);
   };
 
@@ -119,7 +140,10 @@ export default function Agenda() {
 
     await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
+    },
       body: JSON.stringify({ userId: userProfile.id }),
     });
 
