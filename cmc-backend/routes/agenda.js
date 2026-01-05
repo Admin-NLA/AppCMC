@@ -27,9 +27,12 @@ router.get("/", authRequired, async (req, res) => {
     const sedesPermitidasRaw = sedesPermitidasFromPases(pases);
     const sedesPermitidas = sedesPermitidasRaw.map(s => s.name);
 
-    if (!sedesPermitidas || sedesPermitidas.length === 0) {
-      return res.status(403).json({ error: "No tienes acceso a ninguna sede." });
-    }
+    if (
+     (!sedesPermitidas || sedesPermitidas.length === 0) &&
+       usuario.rol !== "admin"
+    ) {
+        return res.status(403).json({ error: "No tienes acceso a ninguna sede." });
+      }
 
     let { sede } = req.query;
 

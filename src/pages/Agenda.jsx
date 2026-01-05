@@ -10,7 +10,7 @@ import {
   QrCode,
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
-import { sedesPermitidasFromPases, sedeActivaPorFecha } from "../../cmc-backend/utils/sedeHelper.js";
+import { sedesPermitidasFromPases, sedeActivaPorFecha } from "../utils/sedeHelper.js";
 
 export default function Agenda() {
   const { userProfile, refreshUserProfile } = useAuth();
@@ -32,23 +32,23 @@ export default function Agenda() {
   const sedesPermitidas = sedesPermitidasFromPases(pasesUsuario);
   const sedePorFecha = sedeActivaPorFecha();
 
-  useEffect(() => {
-  loadAgenda();
-  }, []);
-
-  // LoadAgenda
-  const loadAgenda = async () => {
-  try {
-    setLoading(true);
-
-    const res = await API.get("/agenda");
-    setSessions(res.data || []);
-  } catch (err) {
-    console.error("Error cargando agenda:", err);
-  } finally {
-    setLoading(false); // 🔥 ESTO ES LO QUE TE FALTABA
-  }
-  };
+  // ---------------- Repetido eliminar ----------------
+  //useEffect(() => {
+  //loadAgenda();
+  //}, []);
+  
+// LoadAgenda
+//  const loadAgenda = async () => {
+//  try {
+//    setLoading(true);
+//    const res = await API.get("/agenda");
+//    setSessions(res.data || []);
+//  } catch (err) {
+//    console.error("Error cargando agenda:", err);
+//  } finally {
+//    setLoading(false); // 🔥 ESTO ES LO QUE TE FALTABA
+//}
+ // }; ---------------------------------------------------
 
   // ===============================
   // Auto-selección de sede
@@ -63,19 +63,22 @@ export default function Agenda() {
     }
   }, [userProfile, sedesPermitidas, sedePorFecha]);
 
-    /* ==========================================
+  /* ==========================================
         Cargar sesiones
   ========================================== */
   useEffect(() => {
-    loadSessions();
-  }, []);
+  if (selectedSede) loadSessions();
+    }, [selectedSede]);
 
   useEffect(() => {
     filterSessions();
   }, [selectedDay, sessions]);
 
   const loadSessions = async () => {
-  if (!selectedSede) return;
+  if (!selectedSede) {
+    setLoading(false);
+     return;
+  }
 
   try {
     const res = await fetch(
