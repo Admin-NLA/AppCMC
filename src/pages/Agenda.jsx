@@ -32,6 +32,24 @@ export default function Agenda() {
   const sedesPermitidas = sedesPermitidasFromPases(pasesUsuario);
   const sedePorFecha = sedeActivaPorFecha();
 
+  useEffect(() => {
+  loadAgenda();
+  }, []);
+
+  // LoadAgenda
+  const loadAgenda = async () => {
+  try {
+    setLoading(true);
+
+    const res = await API.get("/agenda");
+    setSessions(res.data || []);
+  } catch (err) {
+    console.error("Error cargando agenda:", err);
+  } finally {
+    setLoading(false); // 🔥 ESTO ES LO QUE TE FALTABA
+  }
+  };
+
   // ===============================
   // Auto-selección de sede
   // ===============================
@@ -60,15 +78,22 @@ export default function Agenda() {
   if (!selectedSede) return;
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/agenda?sede=${encodeURIComponent(selectedSede)}`
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL}/agenda?sede=${encodeURIComponent(selectedSede)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      }
     );
+
     const data = await res.json();
     setSessions(data || []);
-  } catch (e) {
-    console.error("Error cargando agenda", e);
-  } finally {
-    setLoading(false);
-  }
+    } catch (error) {
+      console.error("Error al cargar sesiones:", error);
+    } finally {
+      setLoading(false);
+    }
 };
 
   const filterSessions = () => {
