@@ -100,8 +100,9 @@ router.get("/", authRequired, async (req, res) => {
 
     const result = await pool.query(
       `SELECT 
-          n.*,
-          CASE WHEN nv.vista IS NOT NULL THEN true ELSE false END AS vista
+        n.*,
+        nv.vista_at,
+        CASE WHEN nv.vista_at IS NOT NULL THEN true ELSE false END AS vista
        FROM notificaciones n
        LEFT JOIN notificaciones_vistas nv
             ON nv.notificacion_id = n.id
@@ -132,8 +133,8 @@ router.post("/:id/vista", authRequired, async (req, res) => {
   try {
     await pool.query(
       `INSERT INTO notificaciones_vistas
-        (id, user_id, notificacion_id, vista, fecha)
-       VALUES (gen_random_uuid(), $1, $2, true, NOW())
+       (id, user_id, notificacion_id, vista_at)
+       VALUES (gen_random_uuid(), $1, $2, NOW())
        ON CONFLICT (user_id, notificacion_id) DO NOTHING`,
       [req.user.id, req.params.id]
     );
