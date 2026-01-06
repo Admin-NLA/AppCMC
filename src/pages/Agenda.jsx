@@ -13,7 +13,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { sedesPermitidasFromPases, sedeActivaPorFecha } from "../utils/sedeHelper.js";
 
 export default function Agenda() {
-  const { userProfile, refreshUserProfile } = useAuth();
+  const { userProfile } = useAuth();
 
   const [sessions, setSessions] = useState([]);
   const [filteredSessions, setFilteredSessions] = useState([]);
@@ -72,7 +72,13 @@ export default function Agenda() {
   if (selectedSede) loadSessions();
     }, [selectedSede]);
   
-   if (!loading && !selectedSede) {
+   if (!loading && !selectedSede && sedesPermitidas.length === 0) {
+    console.log("DEBUG Agenda:", {
+      loading,
+      selectedSede,
+      sedesPermitidas,
+      userProfile
+    });
     return (
       <div className="text-center text-gray-500 mt-10">
         No tienes sedes disponibles para tu usuario.
@@ -149,8 +155,7 @@ export default function Agenda() {
       body: JSON.stringify({ userId: userProfile.id }),
     });
 
-    await refreshUserProfile();
-  } catch (error) {
+     } catch (error) {
     console.error("Error al actualizar favorito:", error);
   }
 };
@@ -296,7 +301,9 @@ export default function Agenda() {
               session={session}
               isFavorite={userProfile?.agendaGuardada?.includes(session.id)}
               onToggleFavorite={toggleFavorite}
-              isCheckedIn={session.checkIns?.includes(userProfile?.id)}
+              isCheckedIn={Array.isArray(session.checkIns) 
+                ? session.checkIns.includes(userProfile?.id) 
+                : false}
             />
           ))
         )}
