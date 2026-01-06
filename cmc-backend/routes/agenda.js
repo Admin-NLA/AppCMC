@@ -260,4 +260,10 @@ router.post("/unfavorite/:id", authRequired, async (req, res) => {
     res.status(500).json({ error: "Error al quitar favorito" });
   }
 });
+
+router.use((err, req, res, next) => {
+  console.error("Agenda error:", err);
+  res.status(500).json({ error: "Error en agenda" });
+});
+
 export default router;

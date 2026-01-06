@@ -41,6 +41,8 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
+            id="email"
+            name="email"
             type="email"
             placeholder="Correo electrónico"
             className="w-full p-3 rounded bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -50,6 +52,8 @@ export default function Login() {
           />
 
           <input
+            id="password"
+            name="password"
             type="password"
             placeholder="Contraseña"
             className="w-full p-3 rounded bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"

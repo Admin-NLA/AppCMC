@@ -105,11 +105,13 @@ export default function Agenda() {
     );
 
     if (!res.ok) {
+      console.error("Agenda error:", res.status);
       setSessions([]);
-    return;
-   }
+      setLoading(false);
+      return;
+    }
 
-   const data = await res.json();
+    const data = await res.json();
     setSessions(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error al cargar sesiones:", error);
