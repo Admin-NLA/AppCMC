@@ -29,8 +29,7 @@ const allowedOrigins = [
 ];
 
 // ✅ CORS configurado correctamente
-app.use(
-  cors({
+app.use(cors({
     origin: (origin, callback) => {
       // Permitir requests sin origin (como Postman, curl, o server-to-server)
       if (!origin || allowedOrigins.includes(origin)) {
@@ -45,6 +44,9 @@ app.use(
   allowedHeaders: ["Content-Type", "Authorization"],
   exposedHeaders: ["Authorization"]
 }));
+
+// 👇 ESTA LÍNEA FALTABA
+app.options("*", cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
