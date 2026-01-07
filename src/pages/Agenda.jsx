@@ -57,9 +57,9 @@ export default function Agenda() {
     if (!userProfile) return;
 
     if (sedesPermitidas.length === 1) {
-      setSelectedSede(sedesPermitidas[0]);
+      setSelectedSede(sedesPermitidas[0].name);
     } else if (!selectedSede && sedePorFecha) {
-      setSelectedSede(sedePorFecha);
+      setSelectedSede(sedePorFecha.name);
       } else {
        setLoading(false);
       }
@@ -143,8 +143,8 @@ export default function Agenda() {
     const isFavorite = userProfile.agendaGuardada?.includes(sessionId);
 
     const url = isFavorite
-      ? `${import.meta.env.VITE_API_URL}api/agenda/unfavorite/${sessionId}`
-      : `${import.meta.env.VITE_API_URL}api/agenda/favorite/${sessionId}`;
+      ? `${import.meta.env.VITE_API_URL}/api/agenda/unfavorite/${sessionId}`
+      : `${import.meta.env.VITE_API_URL}/api/agenda/favorite/${sessionId}`;
 
     await fetch(url, {
       method: "POST",
@@ -194,7 +194,7 @@ export default function Agenda() {
 
   const handleScanSuccess = async (sessionQR) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}api/agenda/checkin`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/agenda/checkin`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
