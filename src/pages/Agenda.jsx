@@ -54,14 +54,15 @@ export default function Agenda() {
   // Auto-selección de sede
   // ===============================
   useEffect(() => {
-    if (!userProfile) return;
+  if (!userProfile) {
+    setLoading(false);
+    return;
+  }
 
     if (sedesPermitidas.length === 1) {
       setSelectedSede(sedesPermitidas[0].name);
     } else if (!selectedSede && sedePorFecha) {
       setSelectedSede(sedePorFecha.name);
-      } else {
-       setLoading(false);
       }
   }, [userProfile, sedesPermitidas, sedePorFecha]);
 
@@ -69,8 +70,11 @@ export default function Agenda() {
         Cargar sesiones
   ========================================== */
   useEffect(() => {
-  if (selectedSede) loadSessions();
-    }, [selectedSede]);
+  if (!selectedSede || !userProfile) return;
+
+  setLoading(true);
+  loadSessions();
+}, [selectedSede, userProfile]);
   
    if (!loading && !selectedSede && sedesPermitidas.length === 0) {
     console.log("DEBUG Agenda:", {
@@ -94,19 +98,25 @@ export default function Agenda() {
     }
   }, [selectedDay, sessions]);
 
+  const token = localStorage.getItem("token");
+  if (!token) {
+    console.error("Token ausente");
+    setLoading(false);
+    return;
+  }
+
   const loadSessions = async () => {
   if (!selectedSede) {
     setLoading(false);
      return;
   }
-
-  try {
+     try {
     const res = await fetch(
       `${import.meta.env.VITE_API_URL}/api/agenda?sede=${encodeURIComponent(selectedSede)}`,
       {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
+          Authorization: `Bearer ${token}`,
+        },
       }
     );
 
