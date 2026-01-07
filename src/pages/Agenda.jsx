@@ -234,6 +234,14 @@ export default function Agenda() {
     }
   };
 
+  if (!userProfile) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        Cargando perfil…
+      </div>
+    );
+  }
+
   /* ==========================================
         Loader
   ========================================== */
@@ -312,11 +320,17 @@ export default function Agenda() {
             <SessionCard
               key={session.id}
               session={session}
-              isFavorite={userProfile?.agendaGuardada?.includes(session.id)}
+              isFavorite={
+                userProfile &&
+                Array.isArray(userProfile.agendaGuardada) &&
+                userProfile.agendaGuardada.includes(session.id)
+              }
               onToggleFavorite={toggleFavorite}
-              isCheckedIn={Array.isArray(session.checkIns) 
-                ? session.checkIns.includes(userProfile?.id) 
-                : false}
+              isCheckedIn={
+                userProfile &&
+                Array.isArray(session.checkIns) &&
+                session.checkIns.includes(userProfile.id)
+              }
             />
           ))
         )}
