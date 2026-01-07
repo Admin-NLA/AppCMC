@@ -29,15 +29,16 @@ const allowedOrigins = [
 ];
 
 // ✅ CORS configurado correctamente
-app.use(cors({
-  origin: (origin, callback) => {
-    // Permitir requests sin origin (como Postman, curl, o server-to-server)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`❌ Origen rechazado: ${origin}`);
-      callback(null, false);
-    }
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Permitir requests sin origin (como Postman, curl, o server-to-server)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`❌ Origen rechazado: ${origin}`);
+        callback(null, false);
+      }
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
