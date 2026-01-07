@@ -21,9 +21,22 @@ export default function Expositores() {
      Cargar expositores
   ============================ */
   useEffect(() => {
-    // Firestore DESACTIVADO
-    setExpositores([]);
-    setLoading(false);
+    const loadExpositores = async () => {
+      try {
+        const snap = await getDocs(collection(db, "expositores"));
+        const data = snap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setExpositores(data);
+      } catch (e) {
+        console.error("Error cargando expositores:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadExpositores();
   }, []);
 
   /* ============================

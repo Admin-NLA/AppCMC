@@ -14,9 +14,28 @@ export default function Speakers() {
   }, []);
 
   const loadData = async () => {
-    setSpeakers([]);
-    setSessions([]);
-    setLoading(false);
+    try {
+      // Load speakers
+      const snapshotSpeakers = await getDocs(collection(db, "speakers"));
+      const speakersData = snapshotSpeakers.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Load all sessions ONCE
+      const snapshotSessions = await getDocs(collection(db, "sessions"));
+      const sessionsData = snapshotSessions.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setSpeakers(speakersData);
+      setSessions(sessionsData);
+    } catch (error) {
+      console.error("Error cargando speakers:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   /* ==========================================
