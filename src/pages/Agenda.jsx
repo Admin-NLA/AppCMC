@@ -118,7 +118,7 @@ export default function Agenda() {
     }
 
     const data = await res.json();
-    setSessions(Array.isArray(data) ? data : []);
+    setSessions(Array.isArray(data.sessions) ? data.sessions : []);
     } catch (error) {
       console.error("Error al cargar sesiones:", error);
     } finally {
