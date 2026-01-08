@@ -9,49 +9,29 @@ import {
 const router = Router();
 
 // Alias para compatibilidad con frontend
-router.get("/api/agenda/sessions", authRequired, async (req, res, next) => {
-  req.url = "/";
-  next();
-});
-
-/* ========================================================================
-   GET — AGENDA POR SEDE (PROTEGIDA, USERS + STAFF + ADMIN)
-========================================================================= */
-router.get("/", authRequired, async (req, res) => {
+// ✅ Alias real para sesiones
+router.get("/sessions", authRequired, async (req, res) => {
   try {
     const usuario = req.user;
-
-    // 👀 El backend espera req.user.pases
     const pases = usuario?.pases || [];
 
     const sedesPermitidasRaw = sedesPermitidasFromPases(pases);
     const sedesPermitidas = sedesPermitidasRaw.map(s => s.name);
 
     if (
-     (!sedesPermitidas || sedesPermitidas.length === 0) &&
-       usuario.rol !== "admin"
+      (!sedesPermitidas || sedesPermitidas.length === 0) &&
+      usuario.rol !== "admin"
     ) {
-        return res.status(403).json({ error: "No tienes acceso a ninguna sede." });
-      }
+      return res.status(403).json({ error: "No tienes acceso a ninguna sede." });
+    }
 
     let { sede } = req.query;
 
     if (sedesPermitidas.length === 1) {
-      // Solo una sede → fija automáticamente
       sede = sedesPermitidas[0];
-    } else {
-      // Varias sedes → puede elegir
-      if (!sede) {
-        const auto = sedeActivaPorFecha();
-        sede = auto?.name || sedesPermitidas[0];
-      }
-
-      // La sede elegida debe estar permitida
-      if (!sedesPermitidas.includes(sede)) {
-        return res.status(403).json({
-          error: `No tienes acceso a la sede solicitada: ${sede}`,
-        });
-      }
+    } else if (!sede) {
+      const auto = sedeActivaPorFecha();
+      sede = auto?.name || sedesPermitidas[0];
     }
 
     const result = await pool.query(
@@ -74,9 +54,8 @@ router.get("/", authRequired, async (req, res) => {
     }));
 
     res.json({ sessions });
-
   } catch (err) {
-    console.error("Agenda error:", err);
+    console.error("Agenda sessions error:", err);
     res.status(500).json({ error: "Error al obtener agenda" });
   }
 });
