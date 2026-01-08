@@ -1,3 +1,4 @@
+import { getSpeakers } from "../services/speakers.service";
 import { useState, useEffect } from "react";
 import { Users, Building2, Calendar, Clock } from "lucide-react";
 
@@ -6,6 +7,24 @@ export default function Speakers() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    getSpeakers()
+      .then(setSpeakers)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  {loading && <p>Cargando speakers...</p>}
+
+  {!loading && speakers.map(sp => (
+    <div key={sp.id}>
+      <h3>{sp.name}</h3>
+      {sp.photo && <img src={sp.photo} alt={sp.name} width={120} />}
+      <div dangerouslySetInnerHTML={{ __html: sp.bio }} />
+      <hr />
+    </div>
+  ))}
+  
   /* ==========================================
       Cargar speakers + sesiones
   ========================================== */
