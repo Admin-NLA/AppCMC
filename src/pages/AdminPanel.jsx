@@ -38,7 +38,7 @@ export default function AdminPanel() {
       setLoading(true);
 
       if (activeTab === 'sessions') {
-        const res = await API.get('/sessions');
+        const res = await API.get('/api/agenda/sessions');
         setSessions(res.data);
 
         const sp = await API.get('/speakers');
@@ -220,10 +220,10 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
 
     try {
       if (editingItem?.id) {
-        await API.put(`/sessions/${editingItem.id}`, formData);
+        await API.put(`/api/agenda/sessions/${editingItem.id}`, formData);
         alert('Sesión actualizada');
       } else {
-        await API.post('/sessions', formData);
+        await API.post('/api/agenda/sessions', formData);
         alert('Sesión creada');
       }
 
@@ -241,7 +241,7 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
     if (!confirm('¿Eliminar esta sesión?')) return;
     
     try {
-      await API.delete(`/sessions/${id}`);
+      await API.delete(`/api/agenda/sessions/${id}`);
       alert('Sesión eliminada');
       onReload();
     } catch (error) {

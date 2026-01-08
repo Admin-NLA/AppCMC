@@ -9,7 +9,7 @@ import {
 const router = Router();
 
 // Alias para compatibilidad con frontend
-router.get("/sessions", authRequired, async (req, res, next) => {
+router.get("/api/agenda/sessions", authRequired, async (req, res, next) => {
   req.url = "/";
   next();
 });
