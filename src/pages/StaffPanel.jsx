@@ -24,7 +24,7 @@ const StaffDashboard = () => {
     loadStats();
   }, []);
 
-  const loadStats = async () => {
+  /* =const loadStats = async () => {
     try {
       // Cargar asistentes
       const usersSnap = await getDocs(collection(db, 'users'));
@@ -94,7 +94,7 @@ const StaffDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }; */
 
   const exportarDatos = () => {
     alert('Función de exportación en desarrollo');

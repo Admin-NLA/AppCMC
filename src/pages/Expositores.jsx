@@ -19,7 +19,7 @@ export default function Expositores() {
 
   /* ============================
      Cargar expositores
-  ============================ */
+  ============================ 
   useEffect(() => {
     const loadExpositores = async () => {
       try {
@@ -34,10 +34,10 @@ export default function Expositores() {
       } finally {
         setLoading(false);
       }
-    };
+    }; 
 
     loadExpositores();
-  }, []);
+  }, []);*/
 
   /* ============================
      Filtrado optimizado
