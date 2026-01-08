@@ -7,55 +7,16 @@ export default function Speakers() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+/* ==========================================
+    Cargar speakers + sesiones
+  ========================================== */
+
   useEffect(() => {
     getSpeakers()
       .then(setSpeakers)
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
-
-  {loading && <p>Cargando speakers...</p>}
-
-  {!loading && speakers.map(sp => (
-    <div key={sp.id}>
-      <h3>{sp.name}</h3>
-      {sp.photo && <img src={sp.photo} alt={sp.name} width={120} />}
-      <div dangerouslySetInnerHTML={{ __html: sp.bio }} />
-      <hr />
-    </div>
-  ))}
-  
-  /* ==========================================
-      Cargar speakers + sesiones
-  ========================================== */
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      // Load speakers
-      const snapshotSpeakers = await getDocs(collection(db, "speakers"));
-      const speakersData = snapshotSpeakers.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Load all sessions ONCE
-      const snapshotSessions = await getDocs(collection(db, "sessions"));
-      const sessionsData = snapshotSessions.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      setSpeakers(speakersData);
-      setSessions(sessionsData);
-    } catch (error) {
-      console.error("Error cargando speakers:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   /* ==========================================
       Loader
@@ -124,10 +85,10 @@ function SpeakerCard({ speaker, sessions }) {
       <div className="p-6">
         <h3 className="text-xl font-bold mb-1">{speaker.nombre}</h3>
 
-        {speaker.empresa && (
+        {speaker.company && (
           <div className="flex items-center text-gray-600 text-sm mb-3">
             <Building2 size={16} className="mr-1" />
-            {speaker.empresa}
+            {speaker.company}
           </div>
         )}
 
