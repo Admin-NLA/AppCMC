@@ -6,6 +6,7 @@ import {
   sedeActivaPorFecha
 } from "../../src/utils/sedeHelper.js";
 import { parseSessionSlug } from "../utils/slugParser.js";
+import axios from "axios";
 
 const router = Router();
 
@@ -41,7 +42,8 @@ router.get("/sessions", authRequired, async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT *
+      SELECT *,
+        COALESCE(year_override, year) AS year_final
       FROM agenda
       WHERE sede = $1
         AND COALESCE(year_override, year) = $2
@@ -61,7 +63,7 @@ router.get("/sessions", authRequired, async (req, res) => {
       dia: s.dia,
       speakerNombre: s.speaker_nombre || null,
       sede: s.sede,
-      year: s.year_override ?? s.year,
+      year: s.year_final,
       checkIns: s.check_ins || [],
     }));
 
@@ -104,8 +106,8 @@ router.post("/sync/wp", authRequired, async (req, res) => {
 
     const WP_URL = "https://cmc-latam.com/wp-json/wp/v2/session?per_page=100";
 
-    const wpRes = await fetch(WP_URL);
-    const wpSessions = await wpRes.json();
+    const wpRes = await axios.get(WP_URL);
+    const wpSessions = wpRes.data;
 
     let inserted = 0;
     let skipped = 0;
@@ -141,7 +143,7 @@ router.post("/sync/wp", authRequired, async (req, res) => {
           external_source
         )
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-        ON CONFLICT (external_source) DO NOTHING
+        ON CONFLICT DO NOTHING
         `,
         [
           wp.title.rendered,
@@ -149,14 +151,14 @@ router.post("/sync/wp", authRequired, async (req, res) => {
           wp.acf?.start_at || null,
           wp.acf?.end_at || null,
           parsed.sede,
-          parsed.year,
+          parsed.anio,   // ← aquí va el año
           parsed.tipo,
           parsed.categoria,
-          JSON.stringify({
+          {
             source: "wordpress",
             wp_id: wp.id,
             slug: wp.slug
-          })
+          }
         ]
       );
 
