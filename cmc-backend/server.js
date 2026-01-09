@@ -76,7 +76,7 @@ app.use("/auth", authRoutes);
 app.use("/api/auth", authRoutes); // Alias con /api
 
 app.use("/agenda", agendaRoutes);
-app.use("/api/agenda", agendaRoutes); // Alias con /api
+app.use("/api/agenda/sessions", agendaRoutes); // Alias con /api
 
 app.use("/speakers", speakersRoutes);
 app.use("/api/speakers", speakersRoutes); // Alias con /api
