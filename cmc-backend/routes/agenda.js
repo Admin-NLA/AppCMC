@@ -5,6 +5,7 @@ import {
   sedesPermitidasFromPases,
   sedeActivaPorFecha
 } from "../../src/utils/sedeHelper.js";
+import { parseSessionSlug } from "../utils/slugParser.js";
 
 const router = Router();
 
@@ -40,11 +41,9 @@ router.get("/sessions", authRequired, async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT *,
-        COALESCE(sede_override, sede) AS sede_final,
-        COALESCE(year_override, year) AS year_final
+      SELECT *
       FROM agenda
-      WHERE COALESCE(sede_override, sede) = $1
+      WHERE sede = $1
         AND COALESCE(year_override, year) = $2
       ORDER BY start_at ASC
       `,
@@ -61,8 +60,8 @@ router.get("/sessions", authRequired, async (req, res) => {
       tipo: s.tipo || "conferencia",
       dia: s.dia,
       speakerNombre: s.speaker_nombre || null,
-      sede: s.sede_final,
-      year: s.year_final,
+      sede: s.sede,
+      year: s.year_override ?? s.year,
       checkIns: s.check_ins || [],
     }));
 
@@ -77,9 +76,9 @@ router.get("/sessions", authRequired, async (req, res) => {
    GET — SESIÓN POR ID (STAFF/USER/ADMIN)
 ========================================================================= */
 router.get("/:id", authRequired, async (req, res) => {
-  const { id } = req.params;
-
   try {
+    const { id } = req.params;
+
     const result = await pool.query(
       "SELECT * FROM agenda WHERE id = $1",
       [id]
@@ -93,6 +92,86 @@ router.get("/:id", authRequired, async (req, res) => {
   } catch (err) {
     console.error("Agenda ID error:", err);
     res.status(500).json({ error: "Error al obtener sesión" });
+  }
+});
+
+/* importar sesiones desde WordPress  */
+router.post("/sync/wp", authRequired, async (req, res) => {
+  try {
+    if (!["admin", "staff"].includes(req.user.rol)) {
+      return res.status(403).json({ error: "Solo staff/admin" });
+    }
+
+    const WP_URL = "https://cmc-latam.com/wp-json/wp/v2/session?per_page=100";
+
+    const wpRes = await fetch(WP_URL);
+    const wpSessions = await wpRes.json();
+
+    let inserted = 0;
+    let skipped = 0;
+
+    for (const wp of wpSessions) {
+      const slug = wp.slug;
+      const parsed = parseSessionSlug(slug);
+
+      if (!parsed) continue;
+
+      // 🔒 Si ya existe override → NO tocar
+      const existing = await pool.query(
+        "SELECT id FROM agenda WHERE external_source->>'wp_id' = $1 AND override = true",
+        [String(wp.id)]
+      );
+
+      if (existing.rows.length > 0) {
+        skipped++;
+        continue;
+      }
+
+      await pool.query(
+        `
+        INSERT INTO agenda (
+          title,
+          description,
+          start_at,
+          end_at,
+          sede,
+          year,
+          tipo,
+          categoria,
+          external_source
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ON CONFLICT (external_source) DO NOTHING
+        `,
+        [
+          wp.title.rendered,
+          wp.content.rendered,
+          wp.acf?.start_at || null,
+          wp.acf?.end_at || null,
+          parsed.sede,
+          parsed.year,
+          parsed.tipo,
+          parsed.categoria,
+          JSON.stringify({
+            source: "wordpress",
+            wp_id: wp.id,
+            slug: wp.slug
+          })
+        ]
+      );
+
+      inserted++;
+    }
+
+    res.json({
+      ok: true,
+      inserted,
+      skipped
+    });
+
+  } catch (err) {
+    console.error("WP sync error:", err);
+    res.status(500).json({ error: "Error sincronizando WordPress" });
   }
 });
 
