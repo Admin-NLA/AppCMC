@@ -106,28 +106,22 @@ router.post("/sync/wp", authRequired, async (req, res) => {
 
     const WP_URL = "https://cmc-latam.com/wp-json/wp/v2/session?per_page=100";
 
-    const wpRes = await axios.get(WP_URL);
+    const wpRes = await axios.get(WP_URL, {
+      headers: {
+        "User-Agent": "CMC-App/1.0",
+        "Accept": "application/json"
+      },
+      timeout: 10000
+    });
+    
     const wpSessions = wpRes.data;
 
     let inserted = 0;
     let skipped = 0;
 
     for (const wp of wpSessions) {
-      const slug = wp.slug;
-      const parsed = parseSessionSlug(slug);
-
+      const parsed = parseSessionSlug(wp.slug);
       if (!parsed) continue;
-
-      // 🔒 Si ya existe override → NO tocar
-      const existing = await pool.query(
-        "SELECT id FROM agenda WHERE external_source->>'wp_id' = $1 AND override = true",
-        [String(wp.id)]
-      );
-
-      if (existing.rows.length > 0) {
-        skipped++;
-        continue;
-      }
 
       await pool.query(
         `
@@ -143,7 +137,6 @@ router.post("/sync/wp", authRequired, async (req, res) => {
           external_source
         )
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-        ON CONFLICT DO NOTHING
         `,
         [
           wp.title.rendered,
@@ -151,7 +144,7 @@ router.post("/sync/wp", authRequired, async (req, res) => {
           wp.acf?.start_at || null,
           wp.acf?.end_at || null,
           parsed.sede,
-          parsed.anio,   // ← aquí va el año
+          parsed.anio,
           parsed.tipo,
           parsed.categoria,
           {
@@ -165,15 +158,14 @@ router.post("/sync/wp", authRequired, async (req, res) => {
       inserted++;
     }
 
-    res.json({
-      ok: true,
-      inserted,
-      skipped
-    });
+    res.json({ ok: true, inserted, skipped });
 
   } catch (err) {
-    console.error("WP sync error:", err);
-    res.status(500).json({ error: "Error sincronizando WordPress" });
+    console.error("WP sync error REAL:", err.message);
+    res.status(500).json({
+      error: "Error sincronizando WordPress",
+      detail: err.message
+    });
   }
 });
 
