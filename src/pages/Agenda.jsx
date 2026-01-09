@@ -111,7 +111,8 @@ export default function Agenda() {
      return;
   }
      try {
-    const res = await fetch(
+    const res = await
+      fetch(
       `${import.meta.env.VITE_API_URL}/api/agenda/sessions?sede=${encodeURIComponent(selectedSede)}`,
       {
         headers: {

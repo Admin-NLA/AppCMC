@@ -39,7 +39,7 @@ export default function AdminPanel() {
 
       if (activeTab === 'sessions') {
         const res = await API.get('/agenda/sessions');
-        setSessions(res.data.sessions || []);
+        v
 
         const sp = await API.get('/speakers');
         setSpeakers(sp.data);
