@@ -34,15 +34,21 @@ router.get("/sessions", authRequired, async (req, res) => {
       sede = auto?.name || sedesPermitidas[0];
     }
 
+    const year = req.query.year
+  ? parseInt(req.query.year)
+  : new Date().getFullYear();
+
     const result = await pool.query(
       `
-      SELECT *
+      SELECT *,
+        COALESCE(sede_override, sede) AS sede_final,
+        COALESCE(year_override, year) AS year_final
       FROM agenda
-      WHERE sede = $1
-        AND EXTRACT(YEAR FROM start_at) = EXTRACT(YEAR FROM NOW())
+      WHERE COALESCE(sede_override, sede) = $1
+        AND COALESCE(year_override, year) = $2
       ORDER BY start_at ASC
       `,
-      [sede]
+      [sede, year]
     );
 
     const sessions = result.rows.map(s => ({
@@ -55,7 +61,8 @@ router.get("/sessions", authRequired, async (req, res) => {
       tipo: s.tipo || "conferencia",
       dia: s.dia,
       speakerNombre: s.speaker_nombre || null,
-      sede: s.sede,
+      sede: s.sede_final,
+      year: s.year_final,
       checkIns: s.check_ins || [],
     }));
 
