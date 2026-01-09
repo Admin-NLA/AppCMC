@@ -220,10 +220,10 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
 
     try {
       if (editingItem?.id) {
-        await API.put(`/agenda/${editingItem.id}`, formData);
+        await API.put(`/agenda/sessions/${editingItem.id}`);
         alert('Sesión actualizada');
       } else {
-        await API.post('/agenda', formData);
+        await API.post('/agenda/sessions', formData);
         alert('Sesión creada');
       }
 
@@ -241,7 +241,7 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
     if (!confirm('¿Eliminar esta sesión?')) return;
     
     try {
-      await API.delete(`/agenda/${id}`);
+      await API.delete(`/agenda/sessions/${id}`);
       alert('Sesión eliminada');
       onReload();
     } catch (error) {
