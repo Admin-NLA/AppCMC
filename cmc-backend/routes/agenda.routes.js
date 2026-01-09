@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
 
     // 🔥 Obtener agenda desde WordPress
     // Asumiendo que tienes un Custom Post Type "agenda"
-    const wpResponse = await wordpressAPI.get('/agenda', {
+    const wpResponse = await wordpressAPI.get('/agenda/sessions', {
       params: {
         sede: sede,
         per_page: 100,
@@ -83,7 +83,7 @@ router.post('/checkin', async (req, res) => {
     const { qr, userId } = req.body;
 
     // Buscar sesión en WordPress por QR
-    const wpResponse = await wordpressAPI.get('/agenda', {
+    const wpResponse = await wordpressAPI.get('/agenda/sessions', {
       params: {
         'meta_key': 'qr_code',
         'meta_value': qr,
