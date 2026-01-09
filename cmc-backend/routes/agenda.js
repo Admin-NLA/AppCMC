@@ -5,7 +5,7 @@ import {
   sedesPermitidasFromPases,
   sedeActivaPorFecha
 } from "../../src/utils/sedeHelper.js";
-import { parseSessionSlug } from "../utils/slugParser.js";
+import { parseWpClassList } from "../utils/wpClassParser.js";
 import axios from "axios";
 
 const router = Router();
@@ -113,50 +113,56 @@ router.post("/sync/wp", authRequired, async (req, res) => {
       },
       timeout: 10000
     });
-    
+
     const wpSessions = wpRes.data;
 
     let inserted = 0;
     let skipped = 0;
 
     for (const wp of wpSessions) {
-      const parsed = parseSessionSlug(wp.slug);
-      if (!parsed) continue;
+      const parsed = parseWpClassList(wp.class_list);
 
-      await pool.query(
-        `
-        INSERT INTO agenda (
-          title,
-          description,
-          start_at,
-          end_at,
-          sede,
-          year,
-          tipo,
-          categoria,
-          external_source
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-        `,
-        [
-          wp.title.rendered,
-          wp.content.rendered,
-          wp.acf?.start_at || null,
-          wp.acf?.end_at || null,
-          parsed.sede,
-          parsed.anio,
-          parsed.tipo,
-          parsed.categoria,
-          {
-            source: "wordpress",
-            wp_id: wp.id,
-            slug: wp.slug
-          }
-        ]
-      );
+      if (!parsed) {
+        skipped++;
+        continue;
+      }
 
-      inserted++;
-    }
+        await pool.query(
+          `
+          INSERT INTO agenda (
+            title,
+            description,
+            start_at,
+            end_at,
+            sede,
+            year,
+            tipo,
+            categoria,
+            external_source
+          )
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          ON CONFLICT DO NOTHING
+          `,
+          [
+            wp.title.rendered,
+            wp.content.rendered,
+            wp.acf?.start_at || null,
+            wp.acf?.end_at || null,
+            parsed.sede,
+            parsed.year,
+            parsed.tipo,
+            parsed.tipo === "curso" ? "curso" : "sesion",
+            {
+              source: "wordpress",
+              wp_id: wp.id,
+              slug: wp.slug,
+              class_list: wp.class_list
+            }
+          ]
+        );
+
+        inserted++;
+      }
 
     res.json({ ok: true, inserted, skipped });
 
