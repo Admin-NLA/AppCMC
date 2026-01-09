@@ -35,7 +35,13 @@ router.get("/sessions", authRequired, async (req, res) => {
     }
 
     const result = await pool.query(
-      "SELECT * FROM agenda WHERE sede = $1 ORDER BY start_at ASC",
+      `
+      SELECT *
+      FROM agenda
+      WHERE sede = $1
+        AND EXTRACT(YEAR FROM start_at) = EXTRACT(YEAR FROM NOW())
+      ORDER BY start_at ASC
+      `,
       [sede]
     );
 
