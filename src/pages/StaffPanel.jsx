@@ -23,8 +23,8 @@ const StaffDashboard = () => {
   useEffect(() => {
     loadStats();
   }, []);
-
-  /* =const loadStats = async () => {
+/*
+  const loadStats = async () => {
     try {
       // Cargar asistentes
       const usersSnap = await getDocs(collection(db, 'users'));
@@ -94,7 +94,7 @@ const StaffDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }; */
+  }; 
 
   const exportarDatos = () => {
     alert('Función de exportación en desarrollo');
@@ -107,7 +107,7 @@ const StaffDashboard = () => {
         <div className="w-12 h-12 border-4 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
-  }
+  }*/
 
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-6">

@@ -11,6 +11,12 @@ import axios from "axios";
 const router = Router();
 
 // Alias para compatibilidad con frontend
+// Alias legacy para panel admin / frontend viejo
+router.get("/", authRequired, async (req, res) => {
+  req.url = "/sessions";
+  return router.handle(req, res);
+});
+
 // ✅ Alias real para sesiones
 router.get("/sessions", authRequired, async (req, res) => {
   try {

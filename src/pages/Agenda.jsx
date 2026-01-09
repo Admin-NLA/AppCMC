@@ -112,7 +112,7 @@ export default function Agenda() {
   }
      try {
     const res = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/agenda?sede=${encodeURIComponent(selectedSede)}`,
+      `${import.meta.env.VITE_API_URL}/api/agenda/sessions?sede=${encodeURIComponent(selectedSede)}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -137,11 +137,18 @@ export default function Agenda() {
 };
 
   const filterSessions = () => {
-    const filtered = sessions.filter(
-      (s) => s.dia?.toLowerCase() === selectedDay.toLowerCase()
-    );
-    setFilteredSessions(filtered);
-  };
+  const filtered = sessions.filter((s) => {
+    if (!s.horaInicio) return false;
+
+    const day = new Date(s.horaInicio)
+      .toLocaleDateString("es-MX", { weekday: "long" })
+      .toLowerCase();
+
+    return day === selectedDay;
+  });
+
+  setFilteredSessions(filtered);
+};
 
   /* ==========================================
         Favoritos (sin recargar página)

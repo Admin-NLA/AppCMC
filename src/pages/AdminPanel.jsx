@@ -38,8 +38,8 @@ export default function AdminPanel() {
       setLoading(true);
 
       if (activeTab === 'sessions') {
-        const res = await API.get('/sessions');
-        setSessions(res.data);
+        const res = await API.get('/agenda/sessions');
+        setSessions(res.data.sessions || []);
 
         const sp = await API.get('/speakers');
         setSpeakers(sp.data);
@@ -220,10 +220,10 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
 
     try {
       if (editingItem?.id) {
-        await API.put(`/sessions/${editingItem.id}`, formData);
+        await API.put(`/agenda/${editingItem.id}`, formData);
         alert('Sesión actualizada');
       } else {
-        await API.post('/sessions', formData);
+        await API.post('/agenda', formData);
         alert('Sesión creada');
       }
 
@@ -241,7 +241,7 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
     if (!confirm('¿Eliminar esta sesión?')) return;
     
     try {
-      await API.delete(`/sessions/${id}`);
+      await API.delete(`/agenda/${id}`);
       alert('Sesión eliminada');
       onReload();
     } catch (error) {
@@ -395,7 +395,10 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
               <div>
                 <h3 className="font-bold">{s.titulo}</h3>
                 <p className="text-sm text-gray-600">
-                  {s.dia} • {s.horaInicio} - {s.horaFin} • {s.sala}
+                  {new Date(s.horaInicio).toLocaleDateString('es-MX', { weekday: 'long' })} •
+                  {new Date(s.horaInicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -
+                  {new Date(s.horaFin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} •
+                  {s.sala}
                 </p>
                 {s.speakerNombre && (
                   <p className="text-sm text-gray-600 mt-1">Speaker: {s.speakerNombre}</p>
