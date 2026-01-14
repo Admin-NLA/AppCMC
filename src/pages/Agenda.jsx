@@ -24,6 +24,12 @@ export default function Agenda() {
   const [qrInstance, setQrInstance] = useState(null);
   const [selectedSede, setSelectedSede] = useState(null); // ✅ FALTABA
   const days = ["lunes", "martes", "miercoles", "jueves"];
+  const dayColors = {
+  lunes: "bg-blue-50",
+  martes: "bg-green-50",
+  miercoles: "bg-yellow-50",
+  jueves: "bg-red-50",
+};
 
   // ===============================
   // Sedes por pases del usuario
@@ -54,27 +60,22 @@ export default function Agenda() {
   // Auto-selección de sede
   // ===============================
   useEffect(() => {
-  if (!userProfile) {
-    setLoading(false);
-    return;
-  }
-
+    if (!userProfile) return;
+    
     if (sedesPermitidas.length === 1) {
       setSelectedSede(sedesPermitidas[0].name);
     } else if (!selectedSede && sedePorFecha) {
       setSelectedSede(sedePorFecha.name);
-      }
+    }
   }, [userProfile, sedesPermitidas, sedePorFecha]);
 
   /* ==========================================
         Cargar sesiones
   ========================================== */
   useEffect(() => {
-  if (!selectedSede || !userProfile) return;
-
-  setLoading(true);
-  loadSessions();
-}, [selectedSede, userProfile]);
+    if (!selectedSede) return;
+    loadSessions();
+  }, [selectedSede]);
   
    if (!loading && !selectedSede && sedesPermitidas.length === 0) {
     console.log("DEBUG Agenda:", {
@@ -98,62 +99,51 @@ export default function Agenda() {
     }
   }, [selectedDay, sessions]);
 
+  /* Se elimina el bloque - genera confución
   const token = localStorage.getItem("token");
   if (!token) {
     console.error("Token ausente");
     setLoading(false);
     return;
-  }
+  }*/
 
-  const loadSessions = async () => {
-  if (!selectedSede) {
-    setLoading(false);
-     return;
-  }
-     try {
-    const res = await
-      fetch(
+const loadSessions = async () => {
+  try {
+    setLoading(true);
+
+    const res = await fetch(
       `${import.meta.env.VITE_API_URL}/api/agenda/sessions?sede=${encodeURIComponent(selectedSede)}`,
       {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
       }
     );
 
     if (!res.ok) {
-      console.error("Agenda error:", res.status);
-      setSessions([]);
-      setLoading(false);
-      return;
+      throw new Error(`HTTP ${res.status}`);
     }
 
     const data = await res.json();
     setSessions(Array.isArray(data.sessions) ? data.sessions : []);
-    } catch (error) {
-      console.error("Error al cargar sesiones:", error);
-    } finally {
-      setLoading(false);
-    }
+  } catch (error) {
+    console.error("Error cargando agenda:", error);
+    setSessions([]);
+  } finally {
+    setLoading(false);
+  }
 };
 
-  const filterSessions = () => {
-  const filtered = sessions.filter((s) => {
-    if (!s.horaInicio) return false;
-
-    const day = new Date(s.horaInicio)
-      .toLocaleDateString("es-MX", { weekday: "long" })
-      .toLowerCase();
-
-    return day === selectedDay;
-  });
-
+const filterSessions = () => {
+  const filtered = sessions.filter(
+    (s) => s.dia && s.dia.toLowerCase() === selectedDay
+  );
   setFilteredSessions(filtered);
 };
 
   /* ==========================================
         Favoritos (sin recargar página)
-  ========================================== */
+  ========================================== 
   const toggleFavorite = async (sessionId) => {
   if (!userProfile) return;
 
@@ -176,11 +166,11 @@ export default function Agenda() {
      } catch (error) {
     console.error("Error al actualizar favorito:", error);
   }
-};
+};*/
 
   /* ==========================================
         Scanner QR
-  ========================================== */
+  ==========================================
   const startScanner = async () => {
     try {
       setShowScanner(true);
@@ -200,17 +190,17 @@ export default function Agenda() {
       setShowScanner(false);
       setScannerActive(false);
     }
-  };
+  };*/
 
-  const stopScanner = () => {
+  /*const stopScanner = () => {
     if (qrInstance) {
       qrInstance.stop().catch(() => {});
     }
     setShowScanner(false);
     setScannerActive(false);
-  };
+  };*/
 
-  const handleScanSuccess = async (sessionQR) => {
+  /*const handleScanSuccess = async (sessionQR) => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/agenda/checkin`, {
         method: "POST",
@@ -240,7 +230,7 @@ export default function Agenda() {
       alert("Error al registrar asistencia");
       stopScanner();
     }
-  };
+  };*/
 
   if (!userProfile) {
     return (
@@ -268,8 +258,9 @@ export default function Agenda() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Agenda del Evento</h1>
-
-        {["asistente", "staff"].includes(userProfile?.rol) && (
+        
+       {/*Scanner deshabilitado temporalmente 
+        ["asistente", "staff"].includes(userProfile?.rol) && (
           <button
             onClick={startScanner}
             disabled={scannerActive}
@@ -278,7 +269,8 @@ export default function Agenda() {
             <QrCode size={20} />
             Check-in
           </button>
-        )}
+        )*/} 
+       
       </div>
 
       {/* Filtros por día */}
@@ -328,7 +320,7 @@ export default function Agenda() {
             <SessionCard
               key={session.id}
               session={session}
-              isFavorite={
+             /*isFavorite={
                 userProfile &&
                 Array.isArray(userProfile.agendaGuardada) &&
                 userProfile.agendaGuardada.includes(session.id)
@@ -338,7 +330,7 @@ export default function Agenda() {
                 userProfile &&
                 Array.isArray(session.checkIns) &&
                 session.checkIns.includes(userProfile.id)
-              }
+              }*/
             />
           ))
         )}
@@ -350,7 +342,7 @@ export default function Agenda() {
 /* ==========================================
       Tarjeta de sesión
 ========================================== */
-function SessionCard({ session, isFavorite, onToggleFavorite, isCheckedIn }) {
+function SessionCard({ session }) {
   return (
     <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
       <div className="flex justify-between items-start">
@@ -398,6 +390,7 @@ function SessionCard({ session, isFavorite, onToggleFavorite, isCheckedIn }) {
           </div>
         </div>
 
+        {/*Favoritos deshabilitados temporalmente
         <button
           onClick={() => onToggleFavorite(session.id)}
           className="ml-4 p-2 hover:bg-gray-100 rounded-lg transition"
@@ -407,7 +400,7 @@ function SessionCard({ session, isFavorite, onToggleFavorite, isCheckedIn }) {
           ) : (
             <StarOff size={24} className="text-gray-400" />
           )}
-        </button>
+        </button>*/}
       </div>
     </div>
   );
