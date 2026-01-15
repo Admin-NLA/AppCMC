@@ -1,7 +1,6 @@
 // controllers/agendaController.js
 import axios from "axios";
 import { sedesPermitidasFromPases, sedeActivaPorFecha } from "../utils/sedeHelper.js";
-import pool from "../db.js";
 
 // dentro del controlador:
 const userPases = req.user?.pases || []; // si tu auth añade info del usuario
@@ -33,27 +32,6 @@ export const getAgendaFromWP = async (req, res) => {
       `${WP_URL}/session?per_page=100`
     );
 
-  const sessionsFormatted = sessions.map(s => ({
-    id: s.id,
-    titulo: s.title ?? "Sesión sin título",
-    descripcion: s.description ?? "",
-    horaInicio: s.start_at
-      ? new Date(s.start_at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
-      : "",
-    horaFin: s.end_at
-      ? new Date(s.end_at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
-      : "",
-    sala: s.room ?? "Por definir",
-    dia: s.start_at
-      ? new Date(s.start_at)
-          .toLocaleDateString("es-MX", { weekday: "long" })
-          .toLowerCase()
-      : "",
-    tipo: s.tipo ?? "conferencia",
-    speakerNombre: s.speakers?.map(sp => sp.name).join(", "),
-    sede: s.sede
-  }));
-
     // Formateamos las sesiones
     const sessions = sessionsWP.map((s) => ({
       id: s.id,
@@ -79,32 +57,9 @@ export const getAgendaFromWP = async (req, res) => {
     return res.json({ ok: true, sessions });
   } catch (error) {
     console.error("Error obteniendo agenda WP:", error);
-    
-    return res.status(200).json({
-      sessions: sessionsFormatted
+    return res.status(500).json({
+      ok: false,
+      error: "No se pudo obtener la agenda desde WordPress",
     });
   }
 };
-
-export async function getSessions(sede) {
-  const { rows } = await pool.query(
-    `
-    SELECT
-      id,
-      titulo,
-      descripcion,
-      dia,
-      hora_inicio AS "horaInicio",
-      hora_fin AS "horaFin",
-      sala,
-      tipo,
-      speaker_nombre AS "speakerNombre"
-    FROM agenda
-    WHERE sede = $1
-    ORDER BY dia, hora_inicio
-    `,
-    [sede]
-  );
-
-  return rows;
-}

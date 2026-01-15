@@ -18,7 +18,7 @@ router.get("/", authRequired, async (req, res) => {
 });
 
 // ✅ Alias real para sesiones
-router.get("/sessions", authRequired, async (req, res) => {
+router.get("/agenda/sessions", authRequired, async (req, res) => {
   try {
     const usuario = req.user;
     const pases = usuario?.pases || [];

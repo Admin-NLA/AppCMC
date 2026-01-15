@@ -5,7 +5,8 @@ import pool from "./db.js";
 
 // Importar rutas (ajusta las rutas según tu estructura)
 import authRoutes from "./routes/auth.js";
-import agendaRoutes from "./routes/agenda.routes.js";
+import agendaRoutes from "./routes/agenda.js";
+import speakersRoutes from "./routes/speakers.js";
 import expositoresRoutes from "./routes/expositores.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import notificacionesRoutes from "./routes/notificaciones.js";
@@ -15,21 +16,8 @@ import { sendSSE } from "./routes/notificaciones.js";
 import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js";
 
 dotenv.config();
+
 const app = express();
-
-// ✅ CORS configurado correctamente
-app.use(cors({
-  origin: true, // 🔥 PERMITE firebase, localhost, etc.
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-
-// 👇 ESTA LÍNEA FALTABA
-app.options("*", cors());
-
-app.use(express.json());
-
 const PORT = process.env.PORT || 3000;
 
 // 🌍 Orígenes permitidos
@@ -40,14 +28,28 @@ const allowedOrigins = [
   "http://localhost:3000"
 ];
 
+// ✅ CORS configurado correctamente
+app.use(cors({
+    origin: (origin, callback) => {
+      // Permitir requests sin origin (como Postman, curl, o server-to-server)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`❌ Origen rechazado: ${origin}`);
+        callback(null, false);
+      }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
+  exposedHeaders: ["Authorization"]
+}));
+
+// 👇 ESTA LÍNEA FALTABA
+app.options("*", cors());
+
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-app.use((req, res, next) => {
-  console.log("🌐 Request:", req.method, req.url);
-  next();
-});
-
-app.use("/api/agenda", agendaRoutes);
 
 // ✅ Health Check (IMPORTANTE para Render)
 app.get('/', (req, res) => {
