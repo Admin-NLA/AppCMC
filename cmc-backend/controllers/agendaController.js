@@ -1,6 +1,7 @@
 // controllers/agendaController.js
 import axios from "axios";
 import { sedesPermitidasFromPases, sedeActivaPorFecha } from "../utils/sedeHelper.js";
+import pool from "../db.js";
 
 // dentro del controlador:
 const userPases = req.user?.pases || []; // si tu auth añade info del usuario
@@ -84,3 +85,26 @@ export const getAgendaFromWP = async (req, res) => {
     });
   }
 };
+
+export async function getSessions(sede) {
+  const { rows } = await pool.query(
+    `
+    SELECT
+      id,
+      titulo,
+      descripcion,
+      dia,
+      hora_inicio AS "horaInicio",
+      hora_fin AS "horaFin",
+      sala,
+      tipo,
+      speaker_nombre AS "speakerNombre"
+    FROM agenda
+    WHERE sede = $1
+    ORDER BY dia, hora_inicio
+    `,
+    [sede]
+  );
+
+  return rows;
+}

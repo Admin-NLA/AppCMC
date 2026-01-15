@@ -5,8 +5,7 @@ import pool from "./db.js";
 
 // Importar rutas (ajusta las rutas según tu estructura)
 import authRoutes from "./routes/auth.js";
-import agendaRoutes from "./routes/agenda.js";
-import speakersRoutes from "./routes/speakers.js";
+import agendaRoutes from "./routes/agenda.routes.js";
 import expositoresRoutes from "./routes/expositores.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import notificacionesRoutes from "./routes/notificaciones.js";
@@ -48,6 +47,8 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use("/api/agenda", agendaRoutes);
+
 // ✅ Health Check (IMPORTANTE para Render)
 app.get('/', (req, res) => {
   res.json({ 
@@ -73,7 +74,7 @@ app.use("/auth", authRoutes);
 app.use("/api/auth", authRoutes); // Alias con /api
 
 app.use("/agenda", agendaRoutes);
-//app.use("/api/agenda/sessions", agendaRoutes); // Alias con /api
+app.use("/api/agenda/sessions", agendaRoutes); // Alias con /api
 
 app.use("/speakers", speakersRoutes);
 app.use("/api/speakers", speakersRoutes); // Alias con /api
