@@ -16,24 +16,20 @@ import { sendSSE } from "./routes/notificaciones.js";
 import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js";
 
 dotenv.config();
-
 const app = express();
+
 // ✅ CORS configurado correctamente
 app.use(cors({
-    origin: (origin, callback) => {
-      // Permitir requests sin origin (como Postman, curl, o server-to-server)
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.warn(`❌ Origen rechazado: ${origin}`);
-        callback(null, false);
-      }
-  },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  origin: true, // 🔥 PERMITE firebase, localhost, etc.
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"],
-  exposedHeaders: ["Authorization"]
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+// 👇 ESTA LÍNEA FALTABA
+app.options("*", cors());
+
+app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
@@ -44,11 +40,6 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000"
 ];
-
-app.use(express.json());
-
-// 👇 ESTA LÍNEA FALTABA
-app.options("*", cors());
 
 app.use(express.urlencoded({ extended: true }));
 
@@ -82,7 +73,7 @@ app.use("/auth", authRoutes);
 app.use("/api/auth", authRoutes); // Alias con /api
 
 app.use("/agenda", agendaRoutes);
-app.use("/api/agenda/sessions", agendaRoutes); // Alias con /api
+//app.use("/api/agenda/sessions", agendaRoutes); // Alias con /api
 
 app.use("/speakers", speakersRoutes);
 app.use("/api/speakers", speakersRoutes); // Alias con /api

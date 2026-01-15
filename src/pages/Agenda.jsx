@@ -111,14 +111,12 @@ const loadSessions = async () => {
   try {
     setLoading(true);
 
-    const res = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/agenda/sessions?sede=${encodeURIComponent(selectedSede)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
+    const res = await 
+    fetch(`${import.meta.env.VITE_API_URL}/api/agenda/sessions?sede=${selectedSede}`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`
       }
-    );
+    });
 
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
