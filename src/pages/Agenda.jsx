@@ -61,10 +61,19 @@ export default function Agenda() {
   // ===============================
   useEffect(() => {
     if (!userProfile) return;
-    
+
+    // fallback
+    if (!userProfile.pases || userProfile.pases.length === 0) {
+      setSelectedSede("MX");
+      return;
+    }
+
     if (sedesPermitidas.length === 1) {
       setSelectedSede(sedesPermitidas[0].name);
-    } else if (!selectedSede && sedePorFecha) {
+      return;
+    }
+
+    if (!selectedSede && sedePorFecha) {
       setSelectedSede(sedePorFecha.name);
     }
   }, [userProfile, sedesPermitidas, sedePorFecha]);
@@ -134,10 +143,16 @@ const loadSessions = async () => {
 
 const filterSessions = () => {
   const filtered = sessions.filter(
-    (s) => s.dia && s.dia.toLowerCase() === selectedDay
+    (s) =>
+      s.dia &&
+      typeof s.dia === "string" &&
+      s.dia.toLowerCase() === selectedDay
   );
+
   setFilteredSessions(filtered);
 };
+
+console.log("Sesiones crudas:", sessions);
 
   /* ==========================================
         Favoritos (sin recargar página)
