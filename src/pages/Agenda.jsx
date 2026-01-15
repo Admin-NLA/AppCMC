@@ -62,21 +62,37 @@ export default function Agenda() {
   useEffect(() => {
     if (!userProfile) return;
 
-    // fallback
+    // 1️⃣ Si el usuario no tiene pases → fallback
     if (!userProfile.pases || userProfile.pases.length === 0) {
-      setSelectedSede("MX");
+      setSelectedSede("MX"); // asegúrate que exista en DB
       return;
     }
 
+    // 2️⃣ Si solo tiene una sede permitida
     if (sedesPermitidas.length === 1) {
       setSelectedSede(sedesPermitidas[0].name);
       return;
     }
 
+    // 3️⃣ Si hay sede activa por fecha
     if (!selectedSede && sedePorFecha) {
       setSelectedSede(sedePorFecha.name);
     }
   }, [userProfile, sedesPermitidas, sedePorFecha]);
+
+    if (!loading && sessions.length === 0) {
+    return (
+      <div className="text-center text-gray-500 mt-10">
+        No hay sesiones disponibles para esta sede.
+      </div>
+    );
+  }
+  console.log("Agenda DEBUG →", {
+    selectedSede,
+    sedesPermitidas,
+    sedePorFecha,
+    loading
+  });
 
   /* ==========================================
         Cargar sesiones
