@@ -117,6 +117,7 @@ router.post('/checkin', async (req, res) => {
     console.error('Error en check-in:', error);
     res.status(500).json({ error: 'Error al registrar asistencia' });
   }
+  sessions
 });
 
 export default router;

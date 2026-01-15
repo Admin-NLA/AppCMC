@@ -18,16 +18,6 @@ import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js"
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// 🌍 Orígenes permitidos
-const allowedOrigins = [
-  "https://app-cmc.web.app",
-  "https://app-cmc.firebaseapp.com",
-  "http://localhost:5173",
-  "http://localhost:3000"
-];
-
 // ✅ CORS configurado correctamente
 app.use(cors({
     origin: (origin, callback) => {
@@ -45,11 +35,27 @@ app.use(cors({
   exposedHeaders: ["Authorization"]
 }));
 
+const PORT = process.env.PORT || 3000;
+
+// 🌍 Orígenes permitidos
+const allowedOrigins = [
+  "https://app-cmc.web.app",
+  "https://app-cmc.firebaseapp.com",
+  "http://localhost:5173",
+  "http://localhost:3000"
+];
+
+app.use(express.json());
+
 // 👇 ESTA LÍNEA FALTABA
 app.options("*", cors());
 
-app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use((req, res, next) => {
+  console.log("🌐 Request:", req.method, req.url);
+  next();
+});
 
 // ✅ Health Check (IMPORTANTE para Render)
 app.get('/', (req, res) => {
