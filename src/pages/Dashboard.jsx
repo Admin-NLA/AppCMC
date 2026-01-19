@@ -88,7 +88,7 @@ export default function Dashboard() {
       <div className="p-6">
         <h1 className="text-3xl font-bold">¡Bienvenido, {userProfile.nombre}!</h1>
 
-        {userProfile.rol === "admin" && <AdminView stats={stats} />}
+        {userProfile.rol === "super_admin" && <AdminView stats={stats} />}
         {userProfile.rol === "speaker" && <SpeakerView sessions={speakerSessions} />}
         {userProfile.rol === "asistente" && <AsistenteView stats={stats} nextSessions={nextSessions} />}
         {userProfile.rol === "expositor" && <ExpositorView stats={stats} />}

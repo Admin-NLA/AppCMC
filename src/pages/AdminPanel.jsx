@@ -26,7 +26,7 @@ export default function AdminPanel() {
 
   useEffect(() => {
     if (!userProfile) return;
-    if (userProfile.rol !== 'admin') {
+    if (userProfile.rol !== 'super_admin') {
       setLoading(false);
       return;
     }
@@ -79,7 +79,7 @@ export default function AdminPanel() {
     );
   }
 
-  if (userProfile.rol !== 'admin') {
+  if (userProfile.rol !== 'super_admin') {
     return (
       <div className="p-8 bg-red-50 text-red-600 rounded-xl shadow-sm text-center">
         <h2 className="text-2xl font-bold mb-2">Acceso restringido</h2>
@@ -723,7 +723,7 @@ function AdminNotifications() {
               <option value="staff">Staff</option>
               <option value="speaker">Speakers</option>
               <option value="expositor">Expositores</option>
-              <option value="admin">Admins</option>
+              <option value="super_admin">Admins</option>
             </select>
           </div>
 

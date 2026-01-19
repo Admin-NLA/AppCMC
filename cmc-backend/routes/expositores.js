@@ -56,7 +56,7 @@ router.get("/:id", authRequired, async (req, res) => {
 ======================================================== */
 router.post("/", authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== "admin" && req.user.tipo_pase !== "Staff") {
+    if (req.user.rol !== "super_admin" && req.user.tipo_pase !== "Staff") {
       return res.status(403).json({
         error: "No tienes permisos para crear expositores",
       });
@@ -90,7 +90,7 @@ router.put("/:id", authRequired, async (req, res) => {
     const { nombre, descripcion, logo_url, stand, categoria } = req.body;
 
     // ADMIN + STAFF → todo permitido
-    if (req.user.rol === "admin" || req.user.tipo_pase === "Staff") {
+    if (req.user.rol === "super_admin" || req.user.tipo_pase === "Staff") {
       const result = await pool.query(
         `UPDATE expositores
          SET nombre=$1, descripcion=$2, logo_url=$3, stand=$4, categoria=$5
@@ -129,7 +129,7 @@ router.put("/:id", authRequired, async (req, res) => {
 ======================================================== */
 router.delete("/:id", authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== "admin" && req.user.tipo_pase !== "Staff") {
+    if (req.user.rol !== "super_admin" && req.user.tipo_pase !== "Staff") {
       return res.status(403).json({
         error: "No tienes permisos para eliminar expositores",
       });

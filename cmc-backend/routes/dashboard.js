@@ -75,7 +75,7 @@ router.get("/", authRequired, async (req, res) => {
     // 3) Historial escaneos (entradas)
     // ----------------------------
     const pScanHistory =
-      user.rol === "staff" || user.rol === "admin"
+      user.rol === "staff" || user.rol === "super_admin"
         ? pool.query(
             `SELECT *
              FROM entradas
@@ -132,7 +132,7 @@ router.get("/", authRequired, async (req, res) => {
     let rolePayload = {};
 
     // ---------------- STAFF / ADMIN ----------------
-    if (user.rol === "staff" || user.rol === "admin") {
+    if (user.rol === "staff" || user.rol === "super_admin") {
       rolePayload = {
         stats: {
           bySede: (countBySedeR.rows || []).map((r) => ({

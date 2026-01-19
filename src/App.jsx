@@ -60,7 +60,7 @@ export default function App() {
           <Route
             path="/"
             element={
-              <PrivateRoute roles={['asistente', 'staff', 'speaker', 'expositor', 'admin']}>
+              <PrivateRoute roles={['asistente', 'staff', 'speaker', 'expositor', 'super_admin']}>
                 <Layout />
               </PrivateRoute>
             }
@@ -106,7 +106,7 @@ export default function App() {
             <Route
               path="staff"
               element={
-                <PrivateRoute roles={['staff', 'admin']}>
+                <PrivateRoute roles={['staff', 'super_admin']}>
                   <StaffPanel />
                 </PrivateRoute>
               }
@@ -116,7 +116,7 @@ export default function App() {
             <Route
               path="admin"
               element={
-                <PrivateRoute roles={['admin']}>
+                <PrivateRoute roles={['super_admin']}>
                   <AdminPanel />
                 </PrivateRoute>
               }

@@ -42,7 +42,7 @@ router.post("/", authRequired, async (req, res) => {
   try {
     const user = req.user;
 
-    if (user.rol !== "admin" && user.rol !== "staff") {
+    if (user.rol !== "super_admin" && user.rol !== "staff") {
       return res.status(403).json({ error: "Permiso denegado" });
     }
 
@@ -154,7 +154,7 @@ router.put("/:id/estado", authRequired, async (req, res) => {
   try {
     const user = req.user;
 
-    if (user.rol !== "admin" && user.rol !== "staff") {
+    if (user.rol !== "super_admin" && user.rol !== "staff") {
       return res.status(403).json({ error: "Permiso denegado" });
     }
 
@@ -206,7 +206,7 @@ router.put("/:id", authRequired, async (req, res) => {
   try {
     const user = req.user;
 
-    if (user.rol !== "staff" && user.rol !== "admin") {
+    if (user.rol !== "staff" && user.rol !== "super_admin") {
       return res.status(403).json({ error: "Permiso denegado" });
     }
 
@@ -268,7 +268,7 @@ router.delete("/:id", authRequired, async (req, res) => {
   try {
     const user = req.user;
 
-    if (user.rol !== "staff" && user.rol !== "admin") {
+    if (user.rol !== "staff" && user.rol !== "super_admin") {
       return res.status(403).json({ error: "Permiso denegado" });
     }
 

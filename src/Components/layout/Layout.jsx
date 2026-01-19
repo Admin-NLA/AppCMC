@@ -75,11 +75,11 @@ export default function Layout() {
 
   let finalMenu = [...baseMenu];
 
-  if (userProfile?.rol === "staff" || userProfile?.rol === "admin") {
+  if (userProfile?.rol === "staff" || userProfile?.rol === "super_admin") {
     finalMenu.push(...staffMenu);
   }
 
-  if (userProfile?.rol === "admin") {
+  if (userProfile?.rol === "super_admin") {
     finalMenu.push(...adminMenu);
   }
 

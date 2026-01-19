@@ -44,7 +44,7 @@ router.get("/:id", async (req, res) => {
 ======================================================== */
 router.post("/", authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== "admin" && req.user.rol !== "staff") {
+    if (req.user.rol !== "super_admin" && req.user.rol !== "staff") {
       return res.status(403).json({ error: "No autorizado para crear speakers" });
     }
 
@@ -80,7 +80,7 @@ router.put("/:id", authRequired, async (req, res) => {
     }
 
     // ADMIN + STAFF pueden editar cualquier perfil
-    if (req.user.rol !== "admin" && req.user.rol !== "staff" && req.user.rol !== "speaker") {
+    if (req.user.rol !== "super_admin" && req.user.rol !== "staff" && req.user.rol !== "speaker") {
       return res.status(403).json({ error: "No autorizado para editar speakers" });
     }
 
@@ -107,7 +107,7 @@ router.put("/:id", authRequired, async (req, res) => {
 ======================================================== */
 router.delete("/:id", authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== "admin") {
+    if (req.user.rol !== "super_admin") {
       return res.status(403).json({ error: "Solo admin puede eliminar speakers" });
     }
 
