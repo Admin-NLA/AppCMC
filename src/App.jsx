@@ -36,9 +36,9 @@ function PrivateRoute({ children, roles }) {
   }
 
   // 3️⃣ Validar roles
-  if (roles && !roles.includes(user.rol)) {
-    console.warn("⛔ Acceso denegado para rol:", user?.rol);
-    return <Navigate to="/dashboard" replace />;
+  if (!['admin', 'staff'].includes(user.rol)) {
+    console.warn('⛔ Acceso denegado para rol:', user.rol)
+    return <Navigate to="/login" />
   }
 
   // 4️⃣ Todo OK → renderiza la ruta
