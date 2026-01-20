@@ -52,7 +52,16 @@ export default function Agenda() {
   };
 
   const filterSessions = () => {
-    /*const filtered = sessions.filter((s) => {
+    const filtered = sessions.filter((s) => {
+      if (!s.dia) return false;
+
+      return s.dia.toLowerCase() === selectedDay;
+    });
+
+    setFilteredSessions(filtered);
+  };
+    /*-----------------RE AJUSTE ------------------/
+    const filtered = sessions.filter((s) => {
       if (!s.horaInicio) return false;
 
       const day = new Date(s.horaInicio)
@@ -60,10 +69,10 @@ export default function Agenda() {
         .toLowerCase();
 
       return day === selectedDay;
-    });*/
+    });
 
     setFilteredSessions(filtered);
-  };
+  };*/
 
   const toggleFavorite = async (sessionId) => {
     if (!userProfile) return;
