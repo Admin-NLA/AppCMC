@@ -52,7 +52,7 @@ export default function Agenda() {
   };
 
   const filterSessions = () => {
-    const filtered = sessions.filter((s) => {
+    /*const filtered = sessions.filter((s) => {
       if (!s.horaInicio) return false;
 
       const day = new Date(s.horaInicio)
@@ -60,7 +60,7 @@ export default function Agenda() {
         .toLowerCase();
 
       return day === selectedDay;
-    });
+    });*/
 
     setFilteredSessions(filtered);
   };
