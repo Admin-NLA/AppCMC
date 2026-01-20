@@ -69,7 +69,7 @@ router.get('/sessions', authRequired, async (req, res) => {
         titulo: post.title?.rendered || '',
         descripcion: post.content?.rendered?.replace(/<[^>]+>/g, '').substring(0, 200) || '',
         slug: post.slug,
-        dia: post.acf?.dia || null,
+        dia: post.acf?.dia ?? 0,
         horaInicio: post.acf?.hora_inicio || post.acf?.start_time || null,
         horaFin: post.acf?.hora_fin || post.acf?.end_time || null,
         sala: post.acf?.sala || post.acf?.room || '',
