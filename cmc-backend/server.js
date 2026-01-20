@@ -5,7 +5,7 @@ import pool from "./db.js";
 
 // Importar rutas (ajusta las rutas según tu estructura)
 import authRoutes from "./routes/auth.js";
-import agendaRoutes from "./routes/agenda.routes.js"; // ← Nota: agenda.routes.js
+import agendaRoutes from "./routes/agenda.js"; // ← Nota: agenda.routes.js
 import speakersRoutes from "./routes/speakers.routes.js"; // ← Nota: speakers.routes.js
 import expositoresRoutes from "./routes/expositores.js";
 import dashboardRoutes from "./routes/dashboard.js";

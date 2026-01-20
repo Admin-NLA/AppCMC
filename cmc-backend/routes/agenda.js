@@ -1,305 +1,123 @@
-import { Router } from "express";
-import pool from "../db.js";
-import { authRequired } from "../utils/authMiddleware.js";
-import {
-  sedesPermitidasFromPases,
-  sedeActivaPorFecha
-} from "../../src/utils/sedeHelper.js";
-import { parseWpClassList } from "../utils/wpClassParser.js";
-import axios from "axios";
+import express from 'express';
+import { wordpressAPI } from '../config/wordpress.js';
+import pool from '../db.js';
+import { authRequired } from '../utils/authMiddleware.js';
 
-const router = Router();
+const router = express.Router();
 
-// Alias para compatibilidad con frontend
-// Alias legacy para panel admin / frontend viejo
-router.get("/", authRequired, async (req, res) => {
-  req.url = "/agenda/sessions";
-  return router.handle(req, res);
-});
+// Función helper para extraer info del class_list
+function parseSessionClassList(classList = []) {
+  let sede = null;
+  let tipo = null;
+  let edicion = null;
+  let categoria = 'sesion';
+  
+  classList.forEach(cls => {
+    if (cls === 'events_category-chile') sede = 'chile';
+    if (cls === 'events_category-mexico') sede = 'mexico';
+    if (cls === 'events_category-colombia') sede = 'colombia';
+    
+    if (cls.startsWith('events_category-') && /\d{4}/.test(cls)) {
+      const tipoMatch = cls.match(/events_category-(brujula|toolbox|spark|orion|tracker|cursos)-/i);
+      if (tipoMatch) {
+        tipo = tipoMatch[1].toLowerCase();
+        if (tipo === 'cursos') categoria = 'curso';
+      }
+      
+      const paisMatch = cls.match(/-(cl|mx|co)-/i);
+      if (paisMatch) {
+        const pais = paisMatch[1].toLowerCase();
+        sede = pais === 'cl' ? 'chile' : pais === 'mx' ? 'mexico' : 'colombia';
+      }
+      
+      const yearMatch = cls.match(/(\d{4})/);
+      if (yearMatch) {
+        edicion = parseInt(yearMatch[1]);
+      }
+    }
+  });
+  
+  return { sede, tipo, edicion, categoria };
+}
 
-// ✅ Alias real para sesiones
-router.get("/agenda/sessions", authRequired, async (req, res) => {
+// ========================================================
+// GET /sessions - Obtener sesiones desde WordPress
+// ========================================================
+router.get('/sessions', authRequired, async (req, res) => {
   try {
-    const usuario = req.user;
-    const pases = usuario?.pases || [];
+    const { sede, edicion } = req.query;
 
-    const sedesPermitidasRaw = sedesPermitidasFromPases(pases);
-    const sedesPermitidas = sedesPermitidasRaw.map(s => s.name);
+    console.log(`[Agenda] Solicitando: sede=${sede}, edicion=${edicion}`);
 
-    if (
-      (!sedesPermitidas || sedesPermitidas.length === 0) &&
-      usuario.rol !== "super_admin"
-    ) {
-      return res.status(403).json({ error: "No tienes acceso a ninguna sede." });
-    }
-
-    let { sede } = req.query;
-
-    if (sedesPermitidas.length === 1) {
-      sede = sedesPermitidas[0];
-    } else if (!sede) {
-      const auto = sedeActivaPorFecha();
-      sede = auto?.name || sedesPermitidas[0];
-    }
-
-    const year = req.query.year
-  ? parseInt(req.query.year)
-  : new Date().getFullYear();
-
-    const result = await pool.query(
-      `
-      SELECT *,
-        COALESCE(year_override, year) AS year_final
-      FROM agenda
-      WHERE sede = $1
-        AND COALESCE(year_override, year) = $2
-      ORDER BY start_at ASC
-      `,
-      [sede, year]
-    );
-
-    const sessions = result.rows.map(s => ({
-      id: s.id,
-      titulo: s.title,
-      descripcion: s.description,
-      horaInicio: s.start_at,
-      horaFin: s.end_at,
-      sala: s.room,
-      tipo: s.tipo || "conferencia",
-      dia: s.dia,
-      speakerNombre: s.speaker_nombre || null,
-      sede: s.sede,
-      year: s.year_final,
-      checkIns: s.check_ins || [],
-    }));
-
-    res.json({ sessions });
-  } catch (err) {
-    console.error("Agenda sessions error:", err);
-    res.status(500).json({ error: "Error al obtener agenda" });
-  }
-});
-
-/* ========================================================================
-   GET — SESIÓN POR ID (STAFF/USER/ADMIN)
-========================================================================= */
-router.get("/:id", authRequired, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await pool.query(
-      "SELECT * FROM agenda WHERE id = $1",
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Sesión no encontrada" });
-    }
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error("Agenda ID error:", err);
-    res.status(500).json({ error: "Error al obtener sesión" });
-  }
-});
-
-/* importar sesiones desde WordPress  */
-router.post("/sync/wp", authRequired, async (req, res) => {
-  try {
-    if (!["super_admin","admin", "staff"].includes(req.user.rol)) {
-      return res.status(403).json({ error: "Solo staff/admin" });
-    }
-
-    const WP_URL = "https://cmc-latam.com/wp-json/wp/v2/session?per_page=100";
-
-    const wpRes = await axios.get(WP_URL, {
-      headers: {
-        "User-Agent": "CMC-App/1.0",
-        "Accept": "application/json"
-      },
-      timeout: 10000
+    // Obtener sesiones de WordPress
+    const wpResponse = await wordpressAPI.get('/session', {
+      params: {
+        per_page: 100,
+        _fields: 'id,title,content,slug,class_list,acf'
+      }
     });
 
-    const wpSessions = wpRes.data;
+    console.log(`[Agenda /sessions] Total de WP: ${wpResponse.data.length}`);
 
-    let inserted = 0;
-    let skipped = 0;
-
-    for (const wp of wpSessions) {
-      const parsed = parseWpClassList(wp.class_list);
-
-      if (!parsed) {
-        skipped++;
-        continue;
-      }
-
-        await pool.query(
-          `
-          INSERT INTO agenda (
-            title,
-            description,
-            start_at,
-            end_at,
-            sede,
-            year,
-            tipo,
-            categoria,
-            external_source
-          )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-          ON CONFLICT DO NOTHING
-          `,
-          [
-            wp.title.rendered,
-            wp.content.rendered,
-            wp.acf?.start_at || null,
-            wp.acf?.end_at || null,
-            parsed.sede,
-            parsed.year,
-            parsed.tipo,
-            parsed.tipo === "curso" ? "curso" : "sesion",
-            {
-              source: "wordpress",
-              wp_id: wp.id,
-              slug: wp.slug,
-              class_list: wp.class_list
-            }
-          ]
-        );
-
-        inserted++;
-      }
-
-    res.json({ ok: true, inserted, skipped });
-
-  } catch (err) {
-    console.error("WP sync error REAL:", err.message);
-    res.status(500).json({
-      error: "Error sincronizando WordPress",
-      detail: err.message
+    // Procesar cada sesión
+    let sessions = wpResponse.data.map(post => {
+      const parsed = parseSessionClassList(post.class_list || []);
+      
+      return {
+        id: post.id,
+        wp_id: post.id,
+        titulo: post.title?.rendered || '',
+        descripcion: post.content?.rendered?.replace(/<[^>]+>/g, '').substring(0, 200) || '',
+        slug: post.slug,
+        dia: post.acf?.dia || null,
+        horaInicio: post.acf?.hora_inicio || post.acf?.start_time || null,
+        horaFin: post.acf?.hora_fin || post.acf?.end_time || null,
+        sala: post.acf?.sala || post.acf?.room || '',
+        qrSala: post.acf?.qr_sala || post.acf?.qr || '',
+        tipo: parsed.tipo || 'general',
+        categoria: parsed.categoria,
+        sede: parsed.sede,
+        edicion: parsed.edicion,
+        speakerNombre: post.acf?.speaker || '',
+        speakerId: post.acf?.speaker_id || null,
+        source: 'wordpress'
+      };
     });
-  }
-});
 
-/* ========================================================================
-   CRUD ADMIN — SOLO ADMIN
-========================================================================= */
-
-// Crear sesión
-router.post("/", authRequired, async (req, res) => {
-  try {
-    if (!["super_admin", "admin"].includes(req.user.rol))
-      return res.status(403).json({ error: "Solo admin puede crear sesiones" });
-
-    const { title, description, start_at, end_at, room, speakers, sede } = req.body;
-
-    const result = await pool.query(
-      `INSERT INTO agenda (title, description, start_at, end_at, room, speakers, sede)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [title, description, start_at, end_at, room, speakers || [], sede]
-    );
-
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error("Agenda create error:", err);
-    res.status(500).json({ error: "Error al crear sesión" });
-  }
-});
-
-// Editar sesión
-router.put("/:id", authRequired, async (req, res) => {
-  try {
-    if (!["super_admin", "admin"].includes(req.user.rol))
-      return res.status(403).json({ error: "Solo admin puede editar" });
-
-    const { id } = req.params;
-    const { title, description, start_at, end_at, room, speakers, sede } = req.body;
-
-    const result = await pool.query(
-      `UPDATE agenda
-       SET title=$1, description=$2, start_at=$3, end_at=$4, room=$5, speakers=$6, sede=$7
-       WHERE id=$8
-       RETURNING *`,
-      [title, description, start_at, end_at, room, speakers, sede, id]
-    );
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error("Agenda update error:", err);
-    res.status(500).json({ error: "Error al actualizar sesión" });
-  }
-});
-
-// Eliminar sesión
-router.delete("/:id", authRequired, async (req, res) => {
-  try {
-    if (!["super_admin", "admin"].includes(req.user.rol))
-      return res.status(403).json({ error: "Solo admin puede eliminar" });
-
-    const { id } = req.params;
-
-    await pool.query("DELETE FROM agenda WHERE id = $1", [id]);
-
-    res.json({ message: "Sesión eliminada" });
-  } catch (err) {
-    console.error("Agenda delete error:", err);
-    res.status(500).json({ error: "Error al eliminar sesión" });
-  }
-});
-
-/* ========================================================================
-   POST — CHECK-IN A SESIÓN
-========================================================================= */
-router.post("/checkin", authRequired, async (req, res) => {
-  try {
-    const { qr, userId } = req.body;
-
-    if (!qr || !userId) {
-      return res.status(400).json({ error: "Datos incompletos" });
+    // Filtrar por sede
+    if (sede) {
+      const sedeLower = sede.toLowerCase();
+      const before = sessions.length;
+      sessions = sessions.filter(s => s.sede === sedeLower);
+      console.log(`[Agenda] Filtro sede "${sede}": ${before} → ${sessions.length}`);
     }
 
-    // validar sesión
-    const sessionResult = await pool.query(
-      "SELECT id, title FROM agenda WHERE id = $1",
-      [qr]
-    );
-
-    if (sessionResult.rows.length === 0) {
-      return res.status(404).json({ error: "Sesión no válida" });
+    // Filtrar por edición
+    if (edicion) {
+      const before = sessions.length;
+      const edicionNum = parseInt(edicion);
+      sessions = sessions.filter(s => s.edicion === edicionNum);
+      console.log(`[Agenda] Filtro edicion "${edicion}": ${before} → ${sessions.length}`);
     }
 
-    // evitar doble check-in
-    const exists = await pool.query(
-      `SELECT 1 FROM asistencias_sesion 
-       WHERE session_id = $1 AND user_id = $2`,
-      [qr, userId]
-    );
-
-    if (exists.rows.length > 0) {
-      return res.status(400).json({ error: "Ya registraste asistencia" });
-    }
-
-    await pool.query(
-      `INSERT INTO asistencias_sesion (session_id, user_id)
-       VALUES ($1, $2)`,
-      [qr, userId]
-    );
-
+    // ✅ Responder con formato que espera el frontend
     res.json({
-      ok: true,
-      session: sessionResult.rows[0],
+      sessions: sessions
     });
-  } catch (err) {
-    console.error("Check-in error:", err);
-    res.status(500).json({ error: "Error al registrar asistencia" });
+
+  } catch (error) {
+    console.error('❌ Error en GET /agenda/sessions:', error.message);
+    res.status(500).json({
+      sessions: [],
+      error: error.message
+    });
   }
 });
 
-/* ========================================================================
-   FAVORITOS — GUARDAR SESIÓN
-========================================================================= */
-router.post("/favorite/:id", authRequired, async (req, res) => {
+// ========================================================
+// POST /favorite/:id - Agregar a favoritos
+// ========================================================
+router.post('/favorite/:id', authRequired, async (req, res) => {
   try {
     const sessionId = req.params.id;
     const userId = req.user.id;
@@ -313,15 +131,15 @@ router.post("/favorite/:id", authRequired, async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("Favorite error:", err);
-    res.status(500).json({ error: "Error al guardar favorito" });
+    console.error('❌ Error guardando favorito:', err);
+    res.status(500).json({ error: 'Error al guardar favorito' });
   }
 });
 
-/* ========================================================================
-   FAVORITOS — QUITAR SESIÓN
-========================================================================= */
-router.post("/unfavorite/:id", authRequired, async (req, res) => {
+// ========================================================
+// POST /unfavorite/:id - Quitar de favoritos
+// ========================================================
+router.post('/unfavorite/:id', authRequired, async (req, res) => {
   try {
     const sessionId = req.params.id;
     const userId = req.user.id;
@@ -333,14 +151,67 @@ router.post("/unfavorite/:id", authRequired, async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("Unfavorite error:", err);
-    res.status(500).json({ error: "Error al quitar favorito" });
+    console.error('❌ Error quitando favorito:', err);
+    res.status(500).json({ error: 'Error al quitar favorito' });
   }
 });
 
-router.use((err, req, res, next) => {
-  console.error("Agenda error:", err);
-  res.status(500).json({ error: "Error en agenda" });
+// ========================================================
+// POST /checkin - Registrar asistencia
+// ========================================================
+router.post('/checkin', authRequired, async (req, res) => {
+  try {
+    const { qr, userId } = req.body;
+
+    if (!qr || !userId) {
+      return res.status(400).json({ error: 'Datos incompletos' });
+    }
+
+    // Buscar sesión por QR en WordPress
+    const wpResponse = await wordpressAPI.get('/session', {
+      params: {
+        per_page: 100,
+        _fields: 'id,title,acf'
+      }
+    });
+
+    const session = wpResponse.data.find(post => 
+      post.acf?.qr === qr || post.acf?.qr_code === qr
+    );
+
+    if (!session) {
+      return res.status(404).json({ error: 'Código QR inválido' });
+    }
+
+    // Verificar si ya hizo check-in
+    const exists = await pool.query(
+      `SELECT 1 FROM asistencias_sesion 
+       WHERE session_id = $1 AND user_id = $2`,
+      [session.id, userId]
+    );
+
+    if (exists.rows.length > 0) {
+      return res.status(400).json({ error: 'Ya registraste asistencia' });
+    }
+
+    // Registrar asistencia
+    await pool.query(
+      `INSERT INTO asistencias_sesion (id, session_id, user_id, fecha)
+       VALUES (gen_random_uuid(), $1, $2, NOW())`,
+      [session.id, userId]
+    );
+
+    res.json({
+      ok: true,
+      session: {
+        id: session.id,
+        titulo: session.title?.rendered || ''
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error en check-in:', err);
+    res.status(500).json({ error: 'Error al registrar asistencia' });
+  }
 });
 
 export default router;
