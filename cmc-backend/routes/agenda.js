@@ -188,7 +188,7 @@ router.post("/sync/wp", authRequired, async (req, res) => {
 // Crear sesión
 router.post("/", authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== "admin","super_admin")
+    if (!["super_admin", "admin"].includes(req.user.rol))
       return res.status(403).json({ error: "Solo admin puede crear sesiones" });
 
     const { title, description, start_at, end_at, room, speakers, sede } = req.body;
@@ -210,7 +210,7 @@ router.post("/", authRequired, async (req, res) => {
 // Editar sesión
 router.put("/:id", authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== "super_admin","admin")
+    if (!["super_admin", "admin"].includes(req.user.rol))
       return res.status(403).json({ error: "Solo admin puede editar" });
 
     const { id } = req.params;
@@ -234,7 +234,7 @@ router.put("/:id", authRequired, async (req, res) => {
 // Eliminar sesión
 router.delete("/:id", authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== "super_admin","admin")
+    if (!["super_admin", "admin"].includes(req.user.rol))
       return res.status(403).json({ error: "Solo admin puede eliminar" });
 
     const { id } = req.params;

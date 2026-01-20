@@ -36,7 +36,7 @@ function PrivateRoute({ children, roles }) {
   }
 
   // 3️⃣ Validar roles
-  if (!['admin', 'staff'].includes(user.rol)) {
+  if (!['super_admin', 'admin', 'staff'].includes(user.rol)) {
     console.warn('⛔ Acceso denegado para rol:', user.rol)
     return <Navigate to="/login" />
   }
