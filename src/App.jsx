@@ -35,15 +35,16 @@ function PrivateRoute({ children, roles }) {
     return <Navigate to="/login" replace />;
   }
 
-  // 3️⃣ Validar roles
-  if (!['super_admin', 'admin', 'staff'].includes(user.rol)) {
-    console.warn('⛔ Acceso denegado para rol:', user.rol)
-    return <Navigate to="/login" />
+  // ✅ USAR roles DINÁMICOS
+  if (roles && !roles.includes(user.rol)) {
+    console.warn("⛔ Acceso denegado para rol:", user.rol);
+    return <Navigate to="/dashboard" replace />;
   }
 
-  // 4️⃣ Todo OK → renderiza la ruta
+// 4️⃣ Todo OK → renderiza la ruta
   return children;
 }
+
 // termina Proteccion de rutas
 
 export default function App() {
