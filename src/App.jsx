@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext.jsx";
 import { NotificationProvider } from "./contexts/NotificationContext.jsx";
+import { EventProvider } from "./contexts/EventContext.jsx";
 
 // Layout global
 import Layout from "./Components/layout/Layout.jsx";
@@ -51,88 +52,90 @@ export default function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
-      <Router>
-        <Routes>
+        <EventProvider>
+          <Router>
+            <Routes>
 
-          {/* ---------- LOGIN NO USA LAYOUT ---------- */}
-          <Route path="/login" element={<Login />} />
+              {/* ---------- LOGIN NO USA LAYOUT ---------- */}
+              <Route path="/login" element={<Login />} />
 
-          {/* ---------- TODAS LAS RUTAS PROTEGIDAS VAN DENTRO DEL LAYOUT ---------- */}
-          <Route
-            path="/"
-            element={
-              <PrivateRoute roles={['asistente', 'staff', 'speaker', 'expositor', 'super_admin']}>
-                <Layout />
-              </PrivateRoute>
-            }
-          >
+              {/* ---------- TODAS LAS RUTAS PROTEGIDAS VAN DENTRO DEL LAYOUT ---------- */}
+              <Route
+                path="/"
+                element={
+                  <PrivateRoute roles={['asistente', 'staff', 'speaker', 'expositor', 'super_admin']}>
+                    <Layout />
+                  </PrivateRoute>
+                }
+              >
 
-            {/* Dashboard */}
-            <Route
-              path="dashboard"
-              element={<Dashboard />}
-            />
+                {/* Dashboard */}
+                <Route
+                  path="dashboard"
+                  element={<Dashboard />}
+                />
 
-            {/* Agenda */}
-            <Route
-              path="agenda"
-              element={<Agenda />}
-            />
+                {/* Agenda */}
+                <Route
+                  path="agenda"
+                  element={<Agenda />}
+                />
 
-            {/* Speakers */}
-            <Route
-              path="speakers"
-              element={<Speakers />}
-            />
+                {/* Speakers */}
+                <Route
+                  path="speakers"
+                  element={<Speakers />}
+                />
 
-            {/* Expositores */}
-            <Route
-              path="expositores"
-              element={<Expositores />}
-            />
+                {/* Expositores */}
+                <Route
+                  path="expositores"
+                  element={<Expositores />}
+                />
 
-            {/* Notificaciones */}
-            <Route
-              path="notificaciones"
-              element={<Notificaciones />}
-            />
+                {/* Notificaciones */}
+                <Route
+                  path="notificaciones"
+                  element={<Notificaciones />}
+                />
 
-            {/* Perfil */}
-            <Route
-              path="perfil"
-              element={<Perfil />}
-            />
+                {/* Perfil */}
+                <Route
+                  path="perfil"
+                  element={<Perfil />}
+                />
 
-            {/* Staff Panel */}
-            <Route
-              path="staff"
-              element={
-                <PrivateRoute roles={['staff', 'super_admin']}>
-                  <StaffPanel />
-                </PrivateRoute>
-              }
-            />
+                {/* Staff Panel */}
+                <Route
+                  path="staff"
+                  element={
+                    <PrivateRoute roles={['staff', 'super_admin']}>
+                      <StaffPanel />
+                    </PrivateRoute>
+                  }
+                />
 
-            {/* Admin Panel */}
-            <Route
-              path="admin"
-              element={
-                <PrivateRoute roles={['super_admin']}>
-                  <AdminPanel />
-                </PrivateRoute>
-              }
-            />
+                {/* Admin Panel */}
+                <Route
+                  path="admin"
+                  element={
+                    <PrivateRoute roles={['super_admin']}>
+                      <AdminPanel />
+                    </PrivateRoute>
+                  }
+                />
 
-          </Route>
+              </Route>
 
-          {/* ---------- NOT FOUND ---------- */}
-          <Route path="/404" element={<NotFound />} />
+              {/* ---------- NOT FOUND ---------- */}
+              <Route path="/404" element={<NotFound />} />
 
-          {/* ---------- DEFAULT ---------- */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              {/* ---------- DEFAULT ---------- */}
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
 
-        </Routes>
-      </Router>
+            </Routes>
+          </Router>
+        </EventProvider>  
       </NotificationProvider>
     </AuthProvider>
   );
