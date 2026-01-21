@@ -1,69 +1,44 @@
-// src/context/EventContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
-import { useAuth } from "./AuthContext";
 
-const EventContext = createContext(null);
+const EventContext = createContext();
 
-export const EventProvider = ({ children }) => {
-  const { user } = useAuth();
-
+export function EventProvider({ user, children }) {
   const [sedeActiva, setSedeActiva] = useState(null);
   const [edicionActiva, setEdicionActiva] = useState(null);
-  const [sedesPermitidas, setSedesPermitidas] = useState([]);
-  const [edicionesPermitidas, setEdicionesPermitidas] = useState([]);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!user || !user.pases) return;
+    if (!user) {
+      setReady(false);
+      return;
+    }
 
-    const pases = user.pases;
+    setSedeActiva(user.sede || null);
+    setEdicionActiva(user.edicion || 2025);
 
-    // Ediciones permitidas
-    const ediciones = [...new Set(pases.map(p => p.edicion))].sort();
-    setEdicionesPermitidas(ediciones);
-
-    // Año actual
-    const currentYear = new Date().getFullYear();
-
-    // Edición activa por defecto
-    const edicionDefault = ediciones.includes(currentYear)
-      ? currentYear
-      : Math.max(...ediciones);
-
-    setEdicionActiva(edicionDefault);
-
-    // Sedes permitidas (según edición activa)
-    const sedes = pases
-      .filter(p => p.edicion === edicionDefault)
-      .map(p => p.sede);
-
-    const sedesUnicas = [...new Set(sedes)];
-    setSedesPermitidas(sedesUnicas);
-
-    // Sede activa por defecto
-    setSedeActiva(sedesUnicas.length === 1 ? sedesUnicas[0] : sedesUnicas[0]);
-
+    setReady(true);
   }, [user]);
 
-  const value = {
-    sedeActiva,
-    edicionActiva,
-    sedesPermitidas,
-    edicionesPermitidas,
-    setSedeActiva,
-    setEdicionActiva
-  };
-
   return (
-    <EventContext.Provider value={value}>
+    <EventContext.Provider
+      value={{
+        sedeActiva,
+        edicionActiva,
+        setSedeActiva,
+        setEdicionActiva,
+        ready,
+        multiSede: Boolean(user?.multi_sedes),
+      }}
+    >
       {children}
     </EventContext.Provider>
   );
-};
+}
 
-export const useEvent = () => {
+export function useEvent() {
   const context = useContext(EventContext);
   if (!context) {
-    throw new Error("useEvent must be used within an EventProvider");
+    throw new Error("useEvent debe usarse dentro de EventProvider");
   }
   return context;
-};
+}
