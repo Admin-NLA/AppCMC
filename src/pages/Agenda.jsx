@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
-import API from "../services/api";
+//import API from "../services/api"; -------- Sin uso
 import {
   Calendar,
   Clock,
@@ -9,27 +9,42 @@ import {
   Star,
   StarOff,
 } from "lucide-react";
+//------------hooks---------------------------------------->
+import useEventoActivo from "../hooks/useEventoActivo";
+import useAgenda from "../hooks/useAgenda";
+//--------------------------------------------------------->
 
 export default function Agenda() {
   const { userProfile } = useAuth();
-
+  //----hooks---------------------------------------------->
+  const eventoActivo = useEventoActivo();
+  const { agenda, loading, error } = useAgenda(eventoActivo); //⛔ ESTE loading viene de useAgenda
+  //--------------------------------------------------------->
   const [sessions, setSessions] = useState([]);
+    useEffect(() => {
+      if (agenda && Array.isArray(agenda)) {
+        setSessions(agenda);
+      }
+    }, [agenda]);
+
   const [filteredSessions, setFilteredSessions] = useState([]);
   const [selectedDay, setSelectedDay] = useState("lunes");
-  const [loading, setLoading] = useState(true);
+  // const [loading, setLoading] = useState(true);  ⛔ ESTE loading pisa al anterior
 
   const days = ["lunes", "martes", "miercoles", "jueves"];
 
-  // Cargar sesiones al montar el componente
+  /* Cargar sesiones al montar el componente ----- SE ELIMINA----------
   useEffect(() => {
     loadSessions();
   }, []);
+  --------------------------------------------------------------------*/
 
   // Filtrar sesiones cuando cambia el día seleccionado
   useEffect(() => {
     filterSessions();
   }, [selectedDay, sessions]);
 
+  /* ----- SE ELIMINA----------------------------------------
   const loadSessions = async () => {
     try {
       setLoading(true);
@@ -50,6 +65,9 @@ export default function Agenda() {
       setLoading(false);
     }
   };
+--------------------------------- SE ELIMINA-------------------------> */
+
+
 // NUEVA FUNCION ------------------------------------------------------
   const DAY_MAP = {
     1: "lunes",
@@ -109,7 +127,7 @@ export default function Agenda() {
     );
   }
 
-  if (loading) {
+  if (loading || !eventoActivo) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -117,6 +135,9 @@ export default function Agenda() {
       </div>
     );
   }
+
+  console.log("📌 EVENTO ACTIVO EN AGENDA:", eventoActivo);
+  console.log("📌 SESIONES DESDE useAgenda:", agenda);
 
   return (
     <div>
