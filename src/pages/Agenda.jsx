@@ -50,16 +50,26 @@ export default function Agenda() {
       setLoading(false);
     }
   };
+// NUEVA FUNCION ------------------------------------------------------
+  const DAY_MAP = {
+    1: "lunes",
+    2: "martes",
+    3: "miercoles",
+    4: "jueves",
+  };
 
   const filterSessions = () => {
-    const filtered = sessions.filter((s) => {
-      if (!s.dia) return false;
+  const filtered = sessions.filter((s) => {
+    if (!s.dia) return false;
 
-      return s.dia.toLowerCase() === selectedDay;
-    });
+    const diaTexto = DAY_MAP[s.dia];
+
+    return diaTexto === selectedDay;
+  });
 
     setFilteredSessions(filtered);
   };
+//---------------------------------------------------------------------
     /*-----------------RE AJUSTE ------------------/
     const filtered = sessions.filter((s) => {
       if (!s.horaInicio) return false;
