@@ -13,9 +13,16 @@ import Header from "../Components/layout/Header";
 // ============================================================
 
 export default function Dashboard() {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, permisos } = useAuth();
   // ✅ AQUÍ SÍ se puede usar el hook
   const { sedeActiva, edicionActiva, multiSede, ready } = useEvent();
+  if (!permisos) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-600">Cargando permisos...</p>
+      </div>
+    );
+  }
 
   if (!ready) {
     return (
@@ -103,9 +110,18 @@ export default function Dashboard() {
       <div className="p-6">
         <h1 className="text-3xl font-bold">¡Bienvenido, {userProfile.nombre}!</h1>
 
+        {/* ADMIN / STAFF */}
         {userProfile.rol === "super_admin" && <AdminView stats={stats} />}
+
+        {/* SPEAKER */}
         {userProfile.rol === "speaker" && <SpeakerView sessions={speakerSessions} />}
-        {userProfile.rol === "asistente" && <AsistenteView stats={stats} nextSessions={nextSessions} />}
+
+        {/* ASISTENTES */}
+        {permisos.verAgenda && userProfile.rol === "asistente" && (
+          <AsistenteView stats={stats} nextSessions={nextSessions} />
+        )}
+
+        {/* EXPOSITOR */}
         {userProfile.rol === "expositor" && <ExpositorView stats={stats} />}
       </div>
     </div>
