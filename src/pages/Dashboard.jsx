@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
+//----Sede activa--//
+import { useEvent } from "../contexts/EventContext";
 import API from "../services/api";
+
 import { Link } from "react-router-dom";
 import { Calendar, Users, Building2, CheckCircle, Clock, TrendingUp, Award, Bell } from "lucide-react";
 import Header from "../Components/layout/Header";
@@ -11,6 +14,10 @@ import Header from "../Components/layout/Header";
 
 export default function Dashboard() {
   const { user, userProfile } = useAuth();
+
+  // ✅ AQUÍ SÍ se puede usar el hook
+  const { sedeActiva, edicionActiva, multiSede } = useEvent();
+  console.log("EVENTO ACTIVO:", { sedeActiva, edicionActiva, multiSede });
 
   const [stats, setStats] = useState({
     totalSessions: 0,
