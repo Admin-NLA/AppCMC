@@ -1,7 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext.jsx";
-import { NotificationProvider } from "./contexts/NotificationContext.jsx";
 import { EventProvider } from "./contexts/EventContext.jsx";
+import { NotificationProvider } from "./contexts/NotificationContext.jsx";
+
 
 // Layout global
 import Layout from "./Components/layout/Layout.jsx";
@@ -46,16 +47,14 @@ function PrivateRoute({ children, roles }) {
   return children;
 }
 
-// termina Proteccion de rutas
+//wrapper interno-----------------
+function AppWithEvent() {
+  const { user } = useAuth();
 
-export default function App() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <EventProvider>
-          <Router>
-            <Routes>
-
+    <EventProvider user={user}>
+      <Router>
+        <Routes>
               {/* ---------- LOGIN NO USA LAYOUT ---------- */}
               <Route path="/login" element={<Login />} />
 
@@ -132,10 +131,19 @@ export default function App() {
 
               {/* ---------- DEFAULT ---------- */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Router>
+    </EventProvider>
+  );
+}
+//-------------------------------
 
-            </Routes>
-          </Router>
-        </EventProvider>  
+// termina Proteccion de rutas
+export default function App() {
+  return (
+    <AuthProvider>
+      <NotificationProvider>
+        <AppWithEvent />  
       </NotificationProvider>
     </AuthProvider>
   );
