@@ -13,8 +13,15 @@ export function EventProvider({ user, children }) {
       return;
     }
 
-    setSedeActiva(user.sede || null);
-    setEdicionActiva(user.edicion || 2025);
+    // Super admin y staff ven todo
+    if (user.rol === "super_admin" || user.rol === "staff") {
+    setSedeActiva(null);
+    } else {
+    setSedeActiva(user.sede ?? null);
+    }
+
+    // Edición
+    setEdicionActiva(user.edicion ?? 2025);
 
     setReady(true);
   }, [user]);

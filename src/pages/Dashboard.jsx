@@ -14,9 +14,17 @@ import Header from "../Components/layout/Header";
 
 export default function Dashboard() {
   const { user, userProfile } = useAuth();
-
   // ✅ AQUÍ SÍ se puede usar el hook
-  const { sedeActiva, edicionActiva, multiSede } = useEvent();
+  const { sedeActiva, edicionActiva, multiSede, ready } = useEvent();
+
+  if (!ready) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-600">Cargando evento...</p>
+      </div>
+    );
+  }
+
   console.log("EVENTO ACTIVO:", { sedeActiva, edicionActiva, multiSede });
 
   const [stats, setStats] = useState({
