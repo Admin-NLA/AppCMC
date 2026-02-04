@@ -38,26 +38,30 @@ export default function AdminPanel() {
       setLoading(true);
 
       if (activeTab === 'sessions') {
+        // ✅ CORREGIDO: Se eliminó la letra "v" suelta
         const res = await API.get('/agenda/sessions');
-        v
+        console.log('📊 Admin Panel - Sesiones:', res.data);
+        
+        setSessions(res.data.sessions || res.data || []);
 
+        // También cargar speakers para el formulario
         const sp = await API.get('/speakers');
-        setSpeakers(sp.data);
+        setSpeakers(sp.data || []);
       }
 
       if (activeTab === 'speakers') {
         const res = await API.get('/speakers');
-        setSpeakers(res.data);
+        setSpeakers(res.data || []);
       }
 
       if (activeTab === 'exhibitors') {
-        const res = await API.get('/exhibitors');
-        setExhibitors(res.data);
+        const res = await API.get('/expositores');
+        setExhibitors(res.data || []);
       }
 
     } catch (error) {
-      console.error('Error al cargar datos:', error);
-      alert('Error al cargar datos del servidor');
+      console.error('❌ Error al cargar datos:', error);
+      alert(`Error al cargar datos: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -119,7 +123,10 @@ export default function AdminPanel() {
 
       <div className="bg-white rounded-xl shadow-md p-6">
         {loading ? (
-          <p className="text-gray-500 text-center py-8">Cargando datos...</p>
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Cargando datos...</p>
+          </div>
         ) : (
           <>
             {activeTab === 'sessions' && (
@@ -178,7 +185,9 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
     horaInicio: '',
     horaFin: '',
     sala: '',
-    tipo: 'conferencia',
+    tipo: 'spark',
+    sede: 'chile',
+    edicion: 2025,
     speakerId: '',
     speakerNombre: ''
   });
@@ -192,7 +201,9 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
         horaInicio: editingItem.horaInicio || '',
         horaFin: editingItem.horaFin || '',
         sala: editingItem.sala || '',
-        tipo: editingItem.tipo || 'conferencia',
+        tipo: editingItem.tipo || 'spark',
+        sede: editingItem.sede || 'chile',
+        edicion: editingItem.edicion || 2025,
         speakerId: editingItem.speakerId || '',
         speakerNombre: editingItem.speakerNombre || ''
       });
@@ -208,7 +219,9 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
       horaInicio: '',
       horaFin: '',
       sala: '',
-      tipo: 'conferencia',
+      tipo: 'spark',
+      sede: 'chile',
+      edicion: 2025,
       speakerId: '',
       speakerNombre: ''
     });
@@ -220,11 +233,11 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
 
     try {
       if (editingItem?.id) {
-        await API.put(`/agenda/sessions/${editingItem.id}`);
-        alert('Sesión actualizada');
+        await API.put(`/agenda/sessions/${editingItem.id}`, formData);
+        alert('✅ Sesión actualizada');
       } else {
         await API.post('/agenda/sessions', formData);
-        alert('Sesión creada');
+        alert('✅ Sesión creada');
       }
 
       resetForm();
@@ -233,7 +246,7 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
 
     } catch (error) {
       console.error('Error guardando sesión:', error);
-      alert('Error al guardar sesión');
+      alert(`❌ Error: ${error.response?.data?.error || error.message}`);
     }
   };
 
@@ -242,11 +255,11 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
     
     try {
       await API.delete(`/agenda/sessions/${id}`);
-      alert('Sesión eliminada');
+      alert('✅ Sesión eliminada');
       onReload();
     } catch (error) {
       console.error('Error:', error);
-      alert('Error al eliminar');
+      alert(`❌ Error: ${error.response?.data?.error || error.message}`);
     }
   };
 
@@ -270,7 +283,7 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
         <form onSubmit={handleSubmit} className="bg-gray-50 p-6 rounded-lg mb-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm mb-1">Título *</label>
+              <label className="block text-sm font-medium mb-1">Título *</label>
               <input
                 type="text"
                 className="w-full px-3 py-2 border rounded-lg"
@@ -281,20 +294,47 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
             </div>
 
             <div>
-              <label className="block text-sm mb-1">Tipo *</label>
+              <label className="block text-sm font-medium mb-1">Tipo *</label>
               <select
                 className="w-full px-3 py-2 border rounded-lg"
                 value={formData.tipo}
                 onChange={e => setFormData({ ...formData, tipo: e.target.value })}
               >
-                <option value="conferencia">Conferencia</option>
+                <option value="spark">Spark</option>
+                <option value="toolbox">Toolbox</option>
+                <option value="brujula">Brújula</option>
+                <option value="orion">Orión</option>
                 <option value="curso">Curso</option>
-                <option value="taller">Taller</option>
               </select>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium mb-1">Sede *</label>
+              <select
+                className="w-full px-3 py-2 border rounded-lg"
+                value={formData.sede}
+                onChange={e => setFormData({ ...formData, sede: e.target.value })}
+              >
+                <option value="chile">Chile</option>
+                <option value="mexico">México</option>
+                <option value="colombia">Colombia</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Edición *</label>
+              <input
+                type="number"
+                className="w-full px-3 py-2 border rounded-lg"
+                value={formData.edicion}
+                onChange={e => setFormData({ ...formData, edicion: parseInt(e.target.value) })}
+                min="2020"
+                max="2030"
+              />
+            </div>
+
             <div className="md:col-span-2">
-              <label className="block text-sm mb-1">Descripción</label>
+              <label className="block text-sm font-medium mb-1">Descripción</label>
               <textarea
                 className="w-full px-3 py-2 border rounded-lg"
                 rows={3}
@@ -304,12 +344,13 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
             </div>
 
             <div>
-              <label className="block text-sm mb-1">Día *</label>
+              <label className="block text-sm font-medium mb-1">Día</label>
               <select
                 className="w-full px-3 py-2 border rounded-lg"
                 value={formData.dia}
                 onChange={e => setFormData({ ...formData, dia: e.target.value })}
               >
+                <option value="">Sin asignar</option>
                 <option value="lunes">Lunes</option>
                 <option value="martes">Martes</option>
                 <option value="miercoles">Miércoles</option>
@@ -318,44 +359,42 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
             </div>
 
             <div>
-              <label className="block text-sm mb-1">Sala *</label>
+              <label className="block text-sm font-medium mb-1">Sala</label>
               <input
                 type="text"
                 className="w-full px-3 py-2 border rounded-lg"
                 value={formData.sala}
                 onChange={e => setFormData({ ...formData, sala: e.target.value })}
-                required
+                placeholder="Ej: Sala Principal"
               />
             </div>
 
             <div>
-              <label className="block text-sm mb-1">Hora Inicio *</label>
+              <label className="block text-sm font-medium mb-1">Hora Inicio</label>
               <input
                 type="time"
                 className="w-full px-3 py-2 border rounded-lg"
                 value={formData.horaInicio}
                 onChange={e => setFormData({ ...formData, horaInicio: e.target.value })}
-                required
               />
             </div>
 
             <div>
-              <label className="block text-sm mb-1">Hora Fin *</label>
+              <label className="block text-sm font-medium mb-1">Hora Fin</label>
               <input
                 type="time"
                 className="w-full px-3 py-2 border rounded-lg"
                 value={formData.horaFin}
                 onChange={e => setFormData({ ...formData, horaFin: e.target.value })}
-                required
               />
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm mb-1">Speaker *</label>
+              <label className="block text-sm font-medium mb-1">Speaker</label>
               <select
                 value={formData.speakerId}
                 onChange={e => {
-                  const selected = speakers.find(s => s.id === e.target.value);
+                  const selected = speakers.find(s => s.id === parseInt(e.target.value));
                   setFormData({
                     ...formData,
                     speakerId: selected?.id || '',
@@ -363,9 +402,8 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
                   });
                 }}
                 className="w-full px-3 py-2 border rounded-lg"
-                required
               >
-                <option value="">-- Selecciona un speaker --</option>
+                <option value="">-- Sin speaker asignado --</option>
                 {speakers.map(s => (
                   <option key={s.id} value={s.id}>
                     {s.nombre}
@@ -375,11 +413,18 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2">
+          <div className="flex gap-2 pt-4">
+            <button 
+              type="submit" 
+              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
+            >
               <Save size={20} /> {editingItem ? 'Actualizar' : 'Guardar'}
             </button>
-            <button type="button" onClick={() => { setShowForm(false); resetForm(); }} className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg">
+            <button 
+              type="button" 
+              onClick={() => { setShowForm(false); resetForm(); }} 
+              className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
+            >
               Cancelar
             </button>
           </div>
@@ -392,28 +437,42 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
         ) : (
           sessions.map(s => (
             <div key={s.id} className="flex justify-between items-center border p-4 rounded-lg hover:bg-gray-50">
-              <div>
-                <h3 className="font-bold">{s.titulo}</h3>
-                <p className="text-sm text-gray-600">
-                  {new Date(s.horaInicio).toLocaleDateString('es-MX', { weekday: 'long' })} •
-                  {new Date(s.horaInicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -
-                  {new Date(s.horaFin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} •
-                  {s.sala}
-                </p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded font-medium">
+                    {s.tipo?.toUpperCase()}
+                  </span>
+                  <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
+                    {s.sede} {s.edicion}
+                  </span>
+                </div>
+                <h3 className="font-bold text-lg">{s.titulo}</h3>
                 {s.speakerNombre && (
-                  <p className="text-sm text-gray-600 mt-1">Speaker: {s.speakerNombre}</p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    <Users size={14} className="inline mr-1" />
+                    Speaker: {s.speakerNombre}
+                  </p>
+                )}
+                {(s.dia || s.sala || s.horaInicio) && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    {s.dia && `${s.dia} • `}
+                    {s.horaInicio && `${s.horaInicio} - ${s.horaFin} • `}
+                    {s.sala}
+                  </p>
                 )}
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setEditingItem(s)}
                   className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                  title="Editar"
                 >
                   <Edit2 size={18} />
                 </button>
                 <button
                   onClick={() => handleDelete(s.id)}
                   className="p-2 text-red-600 hover:bg-red-50 rounded"
+                  title="Eliminar"
                 >
                   <Trash2 size={18} />
                 </button>
@@ -460,17 +519,17 @@ function SpeakersManager({ speakers, showForm, setShowForm, editingItem, setEdit
     try {
       if (editingItem?.id) {
         await API.put(`/speakers/${editingItem.id}`, form);
-        alert('Speaker actualizado');
+        alert('✅ Speaker actualizado');
       } else {
         await API.post('/speakers', form);
-        alert('Speaker creado');
+        alert('✅ Speaker creado');
       }
       resetForm();
       setShowForm(false);
       onReload();
     } catch (e) {
       console.error(e);
-      alert('Error guardando speaker');
+      alert(`❌ Error: ${e.response?.data?.error || e.message}`);
     }
   };
 
@@ -478,11 +537,11 @@ function SpeakersManager({ speakers, showForm, setShowForm, editingItem, setEdit
     if (!confirm('¿Eliminar speaker?')) return;
     try {
       await API.delete(`/speakers/${id}`);
-      alert('Speaker eliminado');
+      alert('✅ Speaker eliminado');
       onReload();
     } catch (e) {
       console.error(e);
-      alert('Error al eliminar');
+      alert(`❌ Error: ${e.response?.data?.error || e.message}`);
     }
   };
 

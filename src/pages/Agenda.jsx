@@ -8,54 +8,46 @@ import {
   User,
   Star,
   StarOff,
+  AlertCircle,
 } from "lucide-react";
-//------------hooks---------------------------------------->
-import useEventoActivo from "../hooks/useEventoActivo";
-import useAgenda from "../hooks/useAgenda";
-//--------------------------------------------------------->
 
 export default function Agenda() {
   const { userProfile } = useAuth();
-  //----hooks---------------------------------------------->
-  const eventoActivo = useEventoActivo();
-  const { agenda, loading, error } = useAgenda(eventoActivo); //⛔ ESTE loading viene de useAgenda
-  //--------------------------------------------------------->
+
   const [sessions, setSessions] = useState([]);
-    useEffect(() => {
-      if (agenda && Array.isArray(agenda)) {
-        setSessions(agenda);
-      }
-    }, [agenda]);
-
   const [filteredSessions, setFilteredSessions] = useState([]);
-  const [selectedDay, setSelectedDay] = useState("lunes");
-  // const [loading, setLoading] = useState(true);  ⛔ ESTE loading pisa al anterior
+  const [selectedDay, setSelectedDay] = useState("todos");
+  const [loading, setLoading] = useState(true);
 
-  const days = ["lunes", "martes", "miercoles", "jueves"];
+  const days = [
+    { id: "todos", label: "Todos" },
+    { id: "lunes", label: "Lunes" },
+    { id: "martes", label: "Martes" },
+    { id: "miercoles", label: "Miércoles" },
+    { id: "jueves", label: "Jueves" }
+  ];
 
-  /* Cargar sesiones al montar el componente ----- SE ELIMINA----------
+  // Cargar sesiones al montar el componente
   useEffect(() => {
     loadSessions();
   }, []);
-  --------------------------------------------------------------------*/
 
   // Filtrar sesiones cuando cambia el día seleccionado
   useEffect(() => {
     filterSessions();
   }, [selectedDay, sessions]);
 
-  /* ----- SE ELIMINA----------------------------------------
   const loadSessions = async () => {
     try {
       setLoading(true);
       
-      // Llamar al endpoint correcto
       const res = await API.get("/agenda/sessions");
       
       console.log("📅 Sesiones recibidas:", res.data);
+      console.log("📅 Primera sesión:", res.data.sessions?.[0]);
 
       // Extraer las sesiones del response
-      const sessionData = res.data.sessions || [];
+      const sessionData = res.data.sessions || res.data || [];
       setSessions(Array.isArray(sessionData) ? sessionData : []);
 
     } catch (error) {
@@ -65,50 +57,40 @@ export default function Agenda() {
       setLoading(false);
     }
   };
---------------------------------- SE ELIMINA-------------------------> */
-
-
-// NUEVA FUNCION ------------------------------------------------------
-  const DAY_MAP = {
-    1: "lunes",
-    2: "martes",
-    3: "miercoles",
-    4: "jueves",
-  };
 
   const filterSessions = () => {
-  const filtered = sessions.filter((s) => {
-    if (!s.dia) return false;
+    // Si selecciona "todos", mostrar todas
+    if (selectedDay === "todos") {
+      setFilteredSessions(sessions);
+      return;
+    }
 
-    const diaTexto = DAY_MAP[s.dia];
-
-    return diaTexto === selectedDay;
-  });
-
-    setFilteredSessions(filtered);
-  };
-//---------------------------------------------------------------------
-    /*-----------------RE AJUSTE ------------------/
     const filtered = sessions.filter((s) => {
-      if (!s.horaInicio) return false;
+      // Si la sesión tiene el campo 'dia', usarlo
+      if (s.dia) {
+        return s.dia.toLowerCase() === selectedDay;
+      }
 
-      const day = new Date(s.horaInicio)
-        .toLocaleDateString("es-MX", { weekday: "long" })
-        .toLowerCase();
+      // Si no tiene 'dia', intentar extraerlo de horaInicio
+      if (s.horaInicio) {
+        const day = new Date(s.horaInicio)
+          .toLocaleDateString("es-MX", { weekday: "long" })
+          .toLowerCase();
+        return day === selectedDay;
+      }
 
-      return day === selectedDay;
+      // Si no tiene ni 'dia' ni 'horaInicio', no mostrar
+      return false;
     });
 
     setFilteredSessions(filtered);
-  };*/
+  };
 
   const toggleFavorite = async (sessionId) => {
     if (!userProfile) return;
 
     try {
-      const url = `/agenda/favorite/${sessionId}`;
-
-      await API.post(url, {
+      await API.post(`/agenda/favorite/${sessionId}`, {
         userId: userProfile.id
       });
 
@@ -127,7 +109,7 @@ export default function Agenda() {
     );
   }
 
-  if (loading || !eventoActivo) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -135,9 +117,6 @@ export default function Agenda() {
       </div>
     );
   }
-
-  console.log("📌 EVENTO ACTIVO EN AGENDA:", eventoActivo);
-  console.log("📌 SESIONES DESDE useAgenda:", agenda);
 
   return (
     <div>
@@ -149,24 +128,40 @@ export default function Agenda() {
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
         {days.map((day) => (
           <button
-            key={day}
-            onClick={() => setSelectedDay(day)}
-            className={`px-6 py-2 rounded-lg font-medium transition ${
-              selectedDay === day
+            key={day.id}
+            onClick={() => setSelectedDay(day.id)}
+            className={`px-6 py-2 rounded-lg font-medium transition whitespace-nowrap ${
+              selectedDay === day.id
                 ? "bg-blue-600 text-white"
                 : "bg-white text-gray-700 hover:bg-gray-100"
             }`}
           >
-            {day.charAt(0).toUpperCase() + day.slice(1)}
+            {day.label}
           </button>
         ))}
       </div>
 
       {/* Debug info */}
-      <div className="bg-gray-100 p-4 rounded-lg mb-4 text-sm">
-        <p><strong>Total sesiones:</strong> {sessions.length}</p>
-        <p><strong>Día seleccionado:</strong> {selectedDay}</p>
-        <p><strong>Sesiones filtradas:</strong> {filteredSessions.length}</p>
+      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-4 text-sm">
+        <div className="flex items-start gap-2">
+          <AlertCircle size={20} className="text-blue-600 mt-0.5" />
+          <div>
+            <p className="font-semibold text-blue-900 mb-1">Información de depuración:</p>
+            <p className="text-blue-800"><strong>Total sesiones cargadas:</strong> {sessions.length}</p>
+            <p className="text-blue-800"><strong>Filtro actual:</strong> {selectedDay}</p>
+            <p className="text-blue-800"><strong>Sesiones mostradas:</strong> {filteredSessions.length}</p>
+            {sessions.length > 0 && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-blue-700 hover:text-blue-900">
+                  Ver estructura de primera sesión
+                </summary>
+                <pre className="mt-2 p-2 bg-white rounded text-xs overflow-auto">
+                  {JSON.stringify(sessions[0], null, 2)}
+                </pre>
+              </details>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Lista de sesiones */}
@@ -174,12 +169,20 @@ export default function Agenda() {
         {filteredSessions.length === 0 ? (
           <div className="bg-white rounded-xl shadow-md p-8 text-center">
             <Calendar size={48} className="mx-auto text-gray-400 mb-3" />
-            <p className="text-gray-600">
+            <p className="text-gray-600 font-medium mb-2">
               {sessions.length === 0 
                 ? "No hay sesiones disponibles"
                 : `No hay sesiones programadas para ${selectedDay}`
               }
             </p>
+            {sessions.length > 0 && selectedDay !== "todos" && (
+              <button
+                onClick={() => setSelectedDay("todos")}
+                className="mt-3 text-blue-600 hover:text-blue-700 underline"
+              >
+                Ver todas las sesiones
+              </button>
+            )}
           </div>
         ) : (
           filteredSessions.map((session) => (
@@ -196,38 +199,54 @@ export default function Agenda() {
 }
 
 function SessionCard({ session, onToggleFavorite }) {
+  // Función para formatear la hora
+  const formatTime = (dateString) => {
+    if (!dateString) return 'Sin hora';
+    try {
+      return new Date(dateString).toLocaleTimeString('es-MX', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-medium ${
-                session.tipo === "conferencia"
-                  ? "bg-blue-100 text-blue-700"
-                  : session.tipo === "curso"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-purple-100 text-purple-700"
-              }`}
-            >
-              {session.tipo}
-            </span>
+            {session.tipo && (
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  session.tipo === "conferencia"
+                    ? "bg-blue-100 text-blue-700"
+                    : session.tipo === "curso"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-purple-100 text-purple-700"
+                }`}
+              >
+                {session.tipo}
+              </span>
+            )}
+            {session.dia && (
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                {session.dia}
+              </span>
+            )}
           </div>
 
-          <h3 className="text-xl font-bold mb-2">{session.titulo}</h3>
-          <p className="text-gray-600 mb-4 line-clamp-2">{session.descripcion}</p>
+          <h3 className="text-xl font-bold mb-2">{session.titulo || 'Sin título'}</h3>
+          {session.descripcion && (
+            <p className="text-gray-600 mb-4 line-clamp-2">{session.descripcion}</p>
+          )}
 
           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
             <div className="flex items-center gap-1">
               <Clock size={16} />
-              {session.horaInicio ? new Date(session.horaInicio).toLocaleTimeString('es-MX', {
-                hour: '2-digit',
-                minute: '2-digit'
-              }) : 'Sin hora'}
-              {session.horaFin && ` - ${new Date(session.horaFin).toLocaleTimeString('es-MX', {
-                hour: '2-digit',
-                minute: '2-digit'
-              })}`}
+              {formatTime(session.horaInicio)}
+              {session.horaFin && ` - ${formatTime(session.horaFin)}`}
             </div>
 
             {session.sala && (
@@ -249,8 +268,9 @@ function SessionCard({ session, onToggleFavorite }) {
         <button
           onClick={() => onToggleFavorite(session.id)}
           className="ml-4 p-2 hover:bg-gray-100 rounded-lg transition"
+          title="Agregar a favoritos"
         >
-          <StarOff size={24} className="text-gray-400" />
+          <StarOff size={24} className="text-gray-400 hover:text-yellow-500" />
         </button>
       </div>
     </div>
