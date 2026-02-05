@@ -234,7 +234,37 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
 
     try {
       if (editingItem?.id) {
-        await API.put(`/agenda/sessions/${editingItem.id}`, formData);
+        console.log("ID que se envía:", editingItem?.id);
+        console.log("🧪 Actualizando sesión:", editingItem.id);
+
+        await API.put(
+          `/agenda/sessions/${editingItem.id}`,
+          formData
+        );
+
+        alert("✅ Sesión actualizada");
+      } else {
+        await API.post("/agenda/sessions", formData);
+        alert("✅ Sesión creada");
+      }
+
+      resetForm();
+      setShowForm(false);
+      onReload();
+
+    } catch (error) {
+      console.error("❌ Error guardando sesión:", error);
+
+      alert(
+        `❌ Error: ${
+          error.response?.data?.error ||
+          error.response?.data?.message ||
+          error.message
+        }`
+      );
+    }
+  };
+        /*await API.put(`/agenda/sessions/${editingItem.id}`, formData);
         alert('✅ Sesión actualizada');
       } else {
         await API.post('/agenda/sessions', formData);
@@ -249,7 +279,7 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
       console.error('Error guardando sesión:', error);
       alert(`❌ Error: ${error.response?.data?.error || error.message}`);
     }
-  };
+  };*/
 
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar esta sesión?')) return;
