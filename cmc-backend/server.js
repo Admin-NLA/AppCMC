@@ -95,13 +95,13 @@ app.use("/api/dashboard", dashboardRoutes);
 // Notificaciones
 app.use("/api/notificaciones", notificacionesRoutes);
 
-// ⚠️ Rutas legacy (mantener por compatibilidad)
+/* ⚠️ Rutas legacy (mantener por compatibilidad)
 app.use("/auth", authRoutes);
 app.use("/agenda", agendaRoutes);
 app.use("/speakers", speakersRoutes);
 app.use("/expositores", expositoresRoutes);
 app.use("/dashboard", dashboardRoutes);
-app.use("/notificaciones", notificacionesRoutes);
+app.use("/notificaciones", notificacionesRoutes);*/
 
 // =========================================
 // 🔔 Server Sent Events (SSE) para notificaciones en tiempo real

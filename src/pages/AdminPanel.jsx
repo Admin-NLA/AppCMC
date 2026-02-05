@@ -41,12 +41,13 @@ export default function AdminPanel() {
         // ✅ CORREGIDO: Se eliminó la letra "v" suelta
         const res = await API.get('/agenda/sessions');
         console.log('📊 Admin Panel - Sesiones:', res.data);
-        
         setSessions(res.data.sessions || res.data || []);
 
         // También cargar speakers para el formulario
         const sp = await API.get('/speakers');
-        setSpeakers(sp.data || []);
+        console.log('🧪 RESPUESTA SPEAKERS:', sp.data);
+        setSpeakers(Array.isArray(sp.data?.data) ? sp.data.data : []);
+        console.log("✅ SPEAKERS NORMALIZADOS:", speakers);
       }
 
       if (activeTab === 'speakers') {
@@ -445,6 +446,21 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
                   <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
                     {s.sede} {s.edicion}
                   </span>
+                  {s.source === 'wordpress' && (
+                    <span className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded">
+                      📡 WordPress
+                    </span>
+                  )}
+                  {s.source === 'wordpress-edited' && (
+                    <span className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded">
+                      ✏️ WP Editado
+                    </span>
+                  )}
+                  {s.source === 'local' && (
+                    <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">
+                      💾 Local
+                    </span>
+                  )}
                 </div>
                 <h3 className="font-bold text-lg">{s.titulo}</h3>
                 {s.speakerNombre && (
@@ -462,17 +478,18 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
                 )}
               </div>
               <div className="flex gap-2">
+                {/* TODOS pueden editarse ahora */}
                 <button
                   onClick={() => setEditingItem(s)}
                   className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                  title="Editar"
+                  title={s.source === 'wordpress' ? 'Editar (creará override local)' : 'Editar'}
                 >
                   <Edit2 size={18} />
                 </button>
                 <button
                   onClick={() => handleDelete(s.id)}
                   className="p-2 text-red-600 hover:bg-red-50 rounded"
-                  title="Eliminar"
+                  title={s.source === 'wordpress' ? 'Eliminar override' : 'Eliminar'}
                 >
                   <Trash2 size={18} />
                 </button>

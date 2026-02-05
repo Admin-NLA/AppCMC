@@ -1,5 +1,7 @@
 import express from 'express';
 import { wordpressAPI } from '../config/wordpress.js';
+import pool from '../db.js';
+import { authRequired } from '../utils/authMiddleware.js';
 
 const router = express.Router();
 
@@ -7,31 +9,39 @@ const router = express.Router();
 function parseSpeakerClassList(classList = []) {
   let sede = null;
   let eventos = [];
+  let edicion = null;
   
   classList.forEach(cls => {
-    // Detectar sede: team-category-chile, team-category-mexico, team-category-colombia
+    // Detectar sede
     if (cls === 'team-category-chile') sede = 'chile';
     if (cls === 'team-category-mexico') sede = 'mexico';
     if (cls === 'team-category-colombia') sede = 'colombia';
     
-    // Detectar eventos que contengan año
+    // Detectar eventos con año
     if (cls.startsWith('team-category-') && /\d{4}/.test(cls)) {
-      // Ejemplos: team-category-speakers-2025-cl, team-category-toolbox-cl-2025
       eventos.push(cls.replace('team-category-', ''));
+      
+      // Extraer año
+      const yearMatch = cls.match(/(\d{4})/);
+      if (yearMatch && !edicion) {
+        edicion = parseInt(yearMatch[1]);
+      }
     }
   });
   
-  return { sede, eventos };
+  return { sede, eventos, edicion };
 }
 
-// GET /api/speakers?sede=chile&edicion=2025
+// ========================================================
+// GET /speakers - Obtener speakers (WordPress + BD local)
+// ========================================================
 router.get('/', async (req, res) => {
   try {
     const { sede, edicion } = req.query;
 
     console.log(`[Speakers] Solicitando: sede=${sede}, edicion=${edicion}`);
 
-    // Obtener speakers de WordPress
+    // 1. Obtener speakers de WordPress
     const wpResponse = await wordpressAPI.get('/team-member', {
       params: {
         per_page: 100,
@@ -39,59 +49,384 @@ router.get('/', async (req, res) => {
       }
     });
 
-    console.log(`[Speakers] Total obtenidos de WP: ${wpResponse.data.length}`);
+    console.log(`[Speakers] Total de WP: ${wpResponse.data.length}`);
 
-    // Procesar cada speaker
-    let speakers = wpResponse.data.map(post => {
-      const { sede: detectedSede, eventos } = parseSpeakerClassList(post.class_list || []);
+    // 2. Procesar speakers de WordPress
+    let wpSpeakers = wpResponse.data.map(post => {
+      const { sede: detectedSede, eventos, edicion: detectedEdicion } = parseSpeakerClassList(post.class_list || []);
       
       return {
         id: post.id,
         wp_id: post.id,
         nombre: post.title?.rendered || '',
-        biografia: post.content?.rendered || '',
+        bio: post.content?.rendered?.replace(/<[^>]+>/g, '').substring(0, 300) || '',
         cargo: post.acf?.cargo || post.acf?.position || '',
         empresa: post.acf?.empresa || post.acf?.company || '',
         slug: post.slug,
-        foto: post.featured_media || null,
-        linkedin: post.acf?.linkedin || '',
-        twitter: post.acf?.twitter || '',
-        website: post.acf?.website || '',
+        foto: post.acf?.photo_url || post.featured_media || null,
+        linkedin: post.acf?.linkedin_url || post.acf?.linkedin || '',
+        twitter: post.acf?.twitter_url || post.acf?.twitter || '',
+        website: post.acf?.website_url || post.acf?.website || '',
+        email: post.acf?.email || '',
+        telefono: post.acf?.telefono || post.acf?.phone || '',
         sede: detectedSede,
+        edicion: detectedEdicion,
         eventos: eventos,
-        source: 'wordpress'
+        source: 'wordpress',
+        canEdit: false
       };
     });
 
-    // Filtrar por sede si se proporciona
+    // 3. Obtener speakers de la BD local
+    const localResult = await pool.query(`
+      SELECT 
+        id,
+        nombre,
+        bio,
+        cargo,
+        company as empresa,
+        photo_url as foto,
+        linkedin_url as linkedin,
+        twitter_url as twitter,
+        website_url as website,
+        email,
+        telefono,
+        sede,
+        edicion,
+        activo,
+        es_destacado as destacado,
+        source,
+        wp_slug as slug
+      FROM speakers
+      WHERE activo = true
+      ORDER BY nombre ASC
+    `);
+
+    const localSpeakers = localResult.rows.map(s => ({
+      ...s,
+      canEdit: true,
+      source: s.source || 'local'
+    }));
+
+    // 4. Combinar ambas fuentes
+    let allSpeakers = [...wpSpeakers, ...localSpeakers];
+
+    // 5. Aplicar filtros
     if (sede) {
       const sedeLower = sede.toLowerCase();
-      const before = speakers.length;
-      speakers = speakers.filter(s => s.sede === sedeLower);
-      console.log(`[Speakers] Filtro sede "${sede}": ${before} → ${speakers.length}`);
+      const before = allSpeakers.length;
+      allSpeakers = allSpeakers.filter(s => s.sede === sedeLower);
+      console.log(`[Speakers] Filtro sede "${sede}": ${before} → ${allSpeakers.length}`);
     }
 
-    // Filtrar por edición si se proporciona
     if (edicion) {
-      const before = speakers.length;
-      speakers = speakers.filter(s =>
-        s.eventos.some(e => e.includes(edicion))
+      const before = allSpeakers.length;
+      const edicionNum = parseInt(edicion);
+      allSpeakers = allSpeakers.filter(s => 
+        s.edicion === edicionNum || 
+        (s.eventos && s.eventos.some(e => e.includes(edicion)))
       );
-      console.log(`[Speakers] Filtro edicion "${edicion}": ${before} → ${speakers.length}`);
+      console.log(`[Speakers] Filtro edicion "${edicion}": ${before} → ${allSpeakers.length}`);
     }
 
-    res.json({
-      success: true,
-      count: speakers.length,
-      data: speakers
-    });
+    // 6. Responder (formato que espera el frontend)
+    res.json(allSpeakers);
 
   } catch (error) {
     console.error('❌ Error en GET /speakers:', error.message);
     res.status(500).json({ 
-      success: false,
       error: 'Error al obtener speakers',
-      detail: error.message 
+      details: error.message 
+    });
+  }
+});
+
+// ========================================================
+// GET /speakers/:id - Obtener speaker específico
+// ========================================================
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Buscar en BD local primero
+    const local = await pool.query(
+      `SELECT 
+        id,
+        nombre,
+        bio,
+        cargo,
+        company as empresa,
+        photo_url as foto,
+        linkedin_url as linkedin,
+        twitter_url as twitter,
+        website_url as website,
+        email,
+        telefono,
+        sede,
+        edicion
+      FROM speakers
+      WHERE id = $1 AND activo = true`,
+      [id]
+    );
+
+    if (local.rows.length > 0) {
+      return res.json(local.rows[0]);
+    }
+
+    // Si no está en local, buscar en WordPress por wp_id
+    const wpResponse = await wordpressAPI.get(`/team-member/${id}`);
+    
+    if (wpResponse.data) {
+      const post = wpResponse.data;
+      const { sede, edicion } = parseSpeakerClassList(post.class_list || []);
+      
+      return res.json({
+        id: post.id,
+        nombre: post.title?.rendered || '',
+        bio: post.content?.rendered || '',
+        cargo: post.acf?.cargo || '',
+        empresa: post.acf?.empresa || '',
+        foto: post.acf?.photo_url || '',
+        linkedin: post.acf?.linkedin_url || '',
+        sede,
+        edicion,
+        source: 'wordpress'
+      });
+    }
+
+    res.status(404).json({ error: 'Speaker no encontrado' });
+
+  } catch (error) {
+    console.error('❌ Error obteniendo speaker:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========================================================
+// POST /speakers - Crear speaker
+// ========================================================
+router.post('/', authRequired, async (req, res) => {
+  try {
+    const {
+      nombre,
+      bio,
+      cargo,
+      empresa,
+      foto,
+      linkedin,
+      twitter,
+      website,
+      email,
+      telefono,
+      sede,
+      edicion
+    } = req.body;
+
+    console.log('📝 Creando speaker:', nombre);
+
+    if (!nombre) {
+      return res.status(400).json({ error: 'El nombre es requerido' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO speakers 
+      (
+        id,
+        nombre, 
+        bio, 
+        cargo, 
+        company, 
+        photo_url,
+        linkedin_url,
+        twitter_url,
+        website_url,
+        email,
+        telefono,
+        sede,
+        edicion,
+        activo,
+        source,
+        created_at
+      )
+      VALUES (
+        gen_random_uuid(),
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true, 'local', NOW()
+      )
+      RETURNING 
+        id,
+        nombre,
+        bio,
+        cargo,
+        company as empresa,
+        photo_url as foto,
+        linkedin_url as linkedin,
+        sede,
+        edicion
+      `,
+      [
+        nombre,
+        bio || '',
+        cargo || '',
+        empresa || '',
+        foto || null,
+        linkedin || '',
+        twitter || '',
+        website || '',
+        email || '',
+        telefono || '',
+        sede || 'chile',
+        edicion || 2025
+      ]
+    );
+
+    console.log('✅ Speaker creado:', result.rows[0].id);
+
+    res.status(201).json({
+      ok: true,
+      speaker: result.rows[0],
+      message: 'Speaker creado exitosamente'
+    });
+
+  } catch (err) {
+    console.error("❌ Error creando speaker:", err);
+    res.status(500).json({ 
+      error: "Error creando speaker",
+      details: err.message 
+    });
+  }
+});
+
+// ========================================================
+// PUT /speakers/:id - Actualizar speaker
+// ========================================================
+router.put('/:id', authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      nombre,
+      bio,
+      cargo,
+      empresa,
+      foto,
+      linkedin,
+      twitter,
+      website,
+      email,
+      telefono
+    } = req.body;
+
+    console.log('✏️ Actualizando speaker:', id);
+
+    // Verificar que existe y es local
+    const check = await pool.query(
+      'SELECT id, source FROM speakers WHERE id = $1',
+      [id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Speaker no encontrado' });
+    }
+
+    if (check.rows[0].source === 'wordpress') {
+      return res.status(403).json({
+        error: 'No se pueden editar speakers sincronizados de WordPress'
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE speakers SET
+        nombre = COALESCE($1, nombre),
+        bio = COALESCE($2, bio),
+        cargo = COALESCE($3, cargo),
+        company = COALESCE($4, company),
+        photo_url = COALESCE($5, photo_url),
+        linkedin_url = COALESCE($6, linkedin_url),
+        twitter_url = COALESCE($7, twitter_url),
+        website_url = COALESCE($8, website_url),
+        email = COALESCE($9, email),
+        telefono = COALESCE($10, telefono)
+      WHERE id = $11
+      RETURNING 
+        id,
+        nombre,
+        bio,
+        cargo,
+        company as empresa,
+        photo_url as foto
+      `,
+      [
+        nombre,
+        bio,
+        cargo,
+        empresa,
+        foto,
+        linkedin,
+        twitter,
+        website,
+        email,
+        telefono,
+        id
+      ]
+    );
+
+    console.log('✅ Speaker actualizado:', id);
+
+    res.json({
+      ok: true,
+      speaker: result.rows[0],
+      message: 'Speaker actualizado exitosamente'
+    });
+
+  } catch (err) {
+    console.error("❌ Error actualizando speaker:", err);
+    res.status(500).json({ 
+      error: "Error actualizando speaker",
+      details: err.message 
+    });
+  }
+});
+
+// ========================================================
+// DELETE /speakers/:id - Eliminar speaker (soft delete)
+// ========================================================
+router.delete('/:id', authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('🗑️ Eliminando speaker:', id);
+
+    const check = await pool.query(
+      'SELECT id, source FROM speakers WHERE id = $1',
+      [id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Speaker no encontrado' });
+    }
+
+    if (check.rows[0].source === 'wordpress') {
+      return res.status(403).json({
+        error: 'No se pueden eliminar speakers de WordPress'
+      });
+    }
+
+    await pool.query(
+      'UPDATE speakers SET activo = false WHERE id = $1',
+      [id]
+    );
+
+    console.log('✅ Speaker eliminado:', id);
+
+    res.json({
+      ok: true,
+      message: 'Speaker eliminado exitosamente'
+    });
+
+  } catch (err) {
+    console.error("❌ Error eliminando speaker:", err);
+    res.status(500).json({ 
+      error: "Error eliminando speaker",
+      details: err.message 
     });
   }
 });
