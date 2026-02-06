@@ -351,7 +351,6 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
     const {
       titulo,
       descripcion,
-      dia,
       horaInicio,
       horaFin,
       sala,
@@ -361,6 +360,44 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
       speakerId
     } = req.body;
 
+  // ARREGL DÍA ------------------------------------------------
+    function normalizarDia(dia) {
+      if (dia === null || dia === undefined) return null;
+
+      // Si ya es número, devolverlo
+      if (typeof dia === 'number') return dia;
+
+      // Si viene como string
+      const dias = {
+        lunes: 1,
+        martes: 2,
+        miercoles: 3,
+        miércoles: 3,
+        jueves: 4,
+        viernes: 5,
+      };
+
+      const key = dia.toString().toLowerCase().trim();
+      return dias[key] ?? null;
+    }
+    
+    const diaNormalizado = normalizarDia(req.body.dia);
+
+    console.log('🧪 Dia recibido:', req.body.dia);
+    console.log('🧪 Dia normalizado:', diaNormalizado);
+
+    // 🔒 Blindaje total: jamás enviar string a la DB
+    let diaFinal = null;
+
+    if (typeof diaNormalizado === 'number') {
+      diaFinal = diaNormalizado;
+    }
+
+    if (req.body.dia && diaFinal === null) {
+      console.warn('⚠️ Día inválido recibido:', req.body.dia);
+    }
+  // ARREGL DÍA ----------------------------------------------
+    
     console.log('✏️ Actualizando sesión:', id);
 
     const speakersArray = speakerId ? [speakerId] : null;
@@ -403,7 +440,7 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
           [
             titulo,
             descripcion,
-            dia,
+            diaFinal,
             horaInicio,
             horaFin,
             sala,
@@ -456,7 +493,7 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
             parseInt(id),
             titulo,
             descripcion || '',
-            dia || null,
+            diaFinal,
             horaInicio || null,
             horaFin || null,
             sala || '',
@@ -518,7 +555,7 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
       [
         titulo,
         descripcion,
-        dia,
+        diaFinal,
         horaInicio,
         horaFin,
         sala,

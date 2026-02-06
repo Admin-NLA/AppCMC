@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import API from '../services/api';
 import { Bell } from 'lucide-react';
@@ -38,26 +38,35 @@ export default function AdminPanel() {
       setLoading(true);
 
       if (activeTab === 'sessions') {
-        // ✅ CORREGIDO: Se eliminó la letra "v" suelta
-        const res = await API.get('/agenda/sessions');
-        console.log('📊 Admin Panel - Sesiones:', res.data);
-        setSessions(res.data.sessions || res.data || []);
+        // Cargar sesiones
+        const resS = await API.get('/agenda/sessions');
+        console.log('📊 Admin Panel - Sesiones RAW:', resS.data);
+        setSessions(resS.data.sessions || resS.data || []);
 
-        // También cargar speakers para el formulario
-        const sp = await API.get('/speakers');
-        console.log('🧪 RESPUESTA SPEAKERS:', sp.data);
-        setSpeakers(Array.isArray(sp.data?.data) ? sp.data.data : []);
-        console.log("✅ SPEAKERS NORMALIZADOS:", speakers);
+        // Cargar speakers para el dropdown
+        const resSp = await API.get('/speakers');
+        console.log('🧪 RESPUESTA SPEAKERS RAW:', resSp.data);
+        
+        // ✅ NORMALIZAR: Asegurarse que sea un array
+        const speakersArray = Array.isArray(resSp.data) 
+          ? resSp.data 
+          : (resSp.data?.data || resSp.data?.speakers || []);
+        
+        console.log('✅ SPEAKERS PROCESADOS:', speakersArray);
+        setSpeakers(speakersArray);
       }
 
       if (activeTab === 'speakers') {
         const res = await API.get('/speakers');
-        setSpeakers(res.data || []);
+        const speakersArray = Array.isArray(res.data) 
+          ? res.data 
+          : (res.data?.data || res.data?.speakers || []);
+        setSpeakers(speakersArray);
       }
 
       if (activeTab === 'exhibitors') {
         const res = await API.get('/expositores');
-        setExhibitors(res.data || []);
+        setExhibitors(Array.isArray(res.data) ? res.data : res.data?.data || []);
       }
 
     } catch (error) {
@@ -182,7 +191,7 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
   const [formData, setFormData] = useState({
     titulo: '',
     descripcion: '',
-    dia: 'lunes',
+    dia: '',
     horaInicio: '',
     horaFin: '',
     sala: '',
@@ -195,10 +204,11 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
 
   useEffect(() => {
     if (editingItem) {
+      console.log('📝 Editando sesión:', editingItem);
       setFormData({
         titulo: editingItem.titulo || '',
         descripcion: editingItem.descripcion || '',
-        dia: editingItem.dia || 'lunes',
+        dia: editingItem.dia || '',
         horaInicio: editingItem.horaInicio || '',
         horaFin: editingItem.horaFin || '',
         sala: editingItem.sala || '',
@@ -216,7 +226,7 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
     setFormData({
       titulo: '',
       descripcion: '',
-      dia: 'lunes',
+      dia: '',
       horaInicio: '',
       horaFin: '',
       sala: '',
@@ -233,40 +243,14 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
     e.preventDefault();
 
     try {
+      console.log('📤 Datos del formulario:', formData);
+      
       if (editingItem?.id) {
-        console.log("ID que se envía:", editingItem?.id);
-        console.log("🧪 Actualizando sesión:", editingItem.id);
-
-        await API.put(
-          `/agenda/sessions/${editingItem.id}`,
-          formData
-        );
-
-        alert("✅ Sesión actualizada");
-      } else {
-        await API.post("/agenda/sessions", formData);
-        alert("✅ Sesión creada");
-      }
-
-      resetForm();
-      setShowForm(false);
-      onReload();
-
-    } catch (error) {
-      console.error("❌ Error guardando sesión:", error);
-
-      alert(
-        `❌ Error: ${
-          error.response?.data?.error ||
-          error.response?.data?.message ||
-          error.message
-        }`
-      );
-    }
-  };
-        /*await API.put(`/agenda/sessions/${editingItem.id}`, formData);
+        console.log('✏️ Actualizando sesión ID:', editingItem.id);
+        await API.put(`/agenda/sessions/${editingItem.id}`, formData);
         alert('✅ Sesión actualizada');
       } else {
+        console.log('➕ Creando nueva sesión');
         await API.post('/agenda/sessions', formData);
         alert('✅ Sesión creada');
       }
@@ -276,10 +260,11 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
       onReload();
 
     } catch (error) {
-      console.error('Error guardando sesión:', error);
+      console.error('❌ Error guardando sesión:', error);
+      console.error('📋 Response data:', error.response?.data);
       alert(`❌ Error: ${error.response?.data?.error || error.message}`);
     }
-  };*/
+  };
 
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar esta sesión?')) return;
@@ -421,14 +406,23 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">Speaker</label>
+              <label className="block text-sm font-medium mb-1">
+                Speaker ({speakers.length} disponibles)
+              </label>
               <select
                 value={formData.speakerId}
                 onChange={e => {
-                  const selected = speakers.find(s => s.id === parseInt(e.target.value));
+                  const selectedId = e.target.value;
+                  const selected = speakers.find(s => 
+                    String(s.id) === String(selectedId) || 
+                    String(s.wp_id) === String(selectedId)
+                  );
+                  
+                  console.log('🎯 Speaker seleccionado:', selected);
+                  
                   setFormData({
                     ...formData,
-                    speakerId: selected?.id || '',
+                    speakerId: selected?.id || selected?.wp_id || '',
                     speakerNombre: selected?.nombre || ''
                   });
                 }}
@@ -436,11 +430,16 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
               >
                 <option value="">-- Sin speaker asignado --</option>
                 {speakers.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.nombre}
+                  <option key={s.id || s.wp_id} value={s.id || s.wp_id}>
+                    {s.nombre} {s.empresa && `(${s.empresa})`}
                   </option>
                 ))}
               </select>
+              {speakers.length === 0 && (
+                <p className="text-sm text-red-500 mt-1">
+                  ⚠️ No hay speakers disponibles. Verifica la sincronización.
+                </p>
+              )}
             </div>
           </div>
 
@@ -508,7 +507,6 @@ function SessionsManager({ sessions, speakers, showForm, setShowForm, editingIte
                 )}
               </div>
               <div className="flex gap-2">
-                {/* TODOS pueden editarse ahora */}
                 <button
                   onClick={() => setEditingItem(s)}
                   className="p-2 text-blue-600 hover:bg-blue-50 rounded"
@@ -537,7 +535,7 @@ function SpeakersManager({ speakers, showForm, setShowForm, editingItem, setEdit
   const [form, setForm] = useState({
     nombre: '',
     empresa: '',
-    puesto: '',
+    cargo: '',
     bio: '',
     foto: ''
   });
@@ -546,17 +544,17 @@ function SpeakersManager({ speakers, showForm, setShowForm, editingItem, setEdit
     if (editingItem) {
       setForm({
         nombre: editingItem.nombre || '',
-        empresa: editingItem.empresa || '',
-        puesto: editingItem.puesto || '',
+        empresa: editingItem.empresa || editingItem.company || '',
+        cargo: editingItem.cargo || '',
         bio: editingItem.bio || '',
-        foto: editingItem.foto || ''
+        foto: editingItem.foto || editingItem.photo_url || ''
       });
       setShowForm(true);
     }
   }, [editingItem, setShowForm]);
 
   const resetForm = () => {
-    setForm({ nombre: '', empresa: '', puesto: '', bio: '', foto: '' });
+    setForm({ nombre: '', empresa: '', cargo: '', bio: '', foto: '' });
     setEditingItem(null);
   };
 
@@ -631,11 +629,11 @@ function SpeakersManager({ speakers, showForm, setShowForm, editingItem, setEdit
               />
             </div>
             <div>
-              <label className="block text-sm mb-1">Puesto</label>
+              <label className="block text-sm mb-1">Cargo</label>
               <input
                 type="text"
-                value={form.puesto}
-                onChange={e => setForm({ ...form, puesto: e.target.value })}
+                value={form.cargo}
+                onChange={e => setForm({ ...form, cargo: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg"
               />
             </div>
@@ -679,18 +677,18 @@ function SpeakersManager({ speakers, showForm, setShowForm, editingItem, setEdit
           <p className="text-gray-500 text-center py-8">No hay speakers</p>
         )}
         {speakers.map(s => (
-          <div key={s.id} className="flex justify-between items-center border p-4 rounded-lg hover:bg-gray-50">
+          <div key={s.id || s.wp_id} className="flex justify-between items-center border p-4 rounded-lg hover:bg-gray-50">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded overflow-hidden bg-gray-100 flex items-center justify-center">
-                {s.foto ? (
-                  <img src={s.foto} alt={s.nombre} className="w-full h-full object-cover" />
+                {(s.foto || s.photo_url) ? (
+                  <img src={s.foto || s.photo_url} alt={s.nombre} className="w-full h-full object-cover" />
                 ) : (
                   <Users size={28} className="text-gray-300" />
                 )}
               </div>
               <div>
                 <h3 className="font-bold">{s.nombre}</h3>
-                <p className="text-sm text-gray-600">{s.puesto} — {s.empresa}</p>
+                <p className="text-sm text-gray-600">{s.cargo} — {s.empresa || s.company}</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -701,7 +699,7 @@ function SpeakersManager({ speakers, showForm, setShowForm, editingItem, setEdit
                 <Edit2 size={18} />
               </button>
               <button
-                onClick={() => handleDelete(s.id)}
+                onClick={() => handleDelete(s.id || s.wp_id)}
                 className="p-2 text-red-600 hover:bg-red-50 rounded"
               >
                 <Trash2 size={18} />
