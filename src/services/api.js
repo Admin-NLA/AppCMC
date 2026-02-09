@@ -1,8 +1,9 @@
 import axios from "axios";
 
-// ✅ CORREGIDO: Ya NO agregamos /api aquí porque ya viene en VITE_API_URL
+// ✅ AGREGAMOS /api automáticamente
+const baseURL = import.meta.env.VITE_API_URL;
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: baseURL.endsWith('/api') ? baseURL : `${baseURL}/api`,
 });
 
 // Token automático en cada request
