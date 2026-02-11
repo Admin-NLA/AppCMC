@@ -455,7 +455,11 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
     
     console.log('✏️ Actualizando sesión:', id);
 
-    const speakersArray = speakerId ? [speakerId] : null;
+    let speakersArray = null;
+    if (speakerId) {
+      const speakerUUID = await getUUIDFromWpId(speakerId);
+      speakersArray = speakerUUID ? [speakerUUID] : null;
+    }
 
     // CASO 1: Es una sesión de WordPress (ID numérico)
     if (!isNaN(id) && parseInt(id) > 1000) {
