@@ -33,6 +33,27 @@ function convertirHoraATimestamp(hora) {
   }
 }
 
+// ✅ Helper para convertir wp_id a UUID del speaker
+async function getUUIDFromWpId(wpSpeakerId) {
+  if (!wpSpeakerId) return null;
+  
+  try {
+    const result = await pool.query(
+      'SELECT id FROM speakers WHERE wp_id = $1 LIMIT 1',
+      [wpSpeakerId]
+    );
+    
+    if (result.rows.length === 0) {
+      console.warn('⚠️ Speaker con wp_id no encontrado:', wpSpeakerId);
+      return null;
+    }
+    
+    return result.rows[0].id; // Devuelve el UUID
+  } catch (err) {
+    console.error('❌ Error buscando speaker:', err);
+    return null;
+  }
+}
 
 // Función helper para extraer info del class_list
 function parseSessionClassList(classList = []) {
@@ -297,7 +318,12 @@ router.post('/sessions', authRequired, async (req, res) => {
       });
     }
 
-    const speakersArray = speakerId ? [speakerId] : [];
+    // ✅ Convertir wp_id a UUID
+    let speakersArray = null;
+    if (speakerId) {
+      const speakerUUID = await getUUIDFromWpId(speakerId);
+      speakersArray = speakerUUID ? [speakerUUID] : null;
+    }
 
     const result = await pool.query(
       `INSERT INTO agenda 
