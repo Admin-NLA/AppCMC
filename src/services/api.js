@@ -1,7 +1,8 @@
 import axios from "axios";
 
 // ✅ AGREGAMOS /api automáticamente
-const baseURL = import.meta.env.VITE_API_URL;
+const baseURL = import.meta.env.VITE_API_URL || 'https://cmc-app.onrender.com/api';
+
 const API = axios.create({
   baseURL: baseURL.endsWith('/api') ? baseURL : `${baseURL}/api`,
 });
