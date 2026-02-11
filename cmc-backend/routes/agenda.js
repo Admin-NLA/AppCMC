@@ -4,6 +4,35 @@ import pool from '../db.js';
 import { authRequired } from '../utils/authMiddleware.js';
 
 const router = express.Router();
+// ✅ Helper para convertir hora (HH:MM) a timestamp ISO válido
+function convertirHoraATimestamp(hora) {
+  if (!hora) return null;
+  
+  try {
+    // Si ya es un timestamp ISO válido, devolverlo
+    if (hora.includes('T') && hora.includes('Z')) {
+      return hora;
+    }
+    
+    // Si es solo la hora (HH:MM o HH:MM:SS)
+    const [h, m, s] = hora.split(':').map(Number);
+    
+    if (isNaN(h) || isNaN(m)) {
+      console.warn('⚠️ Hora inválida:', hora);
+      return null;
+    }
+    
+    // Crear timestamp para HOY con la hora especificada
+    const now = new Date();
+    now.setHours(h, m, s || 0, 0);
+    
+    return now.toISOString();
+  } catch (err) {
+    console.error('❌ Error convirtiendo hora:', err, 'hora:', hora);
+    return null;
+  }
+}
+
 
 // Función helper para extraer info del class_list
 function parseSessionClassList(classList = []) {
@@ -414,6 +443,10 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
 
       if (existing.rows.length > 0) {
         // Ya existe override, actualizar
+        // ✅ Convertir horas a timestamps válidos
+        const startTimestamp = convertirHoraATimestamp(horaInicio);
+        const endTimestamp = convertirHoraATimestamp(horaFin);
+        
         const result = await pool.query(
           `UPDATE agenda SET
             title = COALESCE($1, title),
@@ -441,8 +474,8 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
             titulo,
             descripcion,
             diaFinal,
-            horaInicio,
-            horaFin,
+            startTimestamp,
+            endTimestamp,
             sala,
             tipo,
             sede,
@@ -460,6 +493,10 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
 
       } else {
         // No existe override, crear uno nuevo
+        // ✅ Convertir horas a timestamps válidos
+        const startTimestamp = convertirHoraATimestamp(horaInicio);
+        const endTimestamp = convertirHoraATimestamp(horaFin);
+        
         await pool.query(
           `INSERT INTO agenda 
           (
@@ -494,8 +531,8 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
             titulo,
             descripcion || '',
             diaFinal,
-            horaInicio || null,
-            horaFin || null,
+            startTimestamp,
+            endTimestamp,
             sala || '',
             tipo,
             sede,
@@ -526,6 +563,10 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
       });
     }
 
+    // ✅ Convertir horas a timestamps válidos
+    const startTimestamp = convertirHoraATimestamp(horaInicio);
+    const endTimestamp = convertirHoraATimestamp(horaFin);
+    
     const result = await pool.query(
       `UPDATE agenda SET
         title = COALESCE($1, title),
@@ -556,8 +597,8 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
         titulo,
         descripcion,
         diaFinal,
-        horaInicio,
-        horaFin,
+        startTimestamp,
+        endTimestamp,
         sala,
         tipo,
         sede,
