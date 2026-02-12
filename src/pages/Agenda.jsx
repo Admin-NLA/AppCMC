@@ -9,6 +9,7 @@ import {
   Star,
   StarOff,
   AlertCircle,
+  X,
 } from "lucide-react";
 
 export default function Agenda() {
@@ -17,6 +18,7 @@ export default function Agenda() {
   const [sessions, setSessions] = useState([]);
   const [filteredSessions, setFilteredSessions] = useState([]);
   const [selectedDay, setSelectedDay] = useState("todos");
+  const [selectedSession, setSelectedSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const days = [
@@ -27,28 +29,44 @@ export default function Agenda() {
     { id: "jueves", label: "Jueves" }
   ];
 
+  // ========================================================
   // Cargar sesiones al montar el componente
+  // ========================================================
   useEffect(() => {
     loadSessions();
   }, []);
 
+  // ========================================================
   // Filtrar sesiones cuando cambia el día seleccionado
+  // ========================================================
   useEffect(() => {
     filterSessions();
   }, [selectedDay, sessions]);
 
+  // ========================================================
+  // CARGAR SESIONES DESDE API
+  // ========================================================
   const loadSessions = async () => {
     try {
       setLoading(true);
       
       const res = await API.get("/agenda/sessions");
       
-      console.log("📅 Sesiones recibidas:", res.data);
-      console.log("📅 Primera sesión:", res.data.sessions?.[0]);
-
-      // Extraer las sesiones del response
-      const sessionData = res.data.sessions || res.data || [];
-      setSessions(Array.isArray(sessionData) ? sessionData : []);
+      console.log("📅 Response estructura:", {
+        hasSessions: !!res.data.sessions,
+        isArray: Array.isArray(res.data.sessions),
+        count: res.data.sessions?.length
+      });
+      
+      // ✅ Extraer correctamente el array de sesiones
+      const sessionData = Array.isArray(res.data.sessions) 
+        ? res.data.sessions 
+        : [];
+      
+      console.log("✅ Sesiones cargadas:", sessionData.length);
+      console.log("📋 Primeras 3 sesiones:", sessionData.slice(0, 3));
+      
+      setSessions(sessionData);
 
     } catch (error) {
       console.error("❌ Error al cargar sesiones:", error);
@@ -58,34 +76,37 @@ export default function Agenda() {
     }
   };
 
+  // ========================================================
+  // FILTRAR SESIONES POR DÍA
+  // ========================================================
   const filterSessions = () => {
-    // Si selecciona "todos", mostrar todas
+    console.log("🔍 Filtrando por:", selectedDay, "Total sesiones:", sessions.length);
+    
     if (selectedDay === "todos") {
       setFilteredSessions(sessions);
+      console.log("📌 Mostrando todas:", sessions.length);
       return;
     }
 
     const filtered = sessions.filter((s) => {
-      // Si la sesión tiene el campo 'dia', usarlo
-      if (s.dia) {
-        return s.dia.toLowerCase() === selectedDay;
+      // ✅ Usar el campo 'dia' directamente (que ya está normalizado en backend)
+      const dia = s.dia ? String(s.dia).toLowerCase() : "";
+      const match = dia === selectedDay;
+      
+      if (match) {
+        console.log("✅ Match encontrado:", s.titulo, "día:", dia);
       }
-
-      // Si no tiene 'dia', intentar extraerlo de horaInicio
-      if (s.horaInicio) {
-        const day = new Date(s.horaInicio)
-          .toLocaleDateString("es-MX", { weekday: "long" })
-          .toLowerCase();
-        return day === selectedDay;
-      }
-
-      // Si no tiene ni 'dia' ni 'horaInicio', no mostrar
-      return false;
+      
+      return match;
     });
 
+    console.log("📌 Sesiones filtradas:", filtered.length);
     setFilteredSessions(filtered);
   };
 
+  // ========================================================
+  // AGREGAR A FAVORITOS
+  // ========================================================
   const toggleFavorite = async (sessionId) => {
     if (!userProfile) return;
 
@@ -101,6 +122,9 @@ export default function Agenda() {
     }
   };
 
+  // ========================================================
+  // RENDERIZADO
+  // ========================================================
   if (!userProfile) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-500">
@@ -122,6 +146,9 @@ export default function Agenda() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Agenda del Evento</h1>
+        <span className="text-sm text-gray-500">
+          {sessions.length} sesiones totales
+        </span>
       </div>
 
       {/* Filtros por día */}
@@ -155,7 +182,7 @@ export default function Agenda() {
                 <summary className="cursor-pointer text-blue-700 hover:text-blue-900">
                   Ver estructura de primera sesión
                 </summary>
-                <pre className="mt-2 p-2 bg-white rounded text-xs overflow-auto">
+                <pre className="mt-2 p-2 bg-white rounded text-xs overflow-auto max-h-48">
                   {JSON.stringify(sessions[0], null, 2)}
                 </pre>
               </details>
@@ -190,15 +217,27 @@ export default function Agenda() {
               key={session.id}
               session={session}
               onToggleFavorite={toggleFavorite}
+              onViewDetails={() => setSelectedSession(session)}
             />
           ))
         )}
       </div>
+
+      {/* Modal de detalles de sesión */}
+      {selectedSession && (
+        <SessionModal
+          session={selectedSession}
+          onClose={() => setSelectedSession(null)}
+        />
+      )}
     </div>
   );
 }
 
-function SessionCard({ session, onToggleFavorite }) {
+// ========================================================
+// TARJETA DE SESIÓN
+// ========================================================
+function SessionCard({ session, onToggleFavorite, onViewDetails }) {
   // Función para formatear la hora
   const formatTime = (dateString) => {
     if (!dateString) return 'Sin hora';
@@ -213,7 +252,10 @@ function SessionCard({ session, onToggleFavorite }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
+    <div 
+      className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition cursor-pointer"
+      onClick={onViewDetails}
+    >
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
@@ -227,12 +269,17 @@ function SessionCard({ session, onToggleFavorite }) {
                     : "bg-purple-100 text-purple-700"
                 }`}
               >
-                {session.tipo}
+                {session.tipo.toUpperCase()}
               </span>
             )}
             {session.dia && (
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
                 {session.dia}
+              </span>
+            )}
+            {session.sede && (
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                {session.sede.toUpperCase()}
               </span>
             )}
           </div>
@@ -243,11 +290,13 @@ function SessionCard({ session, onToggleFavorite }) {
           )}
 
           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-            <div className="flex items-center gap-1">
-              <Clock size={16} />
-              {formatTime(session.horaInicio)}
-              {session.horaFin && ` - ${formatTime(session.horaFin)}`}
-            </div>
+            {(session.horaInicio || session.horaFin) && (
+              <div className="flex items-center gap-1">
+                <Clock size={16} />
+                {formatTime(session.horaInicio)}
+                {session.horaFin && ` - ${formatTime(session.horaFin)}`}
+              </div>
+            )}
 
             {session.sala && (
               <div className="flex items-center gap-1">
@@ -266,12 +315,183 @@ function SessionCard({ session, onToggleFavorite }) {
         </div>
 
         <button
-          onClick={() => onToggleFavorite(session.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(session.id);
+          }}
           className="ml-4 p-2 hover:bg-gray-100 rounded-lg transition"
           title="Agregar a favoritos"
         >
           <StarOff size={24} className="text-gray-400 hover:text-yellow-500" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ========================================================
+// MODAL DE DETALLES DE SESIÓN
+// ========================================================
+function SessionModal({ session, onClose }) {
+  const formatTime = (dateString) => {
+    if (!dateString) return 'Sin hora';
+    try {
+      return new Date(dateString).toLocaleTimeString('es-MX', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'Sin fecha';
+    try {
+      return new Date(dateString).toLocaleDateString('es-MX', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl sticky top-0">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h2 className="text-2xl font-bold mb-2">{session.titulo}</h2>
+              <div className="flex flex-wrap gap-2">
+                {session.tipo && (
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/20">
+                    {session.tipo.toUpperCase()}
+                  </span>
+                )}
+                {session.sede && (
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/20">
+                    {session.sede.toUpperCase()}
+                  </span>
+                )}
+                {session.edicion && (
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/20">
+                    {session.edicion}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white/20 p-2 rounded-lg transition"
+            >
+              <X size={24} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Descripción */}
+          {session.descripcion && (
+            <div>
+              <h3 className="font-bold text-lg mb-2">Descripción</h3>
+              <p className="text-gray-700 leading-relaxed">{session.descripcion}</p>
+            </div>
+          )}
+
+          {/* Detalles */}
+          <div className="grid grid-cols-2 gap-4">
+            {(session.horaInicio || session.horaFin) && (
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <p className="text-xs text-gray-600 mb-1 flex items-center gap-2">
+                  <Clock size={14} />
+                  HORARIO
+                </p>
+                <p className="font-bold text-blue-900">
+                  {formatTime(session.horaInicio)}
+                  {session.horaFin && ` - ${formatTime(session.horaFin)}`}
+                </p>
+              </div>
+            )}
+
+            {session.dia && (
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <p className="text-xs text-gray-600 mb-1">DÍA</p>
+                <p className="font-bold text-purple-900 capitalize">{session.dia}</p>
+              </div>
+            )}
+
+            {session.sala && (
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <p className="text-xs text-gray-600 mb-1 flex items-center gap-2">
+                  <MapPin size={14} />
+                  SALA
+                </p>
+                <p className="font-bold text-green-900">{session.sala}</p>
+              </div>
+            )}
+
+            {session.edicion && (
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                <p className="text-xs text-gray-600 mb-1">EDICIÓN</p>
+                <p className="font-bold text-orange-900">{session.edicion}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Speaker */}
+          {session.speakerNombre && (
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <p className="text-xs text-gray-600 mb-2 flex items-center gap-2">
+                <User size={14} />
+                EXPOSITOR
+              </p>
+              <p className="font-bold text-gray-900">{session.speakerNombre}</p>
+            </div>
+          )}
+
+          {/* QR Sala */}
+          {session.qrSala && (
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <p className="text-xs text-gray-600 mb-2">CÓDIGO QR</p>
+              <p className="font-mono text-sm text-blue-900 break-all">{session.qrSala}</p>
+            </div>
+          )}
+
+          {/* Información de fuente */}
+          <div className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 border border-gray-200">
+            {session.source === 'wordpress' && (
+              <p>📡 <strong>Fuente:</strong> Sincronizado desde WordPress</p>
+            )}
+            {session.source === 'wordpress-edited' && (
+              <p>📡 ✏️ <strong>Fuente:</strong> Editado localmente (basado en WordPress)</p>
+            )}
+            {session.source === 'local' && (
+              <p>💾 <strong>Fuente:</strong> Creado localmente</p>
+            )}
+          </div>
+
+          {/* Botón cerrar */}
+          <button
+            onClick={onClose}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+          >
+            Cerrar
+          </button>
+        </div>
       </div>
     </div>
   );
