@@ -7,10 +7,12 @@ import pool from "./db.js";
 import authRoutes from "./routes/auth.js";
 import agendaRoutes from "./routes/agenda.js"; // ← Nota: agenda.routes.js
 import speakersRoutes from "./routes/speakers.routes.js"; // ← Nota: speakers.routes.js
-import expositoresRoutes from "./routes/expositores.js";
+import expositoresRoutes from "./routes/expositores.routes.js";
 import dashboardRoutes from "./routes/dashboard.js";
-import notificacionesRoutes from "./routes/notificaciones.js";
+import notificacionesRoutes from "./routes/notificaciones.routes.js";
 import configRoutes from "./routes/config.js"; // ← AGREGAR
+import usersRoutes from './routes/users.routes.js';
+
 
 // Importar funciones de notificaciones
 import { sendSSE } from "./routes/notificaciones.js";
@@ -76,24 +78,20 @@ app.get('/api/health', (req, res) => {
 
 // Auth
 app.use("/api/auth", authRoutes);
-
-// Config
-app.use("/api/config", configRoutes); // ← AGREGAR
-
 // Agenda (sesiones y cursos)
 app.use("/api/agenda", agendaRoutes);
-
 // Speakers
 app.use("/api/speakers", speakersRoutes);
-
 // Expositores
 app.use("/api/expositores", expositoresRoutes);
-
 // Dashboard
 app.use("/api/dashboard", dashboardRoutes);
-
 // Notificaciones
 app.use("/api/notificaciones", notificacionesRoutes);
+// Config
+app.use("/api/config", configRoutes); // ← AGREGAR
+//usuarios
+app.use('/api/users', usersRoutes);
 
 
 // =========================================

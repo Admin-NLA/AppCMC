@@ -1,863 +1,750 @@
- import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import API from '../services/api';
-import { Bell } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext.jsx";
+import API from "../services/api";
 import {
   Plus,
   Edit2,
   Trash2,
+  X,
+  AlertCircle,
+  Bell,
   Users,
-  Calendar,
   Building2,
-  FileText,
+  BarChart3,
   Save,
-  X
-} from 'lucide-react';
+} from "lucide-react";
 
 export default function AdminPanel() {
   const { userProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState('sessions');
+
+  // Tabs del panel
+  const [activeTab, setActiveTab] = useState("sesiones");
+
+  // Estados para Sesiones
   const [sessions, setSessions] = useState([]);
-  const [speakers, setSpeakers] = useState([]);
-  const [exhibitors, setExhibitors] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [showSessionForm, setShowSessionForm] = useState(false);
+  const [sessionFormData, setSessionFormData] = useState({
+    titulo: "",
+    descripcion: "",
+    dia: "",
+    horaInicio: "",
+    horaFin: "",
+    sala: "",
+    tipo: "conferencia",
+    sede: "chile",
+    edicion: 2025,
+  });
 
+  // Estados para Expositores
+  const [expositores, setExpositores] = useState([]);
+  const [showExpositorForm, setShowExpositorForm] = useState(false);
+  const [expositorFormData, setExpositorFormData] = useState({
+    nombre: "",
+    logo_url: "",
+    website: "",
+    telefono: "",
+    email: "",
+    categoria: "",
+    stand: "",
+    descripcion: "",
+    sede: "chile",
+  });
+
+  // Estados para Notificaciones
+  const [showNotificationForm, setShowNotificationForm] = useState(false);
+  const [notificationFormData, setNotificationFormData] = useState({
+    titulo: "",
+    mensaje: "",
+    tipo: "info",
+    usuarios: [], // IDs de usuarios
+  });
+  const [users, setUsers] = useState([]);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationError, setNotificationError] = useState(null);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
+  // ========================================================
+  // Cargar datos iniciales
+  // ========================================================
   useEffect(() => {
-    if (!userProfile) return;
-    if (userProfile.rol !== 'super_admin') {
-      setLoading(false);
-      return;
+    if (activeTab === "sesiones") {
+      loadSessions();
+    } else if (activeTab === "expositores") {
+      loadExpositores();
+    } else if (activeTab === "notificaciones") {
+      loadUsers();
     }
-    loadData();
-  }, [activeTab, userProfile]);
+  }, [activeTab]);
 
-  const loadData = async () => {
+  // ========================================================
+  // SESIONES
+  // ========================================================
+  const loadSessions = async () => {
+    try {
+      const res = await API.get("/agenda/sessions");
+      const data = Array.isArray(res.data.sessions) ? res.data.sessions : [];
+      setSessions(data);
+    } catch (err) {
+      console.error("Error al cargar sesiones:", err);
+    }
+  };
+
+  const handleSessionSubmit = async (e) => {
+    e.preventDefault();
     try {
       setLoading(true);
+      setError(null);
 
-      if (activeTab === 'sessions') {
-        // Cargar sesiones
-        const resS = await API.get('/agenda/sessions');
-        console.log('📊 Admin Panel - Sesiones RAW:', resS.data);
-        setSessions(resS.data.sessions || resS.data || []);
+      console.log("📝 Creando sesión:", sessionFormData);
 
-        // Cargar speakers para el dropdown
-        const resSp = await API.get('/speakers');
-        console.log('🧪 RESPUESTA SPEAKERS RAW:', resSp.data);
-        
-        // ✅ NORMALIZAR: Asegurarse que sea un array
-        const speakersArray = Array.isArray(resSp.data) 
-          ? resSp.data 
-          : (resSp.data?.data || resSp.data?.speakers || []);
-        
-        console.log('✅ SPEAKERS PROCESADOS:', speakersArray);
-        setSpeakers(speakersArray);
-      }
+      await API.post("/agenda/sessions", sessionFormData);
 
-      if (activeTab === 'speakers') {
-        const res = await API.get('/speakers');
-        const speakersArray = Array.isArray(res.data) 
-          ? res.data 
-          : (res.data?.data || res.data?.speakers || []);
-        setSpeakers(speakersArray);
-      }
+      setSuccess(true);
+      setShowSessionForm(false);
+      setSessionFormData({
+        titulo: "",
+        descripcion: "",
+        dia: "",
+        horaInicio: "",
+        horaFin: "",
+        sala: "",
+        tipo: "conferencia",
+        sede: "chile",
+        edicion: 2025,
+      });
 
-      if (activeTab === 'exhibitors') {
-        const res = await API.get('/expositores');
-        setExhibitors(Array.isArray(res.data) ? res.data : res.data?.data || []);
-      }
-
-    } catch (error) {
-      console.error('❌ Error al cargar datos:', error);
-      alert(`Error al cargar datos: ${error.message}`);
+      loadSessions();
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+      console.error("Error al crear sesión:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const tabs = [
-    { id: 'sessions', label: 'Sesiones', icon: Calendar },
-    { id: 'speakers', label: 'Speakers', icon: Users },
-    { id: 'exhibitors', label: 'Expositores', icon: Building2 },
-    { id: 'surveys', label: 'Encuestas', icon: FileText },
-    { id: 'notificaciones', label: 'Notificaciones', icon: Bell }
-  ];
+  // ========================================================
+  // EXPOSITORES
+  // ========================================================
+  const loadExpositores = async () => {
+    try {
+      const res = await API.get("/expositores");
+      const data = Array.isArray(res.data) ? res.data : [];
+      setExpositores(data);
+    } catch (err) {
+      console.error("Error al cargar expositores:", err);
+    }
+  };
 
+  const handleExpositorSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log("📝 Creando expositor:", expositorFormData);
+
+      if (!expositorFormData.nombre || !expositorFormData.categoria) {
+        setError("Nombre y categoría son requeridos");
+        setLoading(false);
+        return;
+      }
+
+      await API.post("/expositores", expositorFormData);
+
+      setSuccess(true);
+      setShowExpositorForm(false);
+      setExpositorFormData({
+        nombre: "",
+        logo_url: "",
+        website: "",
+        telefono: "",
+        email: "",
+        categoria: "",
+        stand: "",
+        descripcion: "",
+        sede: "chile",
+      });
+
+      loadExpositores();
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+      console.error("Error al crear expositor:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ========================================================
+  // NOTIFICACIONES
+  // ========================================================
+  const loadUsers = async () => {
+    try {
+      const res = await API.get("/users"); // Endpoint para obtener usuarios
+      setUsers(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Error al cargar usuarios:", err);
+      // Si falla, continuar sin usuarios
+    }
+  };
+
+  const handleNotificationSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setNotificationLoading(true);
+      setNotificationError(null);
+
+      console.log("📢 Enviando notificación:", notificationFormData);
+
+      if (!notificationFormData.titulo || !notificationFormData.mensaje) {
+        setNotificationError("Título y mensaje son requeridos");
+        setNotificationLoading(false);
+        return;
+      }
+
+      if (notificationFormData.usuarios.length === 0) {
+        setNotificationError("Selecciona al menos un usuario");
+        setNotificationLoading(false);
+        return;
+      }
+
+      // ✅ USAR ENDPOINT CORRECTO: /api/notificaciones/broadcast
+      await API.post("/notificaciones/broadcast", {
+        usuarios: notificationFormData.usuarios,
+        titulo: notificationFormData.titulo,
+        mensaje: notificationFormData.mensaje,
+        tipo: notificationFormData.tipo,
+      });
+
+      setSuccess(true);
+      setShowNotificationForm(false);
+      setNotificationFormData({
+        titulo: "",
+        mensaje: "",
+        tipo: "info",
+        usuarios: [],
+      });
+
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setNotificationError(err.response?.data?.error || err.message);
+      console.error("Error al enviar notificación:", err);
+    } finally {
+      setNotificationLoading(false);
+    }
+  };
+
+  // ========================================================
+  // RENDERIZADO
+  // ========================================================
   if (!userProfile) {
     return (
-      <div className="flex justify-center items-center h-64 text-gray-600">
-        Cargando perfil...
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        Cargando...
       </div>
     );
   }
 
-  if (userProfile.rol !== 'super_admin') {
+  if (userProfile.rol !== "super_admin" && userProfile.rol !== "admin") {
     return (
-      <div className="p-8 bg-red-50 text-red-600 rounded-xl shadow-sm text-center">
-        <h2 className="text-2xl font-bold mb-2">Acceso restringido</h2>
-        <p>Solo los administradores pueden acceder al Panel de Administración.</p>
+      <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
+        <AlertCircle className="inline mr-2 text-red-600" />
+        <p className="text-red-800 font-semibold">
+          No tienes permisos para acceder al panel de administración
+        </p>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Panel de Administración</h1>
-        <p className="text-gray-600 mt-1">Bienvenido, {userProfile?.nombre}</p>
-      </div>
+    <div className="max-w-7xl mx-auto">
+      <h1 className="text-3xl font-bold mb-6">Panel de Administración</h1>
 
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {tabs.map(tab => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                setShowForm(false);
-                setEditingItem(null);
-              }}
-              className={`px-6 py-2 rounded-lg font-medium transition whitespace-nowrap flex items-center gap-2 ${
-                activeTab === tab.id ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <Icon size={20} />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="bg-white rounded-xl shadow-md p-6">
-        {loading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-500">Cargando datos...</p>
+      {/* Mensajes de estado */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-6 flex items-start gap-3">
+          <AlertCircle size={20} className="text-red-600 mt-0.5" />
+          <div>
+            <p className="font-semibold text-red-900">Error</p>
+            <p className="text-red-800 text-sm">{error}</p>
           </div>
-        ) : (
-          <>
-            {activeTab === 'sessions' && (
-              <SessionsManager
-                sessions={sessions}
-                speakers={speakers}
-                showForm={showForm}
-                setShowForm={setShowForm}
-                editingItem={editingItem}
-                setEditingItem={setEditingItem}
-                onReload={loadData}
-              />
-            )}
-            {activeTab === 'speakers' && (
-              <SpeakersManager
-                speakers={speakers}
-                showForm={showForm}
-                setShowForm={setShowForm}
-                editingItem={editingItem}
-                setEditingItem={setEditingItem}
-                onReload={loadData}
-              />
-            )}
-            {activeTab === 'exhibitors' && (
-              <ExhibitorsManager 
-                exhibitors={exhibitors}
-                showForm={showForm}
-                setShowForm={setShowForm}
-                onReload={loadData}
-              />
-            )}
-            {activeTab === 'surveys' && (
-              <div className="text-center py-12">
-                <FileText size={48} className="mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-bold mb-2">Gestor de Encuestas</h3>
-                <p className="text-gray-600">Sección en desarrollo</p>
-              </div>
-            )}
+        </div>
+      )}
 
-            {activeTab === 'notificaciones' && (
-              <AdminNotifications />
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
+      {success && (
+        <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-6 flex items-center gap-3">
+          <AlertCircle size={20} className="text-green-600" />
+          <p className="text-green-800 font-semibold">✅ Operación completada exitosamente</p>
+        </div>
+      )}
 
-// ===== SESSIONS MANAGER =====
-function SessionsManager({ sessions, speakers, showForm, setShowForm, editingItem, setEditingItem, onReload }) {
-  const [formData, setFormData] = useState({
-    titulo: '',
-    descripcion: '',
-    dia: '',
-    horaInicio: '',
-    horaFin: '',
-    sala: '',
-    tipo: 'spark',
-    sede: 'chile',
-    edicion: 2025,
-    speakerId: '',
-    speakerNombre: ''
-  });
-
-  useEffect(() => {
-    if (editingItem) {
-      console.log('📝 Editando sesión:', editingItem);
-      setFormData({
-        titulo: editingItem.titulo || '',
-        descripcion: editingItem.descripcion || '',
-        dia: editingItem.dia || '',
-        horaInicio: editingItem.horaInicio || '',
-        horaFin: editingItem.horaFin || '',
-        sala: editingItem.sala || '',
-        tipo: editingItem.tipo || 'spark',
-        sede: editingItem.sede || 'chile',
-        edicion: editingItem.edicion || 2025,
-        speakerId: editingItem.speakerId || '',
-        speakerNombre: editingItem.speakerNombre || ''
-      });
-      setShowForm(true);
-    }
-  }, [editingItem, setShowForm]);
-
-  const resetForm = () => {
-    setFormData({
-      titulo: '',
-      descripcion: '',
-      dia: '',
-      horaInicio: '',
-      horaFin: '',
-      sala: '',
-      tipo: 'spark',
-      sede: 'chile',
-      edicion: 2025,
-      speakerId: '',
-      speakerNombre: ''
-    });
-    setEditingItem(null);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      console.log('📤 Datos del formulario:', formData);
-      
-      if (editingItem?.id) {
-        console.log('✏️ Actualizando sesión ID:', editingItem.id);
-        await API.put(`/agenda/sessions/${editingItem.id}`, formData);
-        alert('✅ Sesión actualizada');
-      } else {
-        console.log('➕ Creando nueva sesión');
-        await API.post('/agenda/sessions', formData);
-        alert('✅ Sesión creada');
-      }
-
-      resetForm();
-      setShowForm(false);
-      onReload();
-
-    } catch (error) {
-      console.error('❌ Error guardando sesión:', error);
-      console.error('📋 Response data:', error.response?.data);
-      alert(`❌ Error: ${error.response?.data?.error || error.message}`);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar esta sesión?')) return;
-    
-    try {
-      await API.delete(`/agenda/sessions/${id}`);
-      alert('✅ Sesión eliminada');
-      onReload();
-    } catch (error) {
-      console.error('Error:', error);
-      alert(`❌ Error: ${error.response?.data?.error || error.message}`);
-    }
-  };
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold">Sesiones ({sessions.length})</h2>
+      {/* Tabs */}
+      <div className="flex gap-4 mb-6 border-b border-gray-200">
         <button
-          onClick={() => {
-            setShowForm(!showForm);
-            resetForm();
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+          onClick={() => setActiveTab("sesiones")}
+          className={`px-6 py-3 font-semibold transition ${
+            activeTab === "sesiones"
+              ? "text-blue-600 border-b-2 border-blue-600"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
         >
-          {showForm ? <X size={20} /> : <Plus size={20} />}
-          {showForm ? 'Cancelar' : 'Nueva Sesión'}
+          Sesiones
+        </button>
+        <button
+          onClick={() => setActiveTab("expositores")}
+          className={`px-6 py-3 font-semibold transition flex items-center gap-2 ${
+            activeTab === "expositores"
+              ? "text-blue-600 border-b-2 border-blue-600"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          <Building2 size={18} />
+          Expositores
+        </button>
+        <button
+          onClick={() => setActiveTab("notificaciones")}
+          className={`px-6 py-3 font-semibold transition flex items-center gap-2 ${
+            activeTab === "notificaciones"
+              ? "text-blue-600 border-b-2 border-blue-600"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          <Bell size={18} />
+          Notificaciones
         </button>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-50 p-6 rounded-lg mb-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Título *</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border rounded-lg"
-                value={formData.titulo}
-                onChange={e => setFormData({ ...formData, titulo: e.target.value })}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Tipo *</label>
-              <select
-                className="w-full px-3 py-2 border rounded-lg"
-                value={formData.tipo}
-                onChange={e => setFormData({ ...formData, tipo: e.target.value })}
-              >
-                <option value="spark">Spark</option>
-                <option value="toolbox">Toolbox</option>
-                <option value="brujula">Brújula</option>
-                <option value="orion">Orión</option>
-                <option value="curso">Curso</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Sede *</label>
-              <select
-                className="w-full px-3 py-2 border rounded-lg"
-                value={formData.sede}
-                onChange={e => setFormData({ ...formData, sede: e.target.value })}
-              >
-                <option value="chile">Chile</option>
-                <option value="mexico">México</option>
-                <option value="colombia">Colombia</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Edición *</label>
-              <input
-                type="number"
-                className="w-full px-3 py-2 border rounded-lg"
-                value={formData.edicion}
-                onChange={e => setFormData({ ...formData, edicion: parseInt(e.target.value) })}
-                min="2020"
-                max="2030"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">Descripción</label>
-              <textarea
-                className="w-full px-3 py-2 border rounded-lg"
-                rows={3}
-                value={formData.descripcion}
-                onChange={e => setFormData({ ...formData, descripcion: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Día</label>
-              <select
-                className="w-full px-3 py-2 border rounded-lg"
-                value={formData.dia}
-                onChange={e => setFormData({ ...formData, dia: e.target.value })}
-              >
-                <option value="">Sin asignar</option>
-                <option value="lunes">Lunes</option>
-                <option value="martes">Martes</option>
-                <option value="miercoles">Miércoles</option>
-                <option value="jueves">Jueves</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Sala</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border rounded-lg"
-                value={formData.sala}
-                onChange={e => setFormData({ ...formData, sala: e.target.value })}
-                placeholder="Ej: Sala Principal"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Hora Inicio</label>
-              <input
-                type="time"
-                className="w-full px-3 py-2 border rounded-lg"
-                value={formData.horaInicio}
-                onChange={e => setFormData({ ...formData, horaInicio: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Hora Fin</label>
-              <input
-                type="time"
-                className="w-full px-3 py-2 border rounded-lg"
-                value={formData.horaFin}
-                onChange={e => setFormData({ ...formData, horaFin: e.target.value })}
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">
-                Speaker ({speakers.length} disponibles)
-              </label>
-              <select
-                value={formData.speakerId}
-                onChange={e => {
-                  const selectedId = e.target.value;
-                  const selected = speakers.find(s => 
-                    String(s.id) === String(selectedId) || 
-                    String(s.wp_id) === String(selectedId)
-                  );
-                  
-                  console.log('🎯 Speaker seleccionado:', selected);
-                  
-                  setFormData({
-                    ...formData,
-                    speakerId: selected?.id || selected?.wp_id || '',
-                    speakerNombre: selected?.nombre || ''
-                  });
-                }}
-                className="w-full px-3 py-2 border rounded-lg"
-              >
-                <option value="">-- Sin speaker asignado --</option>
-                {speakers.map(s => (
-                  <option key={s.id || s.wp_id} value={s.id || s.wp_id}>
-                    {s.nombre} {s.empresa && `(${s.empresa})`}
-                  </option>
-                ))}
-              </select>
-              {speakers.length === 0 && (
-                <p className="text-sm text-red-500 mt-1">
-                  ⚠️ No hay speakers disponibles. Verifica la sincronización.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-4">
-            <button 
-              type="submit" 
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
-            >
-              <Save size={20} /> {editingItem ? 'Actualizar' : 'Guardar'}
-            </button>
-            <button 
-              type="button" 
-              onClick={() => { setShowForm(false); resetForm(); }} 
-              className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
-            >
-              Cancelar
-            </button>
-          </div>
-        </form>
-      )}
-
-      <div className="space-y-3">
-        {sessions.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">No hay sesiones creadas</p>
-        ) : (
-          sessions.map(s => (
-            <div key={s.id} className="flex justify-between items-center border p-4 rounded-lg hover:bg-gray-50">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded font-medium">
-                    {s.tipo?.toUpperCase()}
-                  </span>
-                  <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
-                    {s.sede} {s.edicion}
-                  </span>
-                  {s.source === 'wordpress' && (
-                    <span className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded">
-                      📡 WordPress
-                    </span>
-                  )}
-                  {s.source === 'wordpress-edited' && (
-                    <span className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded">
-                      ✏️ WP Editado
-                    </span>
-                  )}
-                  {s.source === 'local' && (
-                    <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">
-                      💾 Local
-                    </span>
-                  )}
-                </div>
-                <h3 className="font-bold text-lg">{s.titulo}</h3>
-                {s.speakerNombre && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    <Users size={14} className="inline mr-1" />
-                    Speaker: {s.speakerNombre}
-                  </p>
-                )}
-                {(s.dia || s.sala || s.horaInicio) && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    {s.dia && `${s.dia} • `}
-                    {s.horaInicio && `${s.horaInicio} - ${s.horaFin} • `}
-                    {s.sala}
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setEditingItem(s)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                  title={s.source === 'wordpress' ? 'Editar (creará override local)' : 'Editar'}
-                >
-                  <Edit2 size={18} />
-                </button>
-                <button
-                  onClick={() => handleDelete(s.id)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded"
-                  title={s.source === 'wordpress' ? 'Eliminar override' : 'Eliminar'}
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ===== SPEAKERS MANAGER =====
-function SpeakersManager({ speakers, showForm, setShowForm, editingItem, setEditingItem, onReload }) {
-  const [form, setForm] = useState({
-    nombre: '',
-    empresa: '',
-    cargo: '',
-    bio: '',
-    foto: ''
-  });
-
-  useEffect(() => {
-    if (editingItem) {
-      setForm({
-        nombre: editingItem.nombre || '',
-        empresa: editingItem.empresa || editingItem.company || '',
-        cargo: editingItem.cargo || '',
-        bio: editingItem.bio || '',
-        foto: editingItem.foto || editingItem.photo_url || ''
-      });
-      setShowForm(true);
-    }
-  }, [editingItem, setShowForm]);
-
-  const resetForm = () => {
-    setForm({ nombre: '', empresa: '', cargo: '', bio: '', foto: '' });
-    setEditingItem(null);
-  };
-
-  const handleSubmit = async e => {
-    e.preventDefault();
-
-    try {
-      if (editingItem?.id) {
-        await API.put(`/speakers/${editingItem.id}`, form);
-        alert('✅ Speaker actualizado');
-      } else {
-        await API.post('/speakers', form);
-        alert('✅ Speaker creado');
-      }
-      resetForm();
-      setShowForm(false);
-      onReload();
-    } catch (e) {
-      console.error(e);
-      alert(`❌ Error: ${e.response?.data?.error || e.message}`);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar speaker?')) return;
-    try {
-      await API.delete(`/speakers/${id}`);
-      alert('✅ Speaker eliminado');
-      onReload();
-    } catch (e) {
-      console.error(e);
-      alert(`❌ Error: ${e.response?.data?.error || e.message}`);
-    }
-  };
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold">Speakers ({speakers.length})</h2>
-        <button
-          onClick={() => {
-            setShowForm(!showForm);
-            resetForm();
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-        >
-          {showForm ? <X size={20} /> : <Plus size={20} />}
-          {showForm ? 'Cancelar' : 'Nuevo Speaker'}
-        </button>
-      </div>
-
-      {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-50 p-6 rounded-lg mb-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm mb-1">Nombre *</label>
-              <input
-                type="text"
-                value={form.nombre}
-                onChange={e => setForm({ ...form, nombre: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm mb-1">Empresa</label>
-              <input
-                type="text"
-                value={form.empresa}
-                onChange={e => setForm({ ...form, empresa: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm mb-1">Cargo</label>
-              <input
-                type="text"
-                value={form.cargo}
-                onChange={e => setForm({ ...form, cargo: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm mb-1">Foto (URL)</label>
-              <input
-                type="url"
-                value={form.foto}
-                onChange={e => setForm({ ...form, foto: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm mb-1">Bio</label>
-              <textarea
-                value={form.bio}
-                onChange={e => setForm({ ...form, bio: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded-lg flex items-center gap-2">
-              <Save size={20} /> Guardar
-            </button>
+      {/* SESIONES */}
+      {activeTab === "sesiones" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold">Gestionar Sesiones</h2>
             <button
-              type="button"
-              onClick={() => { resetForm(); setShowForm(false); }}
-              className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg"
+              onClick={() => setShowSessionForm(!showSessionForm)}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
             >
-              Cancelar
+              <Plus size={18} />
+              Nueva Sesión
             </button>
           </div>
-        </form>
-      )}
 
-      <div className="space-y-3">
-        {speakers.length === 0 && (
-          <p className="text-gray-500 text-center py-8">No hay speakers</p>
-        )}
-        {speakers.map(s => (
-          <div key={s.id || s.wp_id} className="flex justify-between items-center border p-4 rounded-lg hover:bg-gray-50">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded overflow-hidden bg-gray-100 flex items-center justify-center">
-                {(s.foto || s.photo_url) ? (
-                  <img src={s.foto || s.photo_url} alt={s.nombre} className="w-full h-full object-cover" />
-                ) : (
-                  <Users size={28} className="text-gray-300" />
-                )}
-              </div>
-              <div>
-                <h3 className="font-bold">{s.nombre}</h3>
-                <p className="text-sm text-gray-600">{s.cargo} — {s.empresa || s.company}</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setEditingItem(s)}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-              >
-                <Edit2 size={18} />
-              </button>
-              <button
-                onClick={() => handleDelete(s.id || s.wp_id)}
-                className="p-2 text-red-600 hover:bg-red-50 rounded"
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ===== EXHIBITORS MANAGER =====
-function ExhibitorsManager({ exhibitors }) {
-  return (
-    <div className="text-center py-12">
-      <Building2 size={48} className="mx-auto text-gray-400 mb-4" />
-      <h3 className="text-xl font-bold mb-2">Gestor de Expositores</h3>
-      <p className="text-gray-600">En desarrollo ({exhibitors.length} expositores)</p>
-    </div>
-  );
-}
-
-// ===== ADMIN NOTIFICATIONS =====
-function AdminNotifications() {
-  const [form, setForm] = useState({
-    titulo: '',
-    mensaje: '',
-    tipo: 'info',
-    rol: 'asistente',
-    sede: '',
-    enviarAhora: true,
-  });
-
-  const [sending, setSending] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      setSending(true);
-
-      await API.post('/notificaciones/admin', form);
-
-      alert('✅ Notificación enviada');
-      setForm({
-        titulo: '',
-        mensaje: '',
-        tipo: 'info',
-        rol: 'asistente',
-        sede: '',
-        enviarAhora: true,
-      });
-
-    } catch (err) {
-      console.error(err);
-      alert('❌ Error enviando notificación');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div>
-      <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-        <Bell /> Enviar notificación
-      </h2>
-
-      <form
-        onSubmit={handleSubmit}
-        className="bg-gray-50 p-6 rounded-lg space-y-4"
-      >
-        <div>
-          <label className="block text-sm mb-1">Título *</label>
-          <input
-            type="text"
-            className="w-full px-3 py-2 border rounded-lg"
-            value={form.titulo}
-            onChange={(e) =>
-              setForm({ ...form, titulo: e.target.value })
-            }
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm mb-1">Mensaje *</label>
-          <textarea
-            rows={3}
-            className="w-full px-3 py-2 border rounded-lg"
-            value={form.mensaje}
-            onChange={(e) =>
-              setForm({ ...form, mensaje: e.target.value })
-            }
-            required
-          />
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm mb-1">Tipo</label>
-            <select
-              className="w-full px-3 py-2 border rounded-lg"
-              value={form.tipo}
+          {showSessionForm && (
+            <SessionForm
+              formData={sessionFormData}
               onChange={(e) =>
-                setForm({ ...form, tipo: e.target.value })
+                setSessionFormData({
+                  ...sessionFormData,
+                  [e.target.name]: e.target.value,
+                })
               }
-            >
-              <option value="info">Info</option>
-              <option value="alerta">Alerta</option>
-              <option value="sistema">Sistema</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Rol destino</label>
-            <select
-              className="w-full px-3 py-2 border rounded-lg"
-              value={form.rol}
-              onChange={(e) =>
-                setForm({ ...form, rol: e.target.value })
-              }
-            >
-              <option value="asistente">Asistentes</option>
-              <option value="staff">Staff</option>
-              <option value="speaker">Speakers</option>
-              <option value="expositor">Expositores</option>
-              <option value="super_admin">Admins</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">
-              Sede (opcional)
-            </label>
-            <input
-              type="text"
-              placeholder="Ej. CDMX"
-              className="w-full px-3 py-2 border rounded-lg"
-              value={form.sede}
-              onChange={(e) =>
-                setForm({ ...form, sede: e.target.value })
-              }
+              onSubmit={handleSessionSubmit}
+              onCancel={() => setShowSessionForm(false)}
+              loading={loading}
             />
+          )}
+
+          <div className="grid grid-cols-1 gap-4">
+            {sessions.map((session) => (
+              <div key={session.id} className="bg-white p-4 rounded-lg shadow">
+                <h3 className="font-bold text-lg">{session.titulo}</h3>
+                <p className="text-gray-600 text-sm mb-2">{session.descripcion}</p>
+                <div className="flex gap-2 text-sm text-gray-500">
+                  <span>📅 {session.dia}</span>
+                  <span>⏰ {session.horaInicio}</span>
+                  <span>📍 {session.sala}</span>
+                  <span>🏢 {session.sede}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+      )}
 
-        <div className="flex justify-end gap-2 pt-4">
-          <button
-            type="submit"
-            disabled={sending}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
-          >
-            <Bell size={18} />
-            {sending ? 'Enviando...' : 'Enviar notificación'}
-          </button>
+      {/* EXPOSITORES */}
+      {activeTab === "expositores" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold">Gestionar Expositores</h2>
+            <button
+              onClick={() => setShowExpositorForm(!showExpositorForm)}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              <Plus size={18} />
+              Nuevo Expositor
+            </button>
+          </div>
+
+          {showExpositorForm && (
+            <ExpositorForm
+              formData={expositorFormData}
+              onChange={(e) =>
+                setExpositorFormData({
+                  ...expositorFormData,
+                  [e.target.name]: e.target.value,
+                })
+              }
+              onSubmit={handleExpositorSubmit}
+              onCancel={() => setShowExpositorForm(false)}
+              loading={loading}
+            />
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {expositores.map((exp) => (
+              <div key={exp.id} className="bg-white p-4 rounded-lg shadow">
+                <h3 className="font-bold text-lg">{exp.nombre}</h3>
+                <p className="text-blue-600 text-sm font-semibold">{exp.categoria}</p>
+                <p className="text-gray-600 text-sm mb-2">{exp.descripcion}</p>
+                <div className="flex gap-2 text-sm text-gray-500">
+                  <span>📌 Stand: {exp.stand}</span>
+                  <span>🏢 {exp.sede}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </form>
+      )}
+
+      {/* NOTIFICACIONES */}
+      {activeTab === "notificaciones" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold">Enviar Notificaciones</h2>
+            <button
+              onClick={() => setShowNotificationForm(!showNotificationForm)}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              <Plus size={18} />
+              Nueva Notificación
+            </button>
+          </div>
+
+          {showNotificationForm && (
+            <NotificationForm
+              formData={notificationFormData}
+              onChange={(e) => {
+                const { name, value } = e.target;
+                setNotificationFormData({
+                  ...notificationFormData,
+                  [name]: value,
+                });
+              }}
+              onUserSelect={(userId) => {
+                setNotificationFormData({
+                  ...notificationFormData,
+                  usuarios: notificationFormData.usuarios.includes(userId)
+                    ? notificationFormData.usuarios.filter(id => id !== userId)
+                    : [...notificationFormData.usuarios, userId],
+                });
+              }}
+              onSubmit={handleNotificationSubmit}
+              onCancel={() => setShowNotificationForm(false)}
+              users={users}
+              loading={notificationLoading}
+              error={notificationError}
+            />
+          )}
+
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+            <p className="text-blue-800">
+              <strong>💡 Nota:</strong> Las notificaciones se envían a través del sistema de notificaciones
+              de la aplicación. Los usuarios recibirán un mensaje en su panel de notificaciones.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ========================================================
+// COMPONENTES DEL FORMULARIO
+// ========================================================
+
+function SessionForm({ formData, onChange, onSubmit, onCancel, loading }) {
+  return (
+    <form onSubmit={onSubmit} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+      <h3 className="text-xl font-bold">Nueva Sesión</h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input
+          type="text"
+          name="titulo"
+          placeholder="Título de la sesión"
+          value={formData.titulo}
+          onChange={onChange}
+          required
+          className="px-4 py-2 border rounded-lg"
+        />
+        <input
+          type="text"
+          name="sala"
+          placeholder="Sala"
+          value={formData.sala}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg"
+        />
+        <textarea
+          name="descripcion"
+          placeholder="Descripción"
+          value={formData.descripcion}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg md:col-span-2"
+        />
+        <select name="dia" value={formData.dia} onChange={onChange} className="px-4 py-2 border rounded-lg">
+          <option value="">Selecciona día</option>
+          <option value="lunes">Lunes</option>
+          <option value="martes">Martes</option>
+          <option value="miercoles">Miércoles</option>
+          <option value="jueves">Jueves</option>
+          <option value="viernes">Viernes</option>
+        </select>
+        <input
+          type="time"
+          name="horaInicio"
+          value={formData.horaInicio}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg"
+        />
+        <input
+          type="time"
+          name="horaFin"
+          value={formData.horaFin}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg"
+        />
+        <select name="tipo" value={formData.tipo} onChange={onChange} className="px-4 py-2 border rounded-lg">
+          <option value="conferencia">Conferencia</option>
+          <option value="taller">Taller</option>
+          <option value="networking">Networking</option>
+          <option value="curso">Curso</option>
+        </select>
+        <select name="sede" value={formData.sede} onChange={onChange} className="px-4 py-2 border rounded-lg">
+          <option value="chile">Chile</option>
+          <option value="mexico">México</option>
+          <option value="colombia">Colombia</option>
+        </select>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+        >
+          <Save size={18} />
+          {loading ? "Guardando..." : "Guardar"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="bg-gray-400 text-white px-4 py-2 rounded-lg hover:bg-gray-500"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ExpositorForm({ formData, onChange, onSubmit, onCancel, loading }) {
+  return (
+    <form onSubmit={onSubmit} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+      <h3 className="text-xl font-bold">Nuevo Expositor</h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input
+          type="text"
+          name="nombre"
+          placeholder="Nombre de la empresa"
+          value={formData.nombre}
+          onChange={onChange}
+          required
+          className="px-4 py-2 border rounded-lg"
+        />
+        <input
+          type="text"
+          name="categoria"
+          placeholder="Categoría"
+          value={formData.categoria}
+          onChange={onChange}
+          required
+          className="px-4 py-2 border rounded-lg"
+        />
+        <input
+          type="text"
+          name="stand"
+          placeholder="Stand #"
+          value={formData.stand}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg"
+        />
+        <input
+          type="email"
+          name="email"
+          placeholder="Email"
+          value={formData.email}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg"
+        />
+        <input
+          type="tel"
+          name="telefono"
+          placeholder="Teléfono"
+          value={formData.telefono}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg"
+        />
+        <input
+          type="url"
+          name="website"
+          placeholder="Website"
+          value={formData.website}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg"
+        />
+        <input
+          type="url"
+          name="logo_url"
+          placeholder="URL del logo"
+          value={formData.logo_url}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg md:col-span-2"
+        />
+        <textarea
+          name="descripcion"
+          placeholder="Descripción de la empresa"
+          value={formData.descripcion}
+          onChange={onChange}
+          className="px-4 py-2 border rounded-lg md:col-span-2"
+        />
+        <select name="sede" value={formData.sede} onChange={onChange} className="px-4 py-2 border rounded-lg">
+          <option value="chile">Chile</option>
+          <option value="mexico">México</option>
+          <option value="colombia">Colombia</option>
+        </select>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+        >
+          <Save size={18} />
+          {loading ? "Guardando..." : "Guardar"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="bg-gray-400 text-white px-4 py-2 rounded-lg hover:bg-gray-500"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function NotificationForm({
+  formData,
+  onChange,
+  onUserSelect,
+  onSubmit,
+  onCancel,
+  users,
+  loading,
+  error,
+}) {
+  return (
+    <form onSubmit={onSubmit} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+      <h3 className="text-xl font-bold">Nueva Notificación</h3>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 p-3 rounded text-sm text-red-800">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-4">
+        <input
+          type="text"
+          name="titulo"
+          placeholder="Título de la notificación"
+          value={formData.titulo}
+          onChange={onChange}
+          required
+          className="w-full px-4 py-2 border rounded-lg"
+        />
+        <textarea
+          name="mensaje"
+          placeholder="Mensaje"
+          value={formData.mensaje}
+          onChange={onChange}
+          required
+          className="w-full px-4 py-2 border rounded-lg"
+        />
+        <select
+          name="tipo"
+          value={formData.tipo}
+          onChange={onChange}
+          className="w-full px-4 py-2 border rounded-lg"
+        >
+          <option value="info">Información</option>
+          <option value="success">Éxito</option>
+          <option value="warning">Advertencia</option>
+          <option value="error">Error</option>
+        </select>
+
+        {/* Selección de usuarios */}
+        <div className="border rounded-lg p-4">
+          <p className="font-semibold mb-2">Enviar a:</p>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {users.length === 0 ? (
+              <p className="text-gray-500 text-sm">No hay usuarios disponibles</p>
+            ) : (
+              users.map((user) => (
+                <label key={user.id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.usuarios.includes(user.id)}
+                    onChange={() => onUserSelect(user.id)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">
+                    {user.nombre} ({user.email})
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+          <p className="text-sm text-gray-600 mt-2">
+            Seleccionados: {formData.usuarios.length}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+        >
+          <Bell size={18} />
+          {loading ? "Enviando..." : "Enviar Notificación"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="bg-gray-400 text-white px-4 py-2 rounded-lg hover:bg-gray-500"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
   );
 }

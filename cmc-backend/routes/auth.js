@@ -250,4 +250,97 @@ router.get("/me", authRequired, async (req, res) => {
   }
 });
 
+/* ========================================================
+   PUT /api/auth/me - Actualizar perfil del usuario
+======================================================== */
+router.put('/me', authRequired, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      nombre,
+      email,
+      telefono,
+      empresa,
+      cargo,
+      ciudad,
+      foto_url,
+      bio,
+      linkedin,
+      twitter
+    } = req.body;
+
+    console.log('✏️ Actualizando perfil de usuario:', userId);
+
+    // Verificar que el usuario existe
+    const check = await pool.query(
+      'SELECT id FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Actualizar datos
+    const result = await pool.query(
+      `UPDATE users SET
+        nombre = COALESCE($1, nombre),
+        email = COALESCE($2, email),
+        telefono = COALESCE($3, telefono),
+        empresa = COALESCE($4, empresa),
+        cargo = COALESCE($5, cargo),
+        ciudad = COALESCE($6, ciudad),
+        foto_url = COALESCE($7, foto_url),
+        bio = COALESCE($8, bio),
+        linkedin_url = COALESCE($9, linkedin_url),
+        twitter_url = COALESCE($10, twitter_url),
+        updated_at = NOW()
+      WHERE id = $11
+      RETURNING 
+        id,
+        nombre,
+        email,
+        telefono,
+        empresa,
+        cargo,
+        ciudad,
+        foto_url,
+        bio,
+        linkedin_url as linkedin,
+        twitter_url as twitter,
+        created_at,
+        updated_at
+      `,
+      [
+        nombre,
+        email,
+        telefono,
+        empresa,
+        cargo,
+        ciudad,
+        foto_url,
+        bio,
+        linkedin,
+        twitter,
+        userId
+      ]
+    );
+
+    console.log('✅ Perfil actualizado:', userId);
+
+    res.json({
+      ok: true,
+      user: result.rows[0],
+      message: 'Perfil actualizado exitosamente'
+    });
+
+  } catch (err) {
+    console.error("❌ Error actualizando perfil:", err);
+    res.status(500).json({ 
+      error: "Error actualizando perfil",
+      details: err.message 
+    });
+  }
+});
+
 export default router;
