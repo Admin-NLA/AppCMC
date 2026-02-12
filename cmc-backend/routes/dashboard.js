@@ -16,9 +16,9 @@ router.get("/", authRequired, async (req, res) => {
     // ----------------------------
     // 1) Precargas generales
     // ----------------------------
-    const pTotalSessions = pool.query("SELECT COUNT(*) FROM agenda");
-    const pTotalSpeakers = pool.query("SELECT COUNT(*) FROM speakers");
-    const pTotalExpositores = pool.query("SELECT COUNT(*) FROM expositores");
+    const pTotalSessions = pool.query("SELECT COUNT(*) as count FROM agenda WHERE activo = true");
+    const pTotalSpeakers = pool.query("SELECT COUNT(*) as count FROM speakers WHERE activo = true");
+    const pTotalExpositores = pool.query("SELECT COUNT(*) as count FROM expositores WHERE activo = true");
 
     const pCountBySede = pool.query(
       "SELECT sede, COUNT(*) FROM agenda GROUP BY sede"
@@ -118,9 +118,9 @@ router.get("/", authRequired, async (req, res) => {
     // ======================================
     const base = {
       totals: {
-        sessions: toInt(totalSessionsR),
-        speakers: toInt(totalSpeakersR),
-        expositores: toInt(totalExpositoresR),
+        sessions: totalSessionsR?.rows?.[0]?.count || 0,
+        speakers: totalSpeakersR?.rows?.[0]?.count || 0,
+        expositores: totalExpositoresR?.rows?.[0]?.count || 0,
       },
       upcoming: upcomingR.rows || [],
       favorites: (favsR.rows || []).map((r) => r.session_id),
