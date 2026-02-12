@@ -5,7 +5,9 @@ import { authRequired } from '../utils/authMiddleware.js';
 
 const router = express.Router();
 
-// Función helper para extraer info del class_list
+// ========================================================
+// HELPER: Parsear class_list de WordPress para speakers
+// ========================================================
 function parseSpeakerClassList(classList = []) {
   let sede = null;
   let eventos = [];
@@ -41,18 +43,41 @@ router.get('/', async (req, res) => {
 
     console.log(`[Speakers] Solicitando: sede=${sede}, edicion=${edicion}`);
 
-    // 1. Obtener speakers de WordPress
-    const wpResponse = await wordpressAPI.get('/team-member', {
-      params: {
-        per_page: 100,
-        _fields: 'id,title,content,slug,featured_media,class_list,acf'
+    // ✅ OBTENER TODAS LAS PÁGINAS (no solo 100)
+    let allSpeakers = [];
+    let page = 1;
+    let hasMore = true;
+    let totalPages = 0;
+
+    console.log('[Speakers] Iniciando paginación desde WordPress...');
+
+    while (hasMore) {
+      console.log(`[Speakers] Obteniendo página ${page}...`);
+      
+      const wpResponse = await wordpressAPI.get('/team-member', {
+        params: {
+          page,
+          per_page: 100,
+          _fields: 'id,title,content,slug,featured_media,class_list,acf'
+        }
+      });
+
+      if (wpResponse.data.length === 0) {
+        hasMore = false;
+        console.log(`[Speakers] Fin de la paginación en página ${page}`);
+      } else {
+        allSpeakers = allSpeakers.concat(wpResponse.data);
+        console.log(`[Speakers] Página ${page}: +${wpResponse.data.length} speakers (total: ${allSpeakers.length})`);
+        page++;
       }
-    });
+    }
 
-    console.log(`[Speakers] Total de WP: ${wpResponse.data.length}`);
+    console.log(`[Speakers] ✅ Total de speakers desde WP: ${allSpeakers.length}`);
 
-    // 2. Procesar speakers de WordPress
-    let wpSpeakers = wpResponse.data.map(post => {
+    // ========================================================
+    // PROCESAR SPEAKERS DE WORDPRESS
+    // ========================================================
+    let wpSpeakers = allSpeakers.map(post => {
       const { sede: detectedSede, eventos, edicion: detectedEdicion } = parseSpeakerClassList(post.class_list || []);
       
       return {
@@ -77,7 +102,11 @@ router.get('/', async (req, res) => {
       };
     });
 
-    // 3. Obtener speakers de la BD local
+    console.log(`[Speakers] Speakers de WP procesados: ${wpSpeakers.length}`);
+
+    // ========================================================
+    // OBTENER SPEAKERS DE LA BD LOCAL
+    // ========================================================
     const localResult = await pool.query(`
       SELECT 
         id,
@@ -105,35 +134,49 @@ router.get('/', async (req, res) => {
     const localSpeakers = localResult.rows.map(s => ({
       ...s,
       canEdit: true,
-      source: s.source || 'local'
+      source: s.source || 'local',
+      eventos: []  // Los locales no tienen eventos
     }));
 
-    // 4. Combinar ambas fuentes
-    let allSpeakers = [...wpSpeakers, ...localSpeakers];
+    console.log(`[Speakers] Speakers locales: ${localSpeakers.length}`);
 
-    // 5. Aplicar filtros
+    // ========================================================
+    // COMBINAR AMBAS FUENTES
+    // ========================================================
+    let allSpeakersData = [...wpSpeakers, ...localSpeakers];
+
+    console.log(`[Speakers] Total antes de filtros: ${allSpeakersData.length}`);
+
+    // ========================================================
+    // APLICAR FILTROS
+    // ========================================================
     if (sede) {
       const sedeLower = sede.toLowerCase();
-      const before = allSpeakers.length;
-      allSpeakers = allSpeakers.filter(s => s.sede === sedeLower);
-      console.log(`[Speakers] Filtro sede "${sede}": ${before} → ${allSpeakers.length}`);
+      const before = allSpeakersData.length;
+      allSpeakersData = allSpeakersData.filter(s => s.sede === sedeLower);
+      console.log(`[Speakers] Filtro sede "${sede}": ${before} → ${allSpeakersData.length}`);
     }
 
     if (edicion) {
-      const before = allSpeakers.length;
+      const before = allSpeakersData.length;
       const edicionNum = parseInt(edicion);
-      allSpeakers = allSpeakers.filter(s => 
+      allSpeakersData = allSpeakersData.filter(s => 
         s.edicion === edicionNum || 
         (s.eventos && s.eventos.some(e => e.includes(edicion)))
       );
-      console.log(`[Speakers] Filtro edicion "${edicion}": ${before} → ${allSpeakers.length}`);
+      console.log(`[Speakers] Filtro edicion "${edicion}": ${before} → ${allSpeakersData.length}`);
     }
 
-    // 6. Responder (formato que espera el frontend)
-    res.json(allSpeakers);
+    // ========================================================
+    // RESPONDER
+    // ========================================================
+    console.log(`[Speakers] Respuesta final: ${allSpeakersData.length} speakers`);
+    
+    res.json(allSpeakersData);
 
   } catch (error) {
     console.error('❌ Error en GET /speakers:', error.message);
+    console.error('Stack:', error.stack);
     res.status(500).json({ 
       error: 'Error al obtener speakers',
       details: error.message 
@@ -147,6 +190,8 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    console.log(`[Speakers] Obteniendo speaker: ${id}`);
 
     // Buscar en BD local primero
     const local = await pool.query(
@@ -170,18 +215,24 @@ router.get('/:id', async (req, res) => {
     );
 
     if (local.rows.length > 0) {
+      console.log(`[Speakers] Encontrado en BD local: ${id}`);
       return res.json(local.rows[0]);
     }
 
     // Si no está en local, buscar en WordPress por wp_id
+    console.log(`[Speakers] No está en local, buscando en WordPress: ${id}`);
+    
     const wpResponse = await wordpressAPI.get(`/team-member/${id}`);
     
     if (wpResponse.data) {
       const post = wpResponse.data;
       const { sede, edicion } = parseSpeakerClassList(post.class_list || []);
       
+      console.log(`[Speakers] Encontrado en WordPress: ${id}`);
+      
       return res.json({
         id: post.id,
+        wp_id: post.id,
         nombre: post.title?.rendered || '',
         bio: post.content?.rendered || '',
         cargo: post.acf?.cargo || '',
@@ -194,6 +245,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
+    console.log(`[Speakers] Speaker no encontrado: ${id}`);
     res.status(404).json({ error: 'Speaker no encontrado' });
 
   } catch (error) {
@@ -203,7 +255,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ========================================================
-// POST /speakers - Crear speaker
+// POST /speakers - Crear speaker (solo autenticados)
 // ========================================================
 router.post('/', authRequired, async (req, res) => {
   try {
@@ -297,7 +349,7 @@ router.post('/', authRequired, async (req, res) => {
 });
 
 // ========================================================
-// PUT /speakers/:id - Actualizar speaker
+// PUT /speakers/:id - Actualizar speaker (solo locales)
 // ========================================================
 router.put('/:id', authRequired, async (req, res) => {
   try {
