@@ -17,9 +17,10 @@ import Notificaciones from "./pages/Notificaciones.jsx";
 import Perfil from "./pages/Perfil.jsx";
 import StaffPanel from "./pages/StaffPanel.jsx";
 import AdminPanel from "./pages/AdminPanel.jsx";
+import ExcelImport from "./pages/ExcelImport.jsx";
 import NotFound from "./pages/notfound-page.jsx";
 
-// 🔒 Protección de rutas
+// 🔐 Protección de rutas
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
 
@@ -39,11 +40,11 @@ function PrivateRoute({ children, roles }) {
 
   // ✅ USAR roles DINÁMICOS
   if (roles && !roles.includes(user.rol)) {
-    console.warn("⛔ Acceso denegado para rol:", user.rol);
+    console.warn("❌ Acceso denegado para rol:", user.rol);
     return <Navigate to="/dashboard" replace />;
   }
 
-// 4️⃣ Todo OK → renderiza la ruta
+  // 4️⃣ Todo OK → renderiza la ruta
   return children;
 }
 
@@ -55,82 +56,92 @@ function AppWithEvent() {
     <EventProvider user={user}>
       <Router>
         <Routes>
-              {/* ---------- LOGIN NO USA LAYOUT ---------- */}
-              <Route path="/login" element={<Login />} />
+          {/* ---------- LOGIN NO USA LAYOUT ---------- */}
+          <Route path="/login" element={<Login />} />
 
-              {/* ---------- TODAS LAS RUTAS PROTEGIDAS VAN DENTRO DEL LAYOUT ---------- */}
-              <Route
-                path="/"
-                element={
-                  <PrivateRoute roles={['asistente', 'staff', 'speaker', 'expositor', 'super_admin']}>
-                    <Layout />
-                  </PrivateRoute>
-                }
-              >
+          {/* ---------- TODAS LAS RUTAS PROTEGIDAS VAN DENTRO DEL LAYOUT ---------- */}
+          <Route
+            path="/"
+            element={
+              <PrivateRoute roles={['asistente', 'staff', 'speaker', 'expositor', 'super_admin']}>
+                <Layout />
+              </PrivateRoute>
+            }
+          >
 
-                {/* Dashboard */}
-                <Route
-                  path="dashboard"
-                  element={<Dashboard />}
-                />
+            {/* Dashboard */}
+            <Route
+              path="dashboard"
+              element={<Dashboard />}
+            />
 
-                {/* Agenda */}
-                <Route
-                  path="agenda"
-                  element={<Agenda />}
-                />
+            {/* Agenda */}
+            <Route
+              path="agenda"
+              element={<Agenda />}
+            />
 
-                {/* Speakers */}
-                <Route
-                  path="speakers"
-                  element={<Speakers />}
-                />
+            {/* Speakers */}
+            <Route
+              path="speakers"
+              element={<Speakers />}
+            />
 
-                {/* Expositores */}
-                <Route
-                  path="expositores"
-                  element={<Expositores />}
-                />
+            {/* Expositores */}
+            <Route
+              path="expositores"
+              element={<Expositores />}
+            />
 
-                {/* Notificaciones */}
-                <Route
-                  path="notificaciones"
-                  element={<Notificaciones />}
-                />
+            {/* Notificaciones */}
+            <Route
+              path="notificaciones"
+              element={<Notificaciones />}
+            />
 
-                {/* Perfil */}
-                <Route
-                  path="perfil"
-                  element={<Perfil />}
-                />
+            {/* Perfil */}
+            <Route
+              path="perfil"
+              element={<Perfil />}
+            />
 
-                {/* Staff Panel */}
-                <Route
-                  path="staff"
-                  element={
-                    <PrivateRoute roles={['staff', 'super_admin']}>
-                      <StaffPanel />
-                    </PrivateRoute>
-                  }
-                />
+            {/* Staff Panel */}
+            <Route
+              path="staff"
+              element={
+                <PrivateRoute roles={['staff', 'super_admin']}>
+                  <StaffPanel />
+                </PrivateRoute>
+              }
+            />
 
-                {/* Admin Panel */}
-                <Route
-                  path="admin"
-                  element={
-                    <PrivateRoute roles={['super_admin']}>
-                      <AdminPanel />
-                    </PrivateRoute>
-                  }
-                />
+            {/* Admin Panel */}
+            <Route
+              path="admin"
+              element={
+                <PrivateRoute roles={['super_admin']}>
+                  <AdminPanel />
+                </PrivateRoute>
+              }
+            />
 
-              </Route>
+            {/* 📊 Excel Import - NUEVA RUTA */}
+            <Route
+              path="admin/import"
+              element={
+                <PrivateRoute roles={['super_admin']}>
+                  <ExcelImport />
+                </PrivateRoute>
+              }
+            />
 
-              {/* ---------- NOT FOUND ---------- */}
-              <Route path="/404" element={<NotFound />} />
+          </Route>
 
-              {/* ---------- DEFAULT ---------- */}
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* ---------- NOT FOUND ---------- */}
+          <Route path="/404" element={<NotFound />} />
+
+          {/* ---------- DEFAULT ---------- */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
     </EventProvider>
