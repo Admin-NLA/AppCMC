@@ -6,6 +6,7 @@ const router = express.Router();
 
 // ========================================================
 // GET /expositores - Obtener todos los expositores
+// CAMBIO: website → website_url
 // ========================================================
 router.get('/', async (req, res) => {
   try {
@@ -19,7 +20,7 @@ router.get('/', async (req, res) => {
         id,
         nombre,
         logo_url,
-        website,
+        website_url,
         telefono,
         email,
         categoria,
@@ -59,7 +60,7 @@ router.get('/', async (req, res) => {
           id,
           nombre,
           logo_url,
-          website,
+          website_url,
           telefono,
           email,
           categoria,
@@ -101,6 +102,7 @@ router.get('/', async (req, res) => {
 
 // ========================================================
 // GET /expositores/:id - Obtener expositor específico
+// CAMBIO: website → website_url
 // ========================================================
 router.get('/:id', async (req, res) => {
   try {
@@ -113,7 +115,7 @@ router.get('/:id', async (req, res) => {
         id,
         nombre,
         logo_url,
-        website,
+        website_url,
         telefono,
         email,
         categoria,
@@ -147,6 +149,7 @@ router.get('/:id', async (req, res) => {
 
 // ========================================================
 // POST /expositores - Crear expositor (solo autenticados)
+// CAMBIO: website → website_url
 // ========================================================
 router.post('/', authRequired, async (req, res) => {
   try {
@@ -179,7 +182,7 @@ router.post('/', authRequired, async (req, res) => {
         id,
         nombre, 
         logo_url,
-        website,
+        website_url,
         telefono,
         email,
         categoria,
@@ -239,6 +242,7 @@ router.post('/', authRequired, async (req, res) => {
 
 // ========================================================
 // PUT /expositores/:id - Actualizar expositor
+// CAMBIO: website → website_url
 // ========================================================
 router.put('/:id', authRequired, async (req, res) => {
   try {
@@ -275,7 +279,7 @@ router.put('/:id', authRequired, async (req, res) => {
       `UPDATE expositores SET
         nombre = COALESCE($1, nombre),
         logo_url = COALESCE($2, logo_url),
-        website = COALESCE($3, website),
+        website_url = COALESCE($3, website_url),
         telefono = COALESCE($4, telefono),
         email = COALESCE($5, email),
         categoria = COALESCE($6, categoria),

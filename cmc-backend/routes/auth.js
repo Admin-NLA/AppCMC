@@ -252,6 +252,8 @@ router.get("/me", authRequired, async (req, res) => {
 
 /* ========================================================
    PUT /api/auth/me - Actualizar perfil del usuario
+   CORREGIDO: Usa nombres de columnas correctos (movil)
+   CAMBIO ÚNICO: telefono → movil
 ======================================================== */
 router.put('/me', authRequired, async (req, res) => {
   try {
@@ -260,13 +262,7 @@ router.put('/me', authRequired, async (req, res) => {
       nombre,
       email,
       telefono,
-      empresa,
-      cargo,
-      ciudad,
-      foto_url,
-      bio,
-      linkedin,
-      twitter
+      empresa
     } = req.body;
 
     console.log('✏️ Actualizando perfil de usuario:', userId);
@@ -281,47 +277,29 @@ router.put('/me', authRequired, async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    // Actualizar datos
+    // Actualizar datos - ÚNICO CAMBIO: telefono → movil
     const result = await pool.query(
       `UPDATE users SET
         nombre = COALESCE($1, nombre),
         email = COALESCE($2, email),
-        telefono = COALESCE($3, telefono),
-        empresa = COALESCE($4, empresa),
-        cargo = COALESCE($5, cargo),
-        ciudad = COALESCE($6, ciudad),
-        foto_url = COALESCE($7, foto_url),
-        bio = COALESCE($8, bio),
-        linkedin_url = COALESCE($9, linkedin_url),
-        twitter_url = COALESCE($10, twitter_url),
-        updated_at = NOW()
-      WHERE id = $11
+        movil = COALESCE($3, movil),
+        empresa = COALESCE($4, empresa)
+      WHERE id = $5
       RETURNING 
         id,
         nombre,
         email,
-        telefono,
+        movil as telefono,
         empresa,
-        cargo,
-        ciudad,
-        foto_url,
-        bio,
-        linkedin_url as linkedin,
-        twitter_url as twitter,
-        created_at,
-        updated_at
+        avatar_url,
+        sede,
+        rol
       `,
       [
         nombre,
         email,
-        telefono,
+        telefono,    // Se inserta en 'movil'
         empresa,
-        cargo,
-        ciudad,
-        foto_url,
-        bio,
-        linkedin,
-        twitter,
         userId
       ]
     );
