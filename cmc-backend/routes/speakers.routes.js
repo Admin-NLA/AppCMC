@@ -36,6 +36,7 @@ function parseSpeakerClassList(classList = []) {
 
 // ========================================================
 // GET /speakers - Obtener speakers (WordPress + BD local)
+// FIX: Try-catch en paginación de WordPress
 // ========================================================
 router.get('/', async (req, res) => {
   try {
@@ -52,23 +53,30 @@ router.get('/', async (req, res) => {
     console.log('[Speakers] Iniciando paginación desde WordPress...');
 
     while (hasMore) {
-      console.log(`[Speakers] Obteniendo página ${page}...`);
-      
-      const wpResponse = await wordpressAPI.get('/team-member', {
-        params: {
-          page,
-          per_page: 100,
-          _fields: 'id,title,content,slug,featured_media,class_list,acf'
-        }
-      });
+      try {
+        console.log(`[Speakers] Obteniendo página ${page}...`);
+        
+        const wpResponse = await wordpressAPI.get('/team-member', {
+          params: {
+            page,
+            per_page: 100,
+            _fields: 'id,title,content,slug,featured_media,class_list,acf'
+          }
+        });
 
-      if (wpResponse.data.length === 0) {
+        if (!wpResponse.data || wpResponse.data.length === 0) {
+          hasMore = false;
+          console.log(`[Speakers] Fin de la paginación en página ${page}`);
+        } else {
+          allSpeakers = allSpeakers.concat(wpResponse.data);
+          console.log(`[Speakers] Página ${page}: +${wpResponse.data.length} speakers (total: ${allSpeakers.length})`);
+          page++;
+        }
+      } catch (wpError) {
+        // Si hay error en WordPress, detener paginación pero continuar con locales
+        console.warn(`[Speakers] ⚠️ Error en página ${page} de WordPress:`, wpError.message);
+        console.log('[Speakers] Continuando con speakers locales...');
         hasMore = false;
-        console.log(`[Speakers] Fin de la paginación en página ${page}`);
-      } else {
-        allSpeakers = allSpeakers.concat(wpResponse.data);
-        console.log(`[Speakers] Página ${page}: +${wpResponse.data.length} speakers (total: ${allSpeakers.length})`);
-        page++;
       }
     }
 
@@ -107,38 +115,45 @@ router.get('/', async (req, res) => {
     // ========================================================
     // OBTENER SPEAKERS DE LA BD LOCAL
     // ========================================================
-    const localResult = await pool.query(`
-      SELECT 
-        id,
-        nombre,
-        bio,
-        cargo,
-        company as empresa,
-        photo_url as foto,
-        linkedin_url as linkedin,
-        twitter_url as twitter,
-        website_url as website,
-        email,
-        telefono,
-        sede,
-        edicion,
-        activo,
-        es_destacado as destacado,
-        source,
-        wp_slug as slug
-      FROM speakers
-      WHERE activo = true
-      ORDER BY nombre ASC
-    `);
+    let localSpeakers = [];
+    
+    try {
+      const localResult = await pool.query(`
+        SELECT 
+          id,
+          nombre,
+          bio,
+          cargo,
+          company as empresa,
+          photo_url as foto,
+          linkedin_url as linkedin,
+          twitter_url as twitter,
+          website_url as website,
+          email,
+          telefono,
+          sede,
+          edicion,
+          activo,
+          es_destacado as destacado,
+          source,
+          wp_slug as slug
+        FROM speakers
+        WHERE activo = true
+        ORDER BY nombre ASC
+      `);
 
-    const localSpeakers = localResult.rows.map(s => ({
-      ...s,
-      canEdit: true,
-      source: s.source || 'local',
-      eventos: []  // Los locales no tienen eventos
-    }));
+      localSpeakers = localResult.rows.map(s => ({
+        ...s,
+        canEdit: true,
+        source: s.source || 'local',
+        eventos: []  // Los locales no tienen eventos
+      }));
 
-    console.log(`[Speakers] Speakers locales: ${localSpeakers.length}`);
+      console.log(`[Speakers] Speakers locales: ${localSpeakers.length}`);
+    } catch (dbError) {
+      console.warn(`[Speakers] ⚠️ Error al obtener speakers locales:`, dbError.message);
+      localSpeakers = [];
+    }
 
     // ========================================================
     // COMBINAR AMBAS FUENTES
@@ -222,27 +237,31 @@ router.get('/:id', async (req, res) => {
     // Si no está en local, buscar en WordPress por wp_id
     console.log(`[Speakers] No está en local, buscando en WordPress: ${id}`);
     
-    const wpResponse = await wordpressAPI.get(`/team-member/${id}`);
-    
-    if (wpResponse.data) {
-      const post = wpResponse.data;
-      const { sede, edicion } = parseSpeakerClassList(post.class_list || []);
+    try {
+      const wpResponse = await wordpressAPI.get(`/team-member/${id}`);
       
-      console.log(`[Speakers] Encontrado en WordPress: ${id}`);
-      
-      return res.json({
-        id: post.id,
-        wp_id: post.id,
-        nombre: post.title?.rendered || '',
-        bio: post.content?.rendered || '',
-        cargo: post.acf?.cargo || '',
-        empresa: post.acf?.empresa || '',
-        foto: post.acf?.photo_url || '',
-        linkedin: post.acf?.linkedin_url || '',
-        sede,
-        edicion,
-        source: 'wordpress'
-      });
+      if (wpResponse.data) {
+        const post = wpResponse.data;
+        const { sede, edicion } = parseSpeakerClassList(post.class_list || []);
+        
+        console.log(`[Speakers] Encontrado en WordPress: ${id}`);
+        
+        return res.json({
+          id: post.id,
+          wp_id: post.id,
+          nombre: post.title?.rendered || '',
+          bio: post.content?.rendered || '',
+          cargo: post.acf?.cargo || '',
+          empresa: post.acf?.empresa || '',
+          foto: post.acf?.photo_url || '',
+          linkedin: post.acf?.linkedin_url || '',
+          sede,
+          edicion,
+          source: 'wordpress'
+        });
+      }
+    } catch (wpError) {
+      console.warn(`[Speakers] ⚠️ Error al buscar en WordPress:`, wpError.message);
     }
 
     console.log(`[Speakers] Speaker no encontrado: ${id}`);

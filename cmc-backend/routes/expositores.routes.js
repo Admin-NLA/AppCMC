@@ -6,7 +6,7 @@ const router = express.Router();
 
 // ========================================================
 // GET /expositores - Obtener todos los expositores
-// CAMBIO: website → website_url
+// SOLO columnas que EXISTEN: nombre, logo_url, website_url, categoria, stand, descripcion, sede
 // ========================================================
 router.get('/', async (req, res) => {
   try {
@@ -14,25 +14,19 @@ router.get('/', async (req, res) => {
 
     console.log(`[Expositores] Solicitando: sede=${sede}, categoria=${categoria}`);
 
-    // Construir query base
+    // Construir query base - SOLO COLUMNAS QUE EXISTEN
     let query = `
       SELECT 
         id,
         nombre,
         logo_url,
         website_url,
-        telefono,
-        email,
         categoria,
         stand,
         descripcion,
         sede,
-        industria,
-        empleados,
-        año_fundacion as "año_fundacion",
+        edicion,
         activo,
-        destacado,
-        source,
         created_at
       FROM expositores
       WHERE activo = true
@@ -61,18 +55,12 @@ router.get('/', async (req, res) => {
           nombre,
           logo_url,
           website_url,
-          telefono,
-          email,
           categoria,
           stand,
           descripcion,
           sede,
-          industria,
-          empleados,
-          año_fundacion as "año_fundacion",
+          edicion,
           activo,
-          destacado,
-          source,
           created_at
         FROM expositores
         WHERE ${whereConditions.join(' AND ')}
@@ -102,7 +90,6 @@ router.get('/', async (req, res) => {
 
 // ========================================================
 // GET /expositores/:id - Obtener expositor específico
-// CAMBIO: website → website_url
 // ========================================================
 router.get('/:id', async (req, res) => {
   try {
@@ -116,18 +103,17 @@ router.get('/:id', async (req, res) => {
         nombre,
         logo_url,
         website_url,
-        telefono,
-        email,
         categoria,
         stand,
         descripcion,
         sede,
-        industria,
-        empleados,
-        año_fundacion,
+        edicion,
         activo,
-        destacado,
-        source
+        usuario_id,
+        coordenadas_x,
+        coordenadas_y,
+        contact,
+        created_at
       FROM expositores
       WHERE id = $1 AND activo = true`,
       [id]
@@ -149,7 +135,7 @@ router.get('/:id', async (req, res) => {
 
 // ========================================================
 // POST /expositores - Crear expositor (solo autenticados)
-// CAMBIO: website → website_url
+// SOLO parámetros que EXISTEN
 // ========================================================
 router.post('/', authRequired, async (req, res) => {
   try {
@@ -157,15 +143,10 @@ router.post('/', authRequired, async (req, res) => {
       nombre,
       logo_url,
       website,
-      telefono,
-      email,
       categoria,
       stand,
       descripcion,
-      sede,
-      industria,
-      empleados,
-      año_fundacion
+      sede
     } = req.body;
 
     console.log('📝 Creando expositor:', nombre);
@@ -179,26 +160,19 @@ router.post('/', authRequired, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO expositores 
       (
-        id,
         nombre, 
         logo_url,
         website_url,
-        telefono,
-        email,
         categoria,
         stand,
         descripcion,
         sede,
-        industria,
-        empleados,
-        año_fundacion,
+        edicion,
         activo,
-        source,
         created_at
       )
       VALUES (
-        gen_random_uuid(),
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true, 'local', NOW()
+        $1, $2, $3, $4, $5, $6, $7, 2025, true, NOW()
       )
       RETURNING 
         id,
@@ -211,15 +185,10 @@ router.post('/', authRequired, async (req, res) => {
         nombre,
         logo_url || null,
         website || '',
-        telefono || '',
-        email || '',
         categoria,
         stand || '',
         descripcion || '',
-        sede || 'chile',
-        industria || '',
-        empleados || '',
-        año_fundacion || null
+        sede || 'chile'
       ]
     );
 
@@ -242,7 +211,7 @@ router.post('/', authRequired, async (req, res) => {
 
 // ========================================================
 // PUT /expositores/:id - Actualizar expositor
-// CAMBIO: website → website_url
+// SOLO parámetros que EXISTEN
 // ========================================================
 router.put('/:id', authRequired, async (req, res) => {
   try {
@@ -251,16 +220,10 @@ router.put('/:id', authRequired, async (req, res) => {
       nombre,
       logo_url,
       website,
-      telefono,
-      email,
       categoria,
       stand,
       descripcion,
-      sede,
-      industria,
-      empleados,
-      año_fundacion,
-      destacado
+      sede
     } = req.body;
 
     console.log('✏️ Actualizando expositor:', id);
@@ -280,17 +243,11 @@ router.put('/:id', authRequired, async (req, res) => {
         nombre = COALESCE($1, nombre),
         logo_url = COALESCE($2, logo_url),
         website_url = COALESCE($3, website_url),
-        telefono = COALESCE($4, telefono),
-        email = COALESCE($5, email),
-        categoria = COALESCE($6, categoria),
-        stand = COALESCE($7, stand),
-        descripcion = COALESCE($8, descripcion),
-        sede = COALESCE($9, sede),
-        industria = COALESCE($10, industria),
-        empleados = COALESCE($11, empleados),
-        año_fundacion = COALESCE($12, año_fundacion),
-        destacado = COALESCE($13, destacado)
-      WHERE id = $14
+        categoria = COALESCE($4, categoria),
+        stand = COALESCE($5, stand),
+        descripcion = COALESCE($6, descripcion),
+        sede = COALESCE($7, sede)
+      WHERE id = $8
       RETURNING 
         id,
         nombre,
@@ -302,16 +259,10 @@ router.put('/:id', authRequired, async (req, res) => {
         nombre,
         logo_url,
         website,
-        telefono,
-        email,
         categoria,
         stand,
         descripcion,
         sede,
-        industria,
-        empleados,
-        año_fundacion,
-        destacado,
         id
       ]
     );

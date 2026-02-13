@@ -6,8 +6,7 @@ const router = express.Router();
 
 // ========================================================
 // GET /notificaciones - Obtener notificaciones del usuario
-// CAMBIOS: user_id → no filtrar por user (traer todas activas)
-//          leida → enviada (mapeo)
+// CAMBIOS: user_id→created_by, leida→enviada, removed updated_at
 // ========================================================
 router.get('/', authRequired, async (req, res) => {
   try {
@@ -18,15 +17,13 @@ router.get('/', authRequired, async (req, res) => {
     const result = await pool.query(
       `SELECT 
         id,
-        created_by,
         titulo,
         mensaje,
         tipo,
-        enviada as leida,
-        related_type as "relatedType",
-        related_id as "relatedId",
+        enviada,
         created_at,
-        created_at as updated_at
+        created_by,
+        activa
       FROM notificaciones
       WHERE activa = true
       ORDER BY created_at DESC
@@ -35,13 +32,19 @@ router.get('/', authRequired, async (req, res) => {
 
     console.log(`[Notificaciones] ✅ ${result.rows.length} notificaciones encontradas`);
 
-    // Mapear created_by a user_id para compatibilidad con frontend
+    // Mapear campos para compatibilidad con frontend
     const notificaciones = result.rows.map(n => ({
-      ...n,
-      user_id: n.created_by
+      id: n.id,
+      user_id: n.created_by,
+      titulo: n.titulo,
+      mensaje: n.mensaje,
+      tipo: n.tipo,
+      leida: n.enviada,
+      relatedType: null,
+      relatedId: null,
+      created_at: n.created_at
     }));
 
-    // Responder como array directamente
     res.json(notificaciones);
 
   } catch (error) {
@@ -55,8 +58,6 @@ router.get('/', authRequired, async (req, res) => {
 
 // ========================================================
 // GET /notificaciones/:id - Obtener notificación específica
-// CAMBIOS: user_id → created_by
-//          leida → enviada
 // ========================================================
 router.get('/:id', authRequired, async (req, res) => {
   try {
@@ -67,15 +68,13 @@ router.get('/:id', authRequired, async (req, res) => {
     const result = await pool.query(
       `SELECT 
         id,
-        created_by as user_id,
+        created_by,
         titulo,
         mensaje,
         tipo,
-        enviada as leida,
-        related_type,
-        related_id,
+        enviada,
         created_at,
-        created_at as updated_at
+        activa
       FROM notificaciones
       WHERE id = $1 AND activa = true`,
       [id]
@@ -85,8 +84,19 @@ router.get('/:id', authRequired, async (req, res) => {
       return res.status(404).json({ error: 'Notificación no encontrada' });
     }
 
+    const n = result.rows[0];
     console.log(`[Notificaciones] ✅ Notificación encontrada: ${id}`);
-    res.json(result.rows[0]);
+    res.json({
+      id: n.id,
+      user_id: n.created_by,
+      titulo: n.titulo,
+      mensaje: n.mensaje,
+      tipo: n.tipo,
+      leida: n.enviada,
+      relatedType: null,
+      relatedId: null,
+      created_at: n.created_at
+    });
 
   } catch (error) {
     console.error('❌ Error obteniendo notificación:', error);
@@ -96,8 +106,7 @@ router.get('/:id', authRequired, async (req, res) => {
 
 // ========================================================
 // PUT /notificaciones/:id - Actualizar notificación (marcar como leída)
-// CAMBIOS: leida → enviada
-//          updated_at no existe, se omite
+// CAMBIO: leida→enviada, removed updated_at
 // ========================================================
 router.put('/:id', authRequired, async (req, res) => {
   try {
@@ -106,7 +115,6 @@ router.put('/:id', authRequired, async (req, res) => {
 
     console.log(`[Notificaciones] Actualizando notificación: ${id}`);
 
-    // Verificar que la notificación existe
     const check = await pool.query(
       'SELECT id FROM notificaciones WHERE id = $1',
       [id]
@@ -148,7 +156,7 @@ router.put('/:id', authRequired, async (req, res) => {
 
 // ========================================================
 // DELETE /notificaciones/:id - Eliminar notificación
-// CAMBIO: Usar soft delete con activa = false
+// CAMBIO: Usar soft delete con activa=false
 // ========================================================
 router.delete('/:id', authRequired, async (req, res) => {
   try {
@@ -156,7 +164,6 @@ router.delete('/:id', authRequired, async (req, res) => {
 
     console.log('🗑️ Eliminando notificación:', id);
 
-    // Verificar que la notificación existe
     const check = await pool.query(
       'SELECT id FROM notificaciones WHERE id = $1',
       [id]
@@ -166,7 +173,6 @@ router.delete('/:id', authRequired, async (req, res) => {
       return res.status(404).json({ error: 'Notificación no encontrada' });
     }
 
-    // Usar soft delete con activa = false
     await pool.query(
       'UPDATE notificaciones SET activa = false WHERE id = $1',
       [id]
@@ -189,8 +195,8 @@ router.delete('/:id', authRequired, async (req, res) => {
 });
 
 // ========================================================
-// POST /notificaciones - Crear notificación
-// CAMBIO: user_id → created_by en tabla
+// POST /notificaciones - Crear notificación (admin solo)
+// CAMBIO: user_id→created_by, leida→enviada
 // ========================================================
 router.post('/', authRequired, async (req, res) => {
   try {
@@ -214,20 +220,16 @@ router.post('/', authRequired, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO notificaciones 
       (
-        id,
-        created_by,
         titulo,
         mensaje,
         tipo,
         enviada,
-        related_type,
-        related_id,
+        created_by,
         activa,
         created_at
       )
       VALUES (
-        gen_random_uuid(),
-        $1, $2, $3, $4, false, $5, $6, true, NOW()
+        $1, $2, $3, false, $4, true, NOW()
       )
       RETURNING 
         id,
@@ -237,12 +239,10 @@ router.post('/', authRequired, async (req, res) => {
         enviada as leida
       `,
       [
-        user_id,
         titulo,
         mensaje,
         tipo || 'info',
-        related_type || null,
-        related_id || null
+        user_id
       ]
     );
 
@@ -265,7 +265,7 @@ router.post('/', authRequired, async (req, res) => {
 
 // ========================================================
 // POST /notificaciones/broadcast - Enviar a múltiples usuarios
-// CAMBIO: user_id → tipo_usuario array
+// CAMBIO: Usar tipo_usuario array en lugar de múltiples inserts
 // ========================================================
 router.post('/broadcast', authRequired, async (req, res) => {
   try {
@@ -279,13 +279,12 @@ router.post('/broadcast', authRequired, async (req, res) => {
       });
     }
 
-    // Convertir array a formato PostgreSQL para tipo_usuario
+    // Convertir array a formato PostgreSQL
     const usuariosArray = usuarios;
 
     const result = await pool.query(
       `INSERT INTO notificaciones 
       (
-        id,
         titulo,
         mensaje,
         tipo,
@@ -296,10 +295,10 @@ router.post('/broadcast', authRequired, async (req, res) => {
         created_at
       )
       VALUES (
-        gen_random_uuid(),
         $1, $2, $3, true, $4, $5, true, NOW()
       )
-      RETURNING id`,
+      RETURNING id
+      `,
       [
         titulo,
         mensaje,
