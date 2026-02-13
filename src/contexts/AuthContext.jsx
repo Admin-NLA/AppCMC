@@ -7,7 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
 
-  //NUEVA SECCIÓN DE BUILPERMISOS ------------------------------------>
+  //NUEVA SECCIÓN DE BUILDPERMISOS ------------------------------------>
   function buildPermisos(user) {
     // super admin y staff → TODO
     if (user.rol === "super_admin" || user.rol === "staff") {
@@ -90,38 +90,71 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const login = async (email, password) => {
-    const res = await API.post("/auth/login", { email, password });
-    localStorage.setItem("token", res.data.token);
-    setUser(res.data.user);
-    setUserProfile(res.data.user);
-    return res.data.user;
+    try {
+      const res = await API.post("/auth/login", { email, password });
+      
+      console.log("✅ Login response:", res.data);
+      
+      // Guardar token
+      localStorage.setItem("token", res.data.token);
+      
+      // Guardar usuario completo en localStorage (por si acaso)
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+      
+      // Guardar en estado
+      setUser(res.data.user);
+      setUserProfile(res.data.user);
+      
+      console.log("✅ Usuario guardado:", res.data.user);
+      
+      return res.data.user;
+    } catch (err) {
+      console.error("❌ Error en login:", err);
+      throw err;
+    }
   };
 
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setUser(null);
     setUserProfile(null);
   };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
+    
+    console.log("🔍 Verificando token en useEffect:", token ? "✅ Existe" : "❌ No existe");
+    
     if (!token) {
       setLoading(false);
       return;
     }
 
+    // Intentar obtener usuario desde /auth/me
     API.get("/auth/me")
-    .then((res) => {
-      console.log("AUTH /me OK:", res.data);
-      setUser(res.data.user);
-      setUserProfile(res.data.user);
-    })
-      .catch(() => {
+      .then((res) => {
+        console.log("✅ AUTH /me OK:", res.data);
+        
+        const userData = res.data.user;
+        setUser(userData);
+        setUserProfile(userData);
+        
+        // Guardar en localStorage también
+        localStorage.setItem("user", JSON.stringify(userData));
+        
+        console.log("✅ Usuario cargado:", userData);
+      })
+      .catch((err) => {
+        console.error("❌ Error en /auth/me:", err);
         localStorage.removeItem("token");
+        localStorage.removeItem("user");
         setUser(null);
         setUserProfile(null);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   return (
