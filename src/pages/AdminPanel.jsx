@@ -9,6 +9,9 @@ import {
   Users,
   Save,
   FileUp,
+  Edit2,
+  Trash2,
+  X,
 } from "lucide-react";
 
 export default function AdminPanel() {
@@ -81,6 +84,15 @@ export default function AdminPanel() {
   const [allUsers, setAllUsers] = useState([]);
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState(null);
+
+  // ========================================================
+  // NUEVOS ESTADOS: Editar y Eliminar Usuarios
+  // ========================================================
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [editingUserData, setEditingUserData] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -259,7 +271,7 @@ export default function AdminPanel() {
   };
 
   // ========================================================
-  // USUARIOS
+  // USUARIOS: Cargar lista
   // ========================================================
   const loadAllUsers = async () => {
     try {
@@ -274,6 +286,9 @@ export default function AdminPanel() {
     }
   };
 
+  // ========================================================
+  // USUARIOS: Crear nuevo
+  // ========================================================
   const handleUserSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -319,15 +334,84 @@ export default function AdminPanel() {
     }
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm("¿Estás seguro de que quieres eliminar este usuario?")) {
-      return;
-    }
+  // ========================================================
+  // USUARIOS: Abrir modal de edición
+  // ========================================================
+  const handleEditClick = (user) => {
+    setEditingUserId(user.id);
+    setEditingUserData({
+      nombre: user.nombre,
+      email: user.email,
+      rol: user.rol,
+      tipo_pase: user.tipo_pase,
+      sede: user.sede,
+      empresa: user.empresa,
+    });
+    setShowEditModal(true);
+    setUserError(null);
+  };
 
+  // ========================================================
+  // USUARIOS: Guardar cambios (editar)
+  // ========================================================
+  const handleSaveEdit = async () => {
     try {
-      alert("Función de eliminación no implementada aún");
+      setUserLoading(true);
+      setUserError(null);
+
+      console.log("✏️ Editando usuario:", editingUserId, editingUserData);
+
+      if (!editingUserData.nombre || !editingUserData.email) {
+        setUserError("Nombre y email son requeridos");
+        setUserLoading(false);
+        return;
+      }
+
+      await API.put(`/users/${editingUserId}`, editingUserData);
+
+      setSuccess(true);
+      setShowEditModal(false);
+      setEditingUserId(null);
+      setEditingUserData(null);
+
+      loadAllUsers();
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
+      setUserError(err.response?.data?.error || err.message);
+      console.error("Error al editar usuario:", err);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  // ========================================================
+  // USUARIOS: Eliminar (con confirmación)
+  // ========================================================
+  const handleDeleteClick = (user) => {
+    setDeletingUserId(user.id);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      setUserLoading(true);
+      setUserError(null);
+
+      console.log("🗑️ Eliminando usuario:", deletingUserId);
+
+      await API.delete(`/users/${deletingUserId}`);
+
+      setSuccess(true);
+      setShowDeleteConfirm(false);
+      setDeletingUserId(null);
+
+      loadAllUsers();
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setUserError(err.response?.data?.error || err.message);
       console.error("Error al eliminar usuario:", err);
+    } finally {
+      setUserLoading(false);
     }
   };
 
@@ -427,6 +511,117 @@ export default function AdminPanel() {
 
       {/* Contenido de cada tab */}
       <div className="bg-white p-6 rounded-lg">
+        {/* USUARIOS - TAB ACTUALIZADO CON EDIT/DELETE */}
+        {activeTab === "usuarios" && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Gestión de Usuarios</h2>
+              <button
+                onClick={() => {
+                  setShowUserForm(!showUserForm);
+                  setUserError(null);
+                }}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                <Plus size={18} />
+                Crear Usuario
+              </button>
+            </div>
+
+            {showUserForm && (
+              <UserForm
+                formData={userFormData}
+                onChange={(e) =>
+                  setUserFormData({
+                    ...userFormData,
+                    [e.target.name]: e.target.value,
+                  })
+                }
+                onSubmit={handleUserSubmit}
+                onCancel={() => {
+                  setShowUserForm(false);
+                  setUserError(null);
+                }}
+                loading={userLoading}
+                error={userError}
+              />
+            )}
+
+            {userError && !showUserForm && (
+              <div className="mb-4 bg-red-50 border border-red-200 p-4 rounded-lg text-red-800">
+                ❌ {userError}
+              </div>
+            )}
+
+            {/* TABLA DE USUARIOS */}
+            <div className="mt-6 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-100 border-b">
+                    <th className="px-4 py-2 text-left">Nombre</th>
+                    <th className="px-4 py-2 text-left">Email</th>
+                    <th className="px-4 py-2 text-left">Rol</th>
+                    <th className="px-4 py-2 text-left">Tipo Pase</th>
+                    <th className="px-4 py-2 text-left">Sede</th>
+                    <th className="px-4 py-2 text-left">Empresa</th>
+                    <th className="px-4 py-2 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userLoading ? (
+                    <tr>
+                      <td colSpan="7" className="px-4 py-2 text-center text-gray-500">
+                        Cargando usuarios...
+                      </td>
+                    </tr>
+                  ) : allUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="px-4 py-2 text-center text-gray-500">
+                        No hay usuarios registrados
+                      </td>
+                    </tr>
+                  ) : (
+                    allUsers.map((user) => (
+                      <tr key={user.id} className="border-b hover:bg-gray-50">
+                        <td className="px-4 py-2 font-semibold">{user.nombre}</td>
+                        <td className="px-4 py-2 text-blue-600">{user.email}</td>
+                        <td className="px-4 py-2">
+                          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold">
+                            {user.rol}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
+                            {user.tipo_pase}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">{user.sede}</td>
+                        <td className="px-4 py-2">{user.empresa || "-"}</td>
+                        <td className="px-4 py-2 text-center space-x-2">
+                          <button
+                            onClick={() => handleEditClick(user)}
+                            className="text-blue-600 hover:text-blue-800 transition inline-flex items-center gap-1"
+                            title="Editar usuario"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(user)}
+                            className="text-red-600 hover:text-red-800 transition inline-flex items-center gap-1"
+                            title="Eliminar usuario"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* SESIONES */}
         {activeTab === "sesiones" && (
           <div>
@@ -571,106 +766,212 @@ export default function AdminPanel() {
             )}
           </div>
         )}
+      </div>
 
-        {/* USUARIOS */}
-        {activeTab === "usuarios" && (
-          <div>
+      {/* ========================================================
+          MODAL DE EDICIÓN
+          ======================================================== */}
+      {showEditModal && editingUserData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">Gestión de Usuarios</h2>
+              <h2 className="text-xl font-bold">Editar Usuario</h2>
               <button
-                onClick={() => setShowUserForm(!showUserForm)}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                onClick={() => {
+                  setShowEditModal(false);
+                  setUserError(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
               >
-                <Plus size={18} />
-                Crear Usuario
+                <X size={24} />
               </button>
             </div>
 
-            {showUserForm && (
-              <UserForm
-                formData={userFormData}
-                onChange={(e) =>
-                  setUserFormData({
-                    ...userFormData,
-                    [e.target.name]: e.target.value,
-                  })
-                }
-                onSubmit={handleUserSubmit}
-                onCancel={() => setShowUserForm(false)}
-                loading={userLoading}
-                error={userError}
-              />
-            )}
-
             {userError && (
-              <div className="mb-4 bg-red-50 border border-red-200 p-4 rounded-lg text-red-800">
-                ❌ {userError}
+              <div className="mb-4 bg-red-50 border border-red-200 p-3 rounded text-sm text-red-800">
+                {userError}
               </div>
             )}
 
-            <div className="mt-6 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-100 border-b">
-                    <th className="px-4 py-2 text-left">Nombre</th>
-                    <th className="px-4 py-2 text-left">Email</th>
-                    <th className="px-4 py-2 text-left">Rol</th>
-                    <th className="px-4 py-2 text-left">Tipo Pase</th>
-                    <th className="px-4 py-2 text-left">Sede</th>
-                    <th className="px-4 py-2 text-left">Empresa</th>
-                    <th className="px-4 py-2 text-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {userLoading ? (
-                    <tr>
-                      <td colSpan="7" className="px-4 py-2 text-center text-gray-500">
-                        Cargando usuarios...
-                      </td>
-                    </tr>
-                  ) : allUsers.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="px-4 py-2 text-center text-gray-500">
-                        No hay usuarios registrados
-                      </td>
-                    </tr>
-                  ) : (
-                    allUsers.map((user) => (
-                      <tr key={user.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-2 font-semibold">{user.nombre}</td>
-                        <td className="px-4 py-2 text-blue-600">{user.email}</td>
-                        <td className="px-4 py-2">
-                          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold">
-                            {user.rol}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2">
-                          <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
-                            {user.tipo_pase}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2">{user.sede}</td>
-                        <td className="px-4 py-2">{user.empresa || "-"}</td>
-                        <td className="px-4 py-2 text-center space-x-2">
-                          <button className="text-blue-600 hover:text-blue-800 text-lg">
-                            ✏️
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="text-red-600 hover:text-red-800 text-lg"
-                          >
-                            🗑️
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre
+                </label>
+                <input
+                  type="text"
+                  value={editingUserData.nombre}
+                  onChange={(e) =>
+                    setEditingUserData({
+                      ...editingUserData,
+                      nombre: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={editingUserData.email}
+                  onChange={(e) =>
+                    setEditingUserData({
+                      ...editingUserData,
+                      email: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Rol
+                </label>
+                <select
+                  value={editingUserData.rol}
+                  onChange={(e) =>
+                    setEditingUserData({
+                      ...editingUserData,
+                      rol: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="asistente">Asistente</option>
+                  <option value="expositor">Expositor</option>
+                  <option value="speaker">Speaker</option>
+                  <option value="admin">Admin</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Pase
+                </label>
+                <select
+                  value={editingUserData.tipo_pase}
+                  onChange={(e) =>
+                    setEditingUserData({
+                      ...editingUserData,
+                      tipo_pase: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="general">General</option>
+                  <option value="vip">VIP</option>
+                  <option value="speaker">Speaker</option>
+                  <option value="expositor">Expositor</option>
+                  <option value="curso">Curso</option>
+                  <option value="sesiones">Sesiones</option>
+                  <option value="combo">Combo</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sede
+                </label>
+                <select
+                  value={editingUserData.sede}
+                  onChange={(e) =>
+                    setEditingUserData({
+                      ...editingUserData,
+                      sede: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="chile">Chile</option>
+                  <option value="mexico">México</option>
+                  <option value="colombia">Colombia</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Empresa
+                </label>
+                <input
+                  type="text"
+                  value={editingUserData.empresa}
+                  onChange={(e) =>
+                    setEditingUserData({
+                      ...editingUserData,
+                      empresa: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={handleSaveEdit}
+                disabled={userLoading}
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+              >
+                {userLoading ? "Guardando..." : "Guardar Cambios"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setUserError(null);
+                }}
+                className="flex-1 bg-gray-300 text-gray-800 py-2 rounded-lg hover:bg-gray-400 transition"
+              >
+                Cancelar
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL DE CONFIRMACIÓN DE ELIMINACIÓN
+          ======================================================== */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-red-100 p-3 rounded-full">
+                <AlertCircle className="text-red-600" size={24} />
+              </div>
+              <h2 className="text-xl font-bold">Confirmar Eliminación</h2>
+            </div>
+
+            <p className="text-gray-700 mb-6">
+              ¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmDelete}
+                disabled={userLoading}
+                className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition"
+              >
+                {userLoading ? "Eliminando..." : "Sí, Eliminar"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeletingUserId(null);
+                }}
+                className="flex-1 bg-gray-300 text-gray-800 py-2 rounded-lg hover:bg-gray-400 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -914,7 +1215,6 @@ function NotificationForm({
           <option value="error">Error</option>
         </select>
 
-        {/* Selección de usuarios */}
         <div className="border rounded-lg p-4">
           <p className="font-semibold mb-2">Enviar a:</p>
           <div className="space-y-2 max-h-48 overflow-y-auto">

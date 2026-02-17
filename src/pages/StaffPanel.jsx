@@ -1,253 +1,492 @@
-// src/components/dashboard/StaffDashboard.jsx
-
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { Users, Calendar, Building2, TrendingUp, Download, BarChart3, Award } from 'lucide-react';
+import API from "../services/api";
+import {
+  Users,
+  Calendar,
+  Building2,
+  TrendingUp,
+  Download,
+  BarChart3,
+  Award,
+  Clock,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
 
-const StaffDashboard = () => {
-  const { userData } = useAuth();
-  const [stats, setStats] = useState({
-    totalAsistentes: 0,
-    asistentesCurso: 0,
-    asistentesSesion: 0,
-    asistentesCombo: 0,
-    becados: 0,
-    checkInsCursos: 0,
-    checkInsSesiones: 0,
-    visitasStands: 0
-  });
-  const [topSesiones, setTopSesiones] = useState([]);
-  const [topStands, setTopStands] = useState([]);
+export default function StaffPanel() {
+  const { userProfile } = useAuth();
+
+  const [stats, setStats] = useState(null);
+  const [resumenDiario, setResumenDiario] = useState(null);
+  const [checkins, setCheckins] = useState([]);
+  const [sessionStats, setSessionStats] = useState([]);
+  const [cursoStats, setCursoStats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState("resumen");
 
+  // ========================================================
+  // Cargar datos al montar
+  // ========================================================
   useEffect(() => {
-    loadStats();
-  }, []);
-/*
-  const loadStats = async () => {
+    if (userProfile) {
+      loadAllData();
+    }
+  }, [userProfile]);
+
+  // ========================================================
+  // Cargar todos los datos
+  // ========================================================
+  const loadAllData = async () => {
     try {
-      // Cargar asistentes
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const users = usersSnap.docs.map(doc => doc.data());
+      setLoading(true);
+      setError(null);
 
-      const asistentes = users.filter(u => ['curso', 'sesion', 'combo'].includes(u.tipo));
-      const curso = users.filter(u => u.tipo === 'curso');
-      const sesion = users.filter(u => u.tipo === 'sesion');
-      const combo = users.filter(u => u.tipo === 'combo');
-      const becados = users.filter(u => u.esBeca === true);
+      console.log("📊 Cargando datos de staff...");
 
-      // Cargar check-ins
-      const checkInsSnap = await getDocs(collection(db, 'checkIns'));
-      const checkIns = checkInsSnap.docs.map(doc => doc.data());
+      // Cargar en paralelo
+      const [statsRes, resumenRes, checkinsRes, sessionsRes, cursosRes] = await Promise.all([
+        API.get("/staff/stats").catch(() => null),
+        API.get("/staff/resumen-diario").catch(() => null),
+        API.get("/staff/checkins?limit=20").catch(() => null),
+        API.get("/staff/sessions-stats").catch(() => null),
+        API.get("/staff/cursos-stats").catch(() => null),
+      ]);
 
-      const checkInsCursos = checkIns.filter(c => c.tipo === 'curso').length;
-      const checkInsSesiones = checkIns.filter(c => c.tipo === 'sesion').length;
-      const visitasStands = checkIns.filter(c => c.tipo === 'stand').length;
+      if (statsRes) setStats(statsRes.data);
+      if (resumenRes) setResumenDiario(resumenRes.data);
+      if (checkinsRes) setCheckins(checkinsRes.data.checkins || []);
+      if (sessionsRes) setSessionStats(sessionsRes.data.sessions || []);
+      if (cursosRes) setCursoStats(cursosRes.data.cursos || []);
 
-      // Cargar sesiones y calcular top
-      const sesionesSnap = await getDocs(collection(db, 'sesiones'));
-      const sesiones = sesionesSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      const topSes = sesiones
-        .sort((a, b) => (b.asistentesActuales || 0) - (a.asistentesActuales || 0))
-        .slice(0, 5);
-
-      // Cargar expositores y calcular top
-      const expositoresSnap = await getDocs(collection(db, 'expositores'));
-      const expositores = expositoresSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      // Contar visitas por stand
-      const visitasPorStand = {};
-      checkIns.filter(c => c.tipo === 'stand').forEach(c => {
-        visitasPorStand[c.referenceId] = (visitasPorStand[c.referenceId] || 0) + 1;
-      });
-
-      const topExp = expositores
-        .map(exp => ({
-          ...exp,
-          visitas: visitasPorStand[exp.stand] || 0
-        }))
-        .sort((a, b) => b.visitas - a.visitas)
-        .slice(0, 5);
-
-      setStats({
-        totalAsistentes: asistentes.length,
-        asistentesCurso: curso.length,
-        asistentesSesion: sesion.length,
-        asistentesCombo: combo.length,
-        becados: becados.length,
-        checkInsCursos,
-        checkInsSesiones,
-        visitasStands
-      });
-
-      setTopSesiones(topSes);
-      setTopStands(topExp);
-
-    } catch (error) {
-      console.error('Error cargando estadísticas:', error);
+      console.log("✅ Datos cargados");
+    } catch (err) {
+      console.error("❌ Error cargando datos:", err);
+      setError("Error al cargar datos del dashboard");
     } finally {
       setLoading(false);
     }
-  }; 
-
-  const exportarDatos = () => {
-    alert('Función de exportación en desarrollo');
-    // Implementar exportación completa
   };
+
+  // ========================================================
+  // Validación de acceso
+  // ========================================================
+  if (!userProfile || (userProfile.rol !== "staff" && userProfile.rol !== "super_admin")) {
+    return (
+      <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
+        <AlertCircle className="inline mr-2 text-red-600" />
+        <p className="text-red-800 font-semibold">
+          No tienes permisos para acceder al panel de Staff
+        </p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-12 h-12 border-4 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin h-12 w-12 border-b-2 border-blue-600 rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando panel de staff...</p>
+        </div>
       </div>
     );
-  }*/
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
+        <AlertCircle className="inline mr-2 text-red-600" />
+        <p className="text-red-800">{error}</p>
+        <button
+          onClick={loadAllData}
+          className="mt-3 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-gray-700 to-gray-800 text-white p-6 rounded-xl shadow-lg">
-        <h2 className="text-2xl font-bold mb-2">Panel de Staff</h2>
-        <p className="text-gray-300">{userData.nombre} - {userData.rol || 'Staff'}</p>
-        <p className="text-sm text-gray-400 mt-2">Vista de solo lectura - Estadísticas en tiempo real</p>
-      </div>
-
-      {/* Estadísticas Principales */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl shadow-md">
-          <Users className="text-blue-600 mb-2" size={28} />
-          <p className="text-3xl font-bold text-gray-800">{stats.totalAsistentes}</p>
-          <p className="text-sm text-gray-600">Total Asistentes</p>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl shadow-md">
-          <Calendar className="text-green-600 mb-2" size={28} />
-          <p className="text-3xl font-bold text-gray-800">{stats.checkInsSesiones}</p>
-          <p className="text-sm text-gray-600">Check-ins Sesiones</p>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl shadow-md">
-          <Building2 className="text-orange-600 mb-2" size={28} />
-          <p className="text-3xl font-bold text-gray-800">{stats.visitasStands}</p>
-          <p className="text-sm text-gray-600">Visitas a Stands</p>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl shadow-md">
-          <TrendingUp className="text-purple-600 mb-2" size={28} />
-          <p className="text-3xl font-bold text-gray-800">89%</p>
-          <p className="text-sm text-gray-600">Satisfacción</p>
+    <div className="space-y-6">
+      {/* ========================================================
+          HEADER
+          ======================================================== */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-lg">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold">Panel de Staff</h1>
+            <p className="text-blue-100 mt-2">{userProfile.nombre} • {userProfile.rol}</p>
+          </div>
+          <button
+            onClick={loadAllData}
+            className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition flex items-center gap-2"
+          >
+            <RefreshCw size={18} />
+            Actualizar
+          </button>
         </div>
       </div>
 
-      {/* Distribución de Asistentes */}
-      <div className="bg-white p-6 rounded-xl shadow-md">
-        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-          <BarChart3 className="text-gray-700" size={24} />
-          Distribución de Asistentes
-        </h3>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <p className="text-3xl font-bold text-blue-600">{stats.asistentesCurso}</p>
-            <p className="text-sm text-gray-600">Solo Curso</p>
-          </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <p className="text-3xl font-bold text-green-600">{stats.asistentesSesion}</p>
-            <p className="text-sm text-gray-600">Solo Sesión</p>
-          </div>
-          <div className="text-center p-4 bg-purple-50 rounded-lg">
-            <p className="text-3xl font-bold text-purple-600">{stats.asistentesCombo}</p>
-            <p className="text-sm text-gray-600">Combo</p>
-          </div>
-        </div>
+      {/* ========================================================
+          TABS
+          ======================================================== */}
+      <div className="flex gap-2 border-b">
+        {[
+          { id: "resumen", label: "📊 Resumen Hoy", icon: "📊" },
+          { id: "general", label: "📈 Estadísticas", icon: "📈" },
+          { id: "checkins", label: "✅ Check-ins", icon: "✅" },
+          { id: "sesiones", label: "🎓 Sesiones", icon: "🎓" },
+          { id: "cursos", label: "📚 Cursos", icon: "📚" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 font-medium border-b-2 transition ${
+              activeTab === tab.id
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Información de Becas (Solo visible para staff/admin) */}
-      <div className="bg-white p-6 rounded-xl shadow-md">
-        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-          <Award className="text-yellow-600" size={24} />
-          Asistentes con Beca
-        </h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500 text-center">
-            <p className="text-3xl font-bold text-yellow-700">{stats.becados}</p>
-            <p className="text-sm text-gray-600">Becados</p>
-          </div>
-          <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500 text-center">
-            <p className="text-3xl font-bold text-blue-700">{stats.totalAsistentes - stats.becados}</p>
-            <p className="text-sm text-gray-600">Pagados</p>
-          </div>
-        </div>
-        <p className="text-xs text-gray-500 mt-3 text-center">
-          ⚠️ Información confidencial - Solo visible para Staff y Admin
-        </p>
-      </div>
+      {/* ========================================================
+          RESUMEN HOY
+          ======================================================== */}
+      {activeTab === "resumen" && (
+        <div className="space-y-6">
+          {/* Cards principales */}
+          {resumenDiario && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard
+                icon={Clock}
+                label="Check-ins Hoy"
+                value={resumenDiario.resumen.checkinsHoy}
+                color="blue"
+              />
+              <StatCard
+                icon={Calendar}
+                label="Sesiones Hoy"
+                value={resumenDiario.resumen.sesionesHoy}
+                color="green"
+              />
+              <StatCard
+                icon={Users}
+                label="Usuarios Únicos"
+                value={resumenDiario.resumen.usuariosHoy}
+                color="purple"
+              />
+            </div>
+          )}
 
-      {/* Top 5 Sesiones */}
-      <div className="bg-white p-6 rounded-xl shadow-md">
-        <h3 className="font-bold text-lg mb-4">Top 5 Sesiones más Concurridas</h3>
-        <div className="space-y-3">
-          {topSesiones.map((sesion, index) => (
-            <div key={sesion.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">
-                {index + 1}
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-sm">{sesion.titulo}</p>
-                <p className="text-xs text-gray-600">{sesion.speaker}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xl font-bold text-blue-600">{sesion.asistentesActuales || 0}</p>
-                <p className="text-xs text-gray-500">asistentes</p>
+          {/* Últimas entradas */}
+          {resumenDiario && resumenDiario.ultimasEntradas.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-xl font-bold mb-4">Últimas 5 Entradas</h2>
+              <div className="space-y-2">
+                {resumenDiario.ultimasEntradas.map((entrada, idx) => (
+                  <div
+                    key={idx}
+                    className="flex justify-between items-center p-3 bg-gray-50 rounded border-l-4 border-blue-600"
+                  >
+                    <div>
+                      <p className="font-semibold">{entrada.nombre}</p>
+                      <p className="text-sm text-gray-600">{entrada.email}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{entrada.sesion}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(entrada.fecha).toLocaleTimeString("es-MX")}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Top 5 Stands */}
-      <div className="bg-white p-6 rounded-xl shadow-md">
-        <h3 className="font-bold text-lg mb-4">Top 5 Stands más Visitados</h3>
-        <div className="space-y-3">
-          {topStands.map((expositor, index) => (
-            <div key={expositor.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="w-8 h-8 bg-orange-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">
-                {index + 1}
+      {/* ========================================================
+          ESTADÍSTICAS GENERALES
+          ======================================================== */}
+      {activeTab === "general" && (
+        <div className="space-y-6">
+          {/* Cards principales */}
+          {stats && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <StatCard
+                  icon={Users}
+                  label="Usuarios Totales"
+                  value={stats.totalUsers}
+                  color="blue"
+                />
+                <StatCard
+                  icon={CheckCircle}
+                  label="Check-ins Totales"
+                  value={stats.totalCheckins}
+                  color="green"
+                />
+                <StatCard
+                  icon={Calendar}
+                  label="Asistencias a Cursos"
+                  value={stats.attendanceByType.cursos}
+                  color="orange"
+                />
+                <StatCard
+                  icon={Award}
+                  label="Asistencias a Sesiones"
+                  value={stats.attendanceByType.sesiones}
+                  color="purple"
+                />
               </div>
-              <div className="flex-1">
-                <p className="font-semibold text-sm">{expositor.empresa}</p>
-                <p className="text-xs text-gray-600">Stand {expositor.stand}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xl font-bold text-orange-600">{expositor.visitas}</p>
-                <p className="text-xs text-gray-500">visitas</p>
-              </div>
+
+              {/* Usuarios por tipo de pase */}
+              {Object.keys(stats.byTipoPase).length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <BarChart3 size={24} className="text-blue-600" />
+                    Usuarios por Tipo de Pase
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {Object.entries(stats.byTipoPase).map(([pase, cantidad]) => (
+                      <div
+                        key={pase}
+                        className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200"
+                      >
+                        <p className="text-3xl font-bold text-blue-600">{cantidad}</p>
+                        <p className="text-sm text-gray-600 capitalize mt-1">{pase}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Usuarios por sede */}
+              {Object.keys(stats.bySede).length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Building2 size={24} className="text-orange-600" />
+                    Usuarios por Sede
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {Object.entries(stats.bySede).map(([sede, cantidad]) => (
+                      <div
+                        key={sede}
+                        className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200"
+                      >
+                        <p className="text-3xl font-bold text-orange-600">{cantidad}</p>
+                        <p className="text-sm text-gray-600 capitalize mt-1">{sede}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
+          CHECK-INS DETALLADO
+          ======================================================== */}
+      {activeTab === "checkins" && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-bold mb-4">Registro de Check-ins</h2>
+          {checkins.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-100 border-b">
+                    <th className="px-4 py-2 text-left">Usuario</th>
+                    <th className="px-4 py-2 text-left">Email</th>
+                    <th className="px-4 py-2 text-left">Tipo Pase</th>
+                    <th className="px-4 py-2 text-left">Sesión</th>
+                    <th className="px-4 py-2 text-left">Hora</th>
+                    <th className="px-4 py-2 text-left">Fecha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checkins.map((checkin) => (
+                    <tr key={checkin.id} className="border-b hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium">{checkin.usuario_nombre}</td>
+                      <td className="px-4 py-2 text-blue-600">{checkin.email}</td>
+                      <td className="px-4 py-2">
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold">
+                          {checkin.tipo_pase}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">{checkin.sesion_titulo || "—"}</td>
+                      <td className="px-4 py-2">
+                        {checkin.hora_sesion
+                          ? new Date(checkin.hora_sesion).toLocaleTimeString("es-MX")
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-2">
+                        {new Date(checkin.fecha).toLocaleString("es-MX")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
+          ) : (
+            <p className="text-gray-600 text-center py-8">No hay check-ins registrados</p>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Botón Exportar */}
-      <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-6 rounded-xl">
-        <h3 className="font-bold text-lg mb-3">Exportar Datos</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Descarga todos los reportes y estadísticas en formato CSV
-        </p>
-        <button
-          onClick={exportarDatos}
-          className="w-full bg-gray-700 text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition flex items-center justify-center gap-2"
-        >
-          <Download size={20} />
-          Exportar Reportes Completos
-        </button>
+      {/* ========================================================
+          ASISTENCIA POR SESIÓN
+          ======================================================== */}
+      {activeTab === "sesiones" && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-bold mb-4">Asistencia por Sesión</h2>
+          {sessionStats.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-100 border-b">
+                    <th className="px-4 py-2 text-left">Sesión</th>
+                    <th className="px-4 py-2 text-left">Tipo</th>
+                    <th className="px-4 py-2 text-left">Día</th>
+                    <th className="px-4 py-2 text-left">Hora</th>
+                    <th className="px-4 py-2 text-left">Sala</th>
+                    <th className="px-4 py-2 text-right">Asistentes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessionStats.map((session) => (
+                    <tr key={session.id} className="border-b hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium">{session.titulo}</td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-semibold ${
+                            session.categoria === "curso"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
+                          {session.categoria}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 capitalize">{session.dia || "—"}</td>
+                      <td className="px-4 py-2">
+                        {session.hora
+                          ? new Date(session.hora).toLocaleTimeString("es-MX", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-2">{session.sala || "—"}</td>
+                      <td className="px-4 py-2 text-right font-bold text-blue-600">
+                        {session.asistentes}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-gray-600 text-center py-8">No hay sesiones registradas</p>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
+          ASISTENCIA POR CURSO
+          ======================================================== */}
+      {activeTab === "cursos" && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-bold mb-4">Asistencia por Curso</h2>
+          {cursoStats.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-100 border-b">
+                    <th className="px-4 py-2 text-left">Curso</th>
+                    <th className="px-4 py-2 text-left">Día</th>
+                    <th className="px-4 py-2 text-left">Hora</th>
+                    <th className="px-4 py-2 text-left">Sala</th>
+                    <th className="px-4 py-2 text-right">Asistentes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cursoStats.map((curso) => (
+                    <tr key={curso.id} className="border-b hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium">{curso.titulo}</td>
+                      <td className="px-4 py-2 capitalize">{curso.dia || "—"}</td>
+                      <td className="px-4 py-2">
+                        {curso.hora
+                          ? new Date(curso.hora).toLocaleTimeString("es-MX", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-2">{curso.sala || "—"}</td>
+                      <td className="px-4 py-2 text-right font-bold text-green-600">
+                        {curso.asistentes}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-gray-600 text-center py-8">No hay cursos registrados</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================================
+// COMPONENTE STAT CARD
+// ========================================================
+function StatCard({ icon: Icon, label, value, color }) {
+  const colors = {
+    blue: "bg-blue-100 text-blue-600",
+    green: "bg-green-100 text-green-600",
+    purple: "bg-purple-100 text-purple-600",
+    orange: "bg-orange-100 text-orange-600",
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-gray-600 text-sm">{label}</p>
+          <p className="text-3xl font-bold text-gray-800 mt-1">{value}</p>
+        </div>
+        <div className={`p-3 rounded-full ${colors[color]}`}>
+          <Icon size={24} />
+        </div>
       </div>
     </div>
   );
-};
+}
 
-export default StaffDashboard;
+function CheckCircle({ size = 24 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  );
+}

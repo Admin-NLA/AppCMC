@@ -16,6 +16,7 @@ export default function Dashboard() {
   const { user, userProfile, permisos } = useAuth();
   // ✅ AQUÍ SÍ se puede usar el hook
   const { sedeActiva, edicionActiva, multiSede, ready } = useEvent();
+  
   if (!permisos) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -35,59 +36,76 @@ export default function Dashboard() {
   console.log("EVENTO ACTIVO:", { sedeActiva, edicionActiva, multiSede });
 
   const [stats, setStats] = useState({
-    totalSessions: 0,
+    sessions: 0,
     speakers: 0,
-    exhibitors: 0,
-    mySessions: 0,
-    myCheckIns: 0,
-    myStandVisits: 0,
+    expositores: 0,
+    users: 0,
+    checkIns: 0,
+    byTipoPase: {},
+    byRol: {},
+    bySede: {},
   });
 
   const [nextSessions, setNextSessions] = useState([]);
   const [speakerSessions, setSpeakerSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ---------------------------------------------
-  // Cargar dashboard
-  // ---------------------------------------------
+  // ========================================================
+  // Cargar estadísticas
+  // ========================================================
   useEffect(() => {
-  if (user && userProfile) loadDashboard();
+    if (user && userProfile) loadDashboard();
   }, [user, userProfile]);
 
   const loadDashboard = async () => {
-  try {
-    const res = await API.get("/dashboard");
+    try {
+      setLoading(true);
 
-    const { base, payload, role } = res.data;
+      // ✅ LLAMAR A /api/stats
+      console.log('📊 Cargando estadísticas...');
+      const statsRes = await API.get("/stats");
+      
+      console.log('✅ Stats recibidas:', statsRes.data);
 
-    // ---------- STATS GENERALES ----------
-    setStats((prev) => ({
-      ...prev,
-      totalSessions: base.totals.sessions,
-      speakers: base.totals.speakers,
-      exhibitors: base.totals.expositores,
+      setStats({
+        sessions: statsRes.data.sessions || 0,
+        speakers: statsRes.data.speakers || 0,
+        expositores: statsRes.data.expositores || 0,
+        users: statsRes.data.users || 0,
+        checkIns: statsRes.data.checkIns || 0,
+        byTipoPase: statsRes.data.byTipoPase || {},
+        byRol: statsRes.data.byRol || {},
+        bySede: statsRes.data.bySede || {},
+      });
 
-      // asistente
-      mySessions: payload?.favorites?.length || 0,
-      myCheckIns: payload?.entradasPorDia?.length || 0,
-      myStandVisits: payload?.standVisits || 0,
-    }));
-
-    // ---------- PRÓXIMAS SESIONES ----------
-    setNextSessions(base.upcoming || []);
-
-    // ---------- SPEAKER ----------
-    if (role === "speaker") {
-      setSpeakerSessions(payload.mySessions || []);
-    }
+      // Opcional: Cargar próximas sesiones
+      try {
+        const sessionsRes = await API.get("/agenda/sessions");
+        const sessions = Array.isArray(sessionsRes.data.sessions) 
+          ? sessionsRes.data.sessions 
+          : [];
+        setNextSessions(sessions.slice(0, 5)); // Primeras 5
+      } catch (err) {
+        console.log('⚠️ No se pudieron cargar próximas sesiones:', err.message);
+        setNextSessions([]);
+      }
 
     } catch (err) {
-      console.error("Error dashboard:", err);
+      console.error("❌ Error cargando dashboard:", err);
+      setStats({
+        sessions: 0,
+        speakers: 0,
+        expositores: 0,
+        users: 0,
+        checkIns: 0,
+        byTipoPase: {},
+        byRol: {},
+        bySede: {},
+      });
     } finally {
       setLoading(false);
     }
   };
-
 
   if (loading || !userProfile) {
     return (
@@ -108,10 +126,17 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-100">
       <Header />
       <div className="p-6">
-        <h1 className="text-3xl font-bold">¡Bienvenido, {userProfile.nombre}!</h1>
+        <h1 className="text-3xl font-bold mb-2">¡Bienvenido, {userProfile.nombre}!</h1>
+        <p className="text-gray-600 mb-6">
+          Rol: <span className="font-semibold capitalize">{userProfile.rol}</span>
+          {sedeActiva && ` | Sede: ${sedeActiva.toUpperCase()}`}
+          {edicionActiva && ` | Edición: ${edicionActiva}`}
+        </p>
 
-        {/* ADMIN / STAFF */}
-        {userProfile.rol === "super_admin" && <AdminView stats={stats} />}
+        {/* ADMIN / STAFF / SUPER_ADMIN */}
+        {(userProfile.rol === "super_admin" || userProfile.rol === "admin" || userProfile.rol === "staff") && (
+          <AdminView stats={stats} />
+        )}
 
         {/* SPEAKER */}
         {userProfile.rol === "speaker" && <SpeakerView sessions={speakerSessions} />}
@@ -129,19 +154,90 @@ export default function Dashboard() {
 }
 
 // ============================================================
-// ADMIN
+// ADMIN / STAFF VIEW
 // ============================================================
 
 function AdminView({ stats }) {
   return (
     <div className="mt-8 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon={Calendar} label="Sesiones Totales" value={stats.totalSessions} color="blue" />
-        <StatCard icon={Users} label="Speakers" value={stats.speakers} color="purple" />
-        <StatCard icon={Building2} label="Expositores" value={stats.exhibitors} color="orange" />
+      {/* Cards principales */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <StatCard 
+          icon={Calendar} 
+          label="Sesiones Totales" 
+          value={stats.sessions} 
+          color="blue" 
+        />
+        <StatCard 
+          icon={Users} 
+          label="Speakers" 
+          value={stats.speakers} 
+          color="purple" 
+        />
+        <StatCard 
+          icon={Building2} 
+          label="Expositores" 
+          value={stats.expositores} 
+          color="orange" 
+        />
+        <StatCard 
+          icon={Users} 
+          label="Usuarios Registrados" 
+          value={stats.users} 
+          color="green" 
+        />
       </div>
 
-      <Link to="/admin" className="text-blue-600 font-medium hover:underline text-lg">
+      {/* Distribucion por rol */}
+      {Object.keys(stats.byRol).length > 0 && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h2 className="text-xl font-bold mb-4">Usuarios por Rol</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Object.entries(stats.byRol).map(([rol, count]) => (
+              <div key={rol} className="bg-gray-50 p-4 rounded-lg text-center border-l-4 border-blue-600">
+                <p className="text-2xl font-bold text-gray-800">{count}</p>
+                <p className="text-sm text-gray-600 capitalize">{rol}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Distribucion por sede */}
+      {Object.keys(stats.bySede).length > 0 && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h2 className="text-xl font-bold mb-4">Usuarios por Sede</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Object.entries(stats.bySede).map(([sede, count]) => (
+              <div key={sede} className="bg-gray-50 p-4 rounded-lg text-center border-l-4 border-orange-600">
+                <p className="text-2xl font-bold text-gray-800">{count}</p>
+                <p className="text-sm text-gray-600 capitalize">{sede}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Distribucion por tipo de pase */}
+      {Object.keys(stats.byTipoPase).length > 0 && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h2 className="text-xl font-bold mb-4">Usuarios por Tipo de Pase</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Object.entries(stats.byTipoPase).map(([pase, count]) => (
+              <div key={pase} className="bg-gray-50 p-4 rounded-lg text-center border-l-4 border-purple-600">
+                <p className="text-2xl font-bold text-gray-800">{count}</p>
+                <p className="text-sm text-gray-600 capitalize">{pase}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Link a panel admin */}
+      <Link 
+        to="/admin" 
+        className="inline-block bg-blue-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+      >
         Ir al Panel de Administración →
       </Link>
     </div>
@@ -149,7 +245,7 @@ function AdminView({ stats }) {
 }
 
 // ============================================================
-// SPEAKER
+// SPEAKER VIEW
 // ============================================================
 
 function SpeakerView({ sessions }) {
@@ -161,7 +257,7 @@ function SpeakerView({ sessions }) {
       ) : (
         <div className="space-y-3">
           {sessions.map((s) => (
-            <div key={s.id} className="border-l-4 border-blue-600 pl-4 py-2">
+            <div key={s.id} className="border-l-4 border-blue-600 pl-4 py-2 bg-white p-4 rounded-lg">
               <h3 className="font-semibold">{s.title}</h3>
               <p className="text-sm text-gray-600">
                 {new Date(s.start_at).toLocaleString()} – {new Date(s.end_at).toLocaleTimeString()}
@@ -175,17 +271,37 @@ function SpeakerView({ sessions }) {
 }
 
 // ============================================================
-// ASISTENTE
+// ASISTENTE VIEW
 // ============================================================
 
 function AsistenteView({ stats, nextSessions }) {
   return (
     <div className="mt-8 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard icon={Calendar} label="Sesiones Totales" value={stats.totalSessions} color="blue" />
-        <StatCard icon={CheckCircle} label="Mis Asistencias" value={stats.myCheckIns} color="green" />
-        <StatCard icon={Building2} label="Stands Visitados" value={stats.myStandVisits} color="purple" />
-        <StatCard icon={Award} label="Mi Agenda" value={stats.mySessions} color="orange" />
+        <StatCard 
+          icon={Calendar} 
+          label="Sesiones Totales" 
+          value={stats.sessions} 
+          color="blue" 
+        />
+        <StatCard 
+          icon={CheckCircle} 
+          label="Check-ins" 
+          value={stats.checkIns} 
+          color="green" 
+        />
+        <StatCard 
+          icon={Building2} 
+          label="Expositores" 
+          value={stats.expositores} 
+          color="purple" 
+        />
+        <StatCard 
+          icon={Award} 
+          label="Speakers" 
+          value={stats.speakers} 
+          color="orange" 
+        />
       </div>
 
       <NextSessionsCard sessions={nextSessions} />
@@ -194,15 +310,32 @@ function AsistenteView({ stats, nextSessions }) {
 }
 
 // ============================================================
-// EXPOSITOR
+// EXPOSITOR VIEW
 // ============================================================
 
 function ExpositorView({ stats }) {
   return (
     <div className="mt-8 space-y-6">
-      <StatCard icon={Users} label="Visitantes" value={stats.myStandVisits} color="blue" />
-      <StatCard icon={TrendingUp} label="Promedio por Hora" value="12" color="green" />
-      <StatCard icon={Award} label="Leads" value={stats.myStandVisits} color="purple" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard 
+          icon={Users} 
+          label="Visitantes Registrados" 
+          value={stats.checkIns} 
+          color="blue" 
+        />
+        <StatCard 
+          icon={TrendingUp} 
+          label="Total de Usuarios" 
+          value={stats.users} 
+          color="green" 
+        />
+        <StatCard 
+          icon={Award} 
+          label="Sesiones Disponibles" 
+          value={stats.sessions} 
+          color="purple" 
+        />
+      </div>
     </div>
   );
 }
@@ -224,7 +357,7 @@ function StatCard({ icon: Icon, label, value, color }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-gray-600 text-sm">{label}</p>
-          <p className="text-3xl font-bold">{value}</p>
+          <p className="text-3xl font-bold text-gray-800">{value}</p>
         </div>
         <div className={`p-3 rounded-full ${colors[color]}`}>
           <Icon size={24} />
@@ -237,20 +370,32 @@ function StatCard({ icon: Icon, label, value, color }) {
 function NextSessionsCard({ sessions }) {
   return (
     <div className="bg-white rounded-xl shadow-md p-6">
-      <h2 className="text-xl font-bold flex items-center">
-        <Clock className="mr-2" /> Próximas Sesiones
+      <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
+        <Clock size={24} className="text-blue-600" /> Próximas Sesiones
       </h2>
 
       {sessions.length === 0 ? (
         <p className="text-gray-600">No hay próximas sesiones.</p>
       ) : (
-        <div className="space-y-3 mt-4">
-          {sessions.map((s) => (
-            <div key={s.id} className="border-l-4 border-blue-600 pl-4 py-2">
-              <h3 className="font-semibold">{s.title}</h3>
-              <p className="text-sm text-gray-600">
-                {new Date(s.start_at).toLocaleString()} − {new Date(s.end_at).toLocaleTimeString()}
-              </p>
+        <div className="space-y-3">
+          {sessions.map((s, idx) => (
+            <div key={s.id} className="border-l-4 border-blue-600 pl-4 py-2 bg-gray-50 p-4 rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-semibold">{idx + 1}. {s.titulo || 'Sin título'}</h3>
+                  {s.horaInicio && (
+                    <p className="text-sm text-gray-600">
+                      {new Date(s.horaInicio).toLocaleTimeString()} 
+                      {s.horaFin && ` - ${new Date(s.horaFin).toLocaleTimeString()}`}
+                    </p>
+                  )}
+                </div>
+                {s.sede && (
+                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
+                    {s.sede.toUpperCase()}
+                  </span>
+                )}
+              </div>
             </div>
           ))}
         </div>

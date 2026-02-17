@@ -13,6 +13,11 @@ import notificacionesRoutes from "./routes/notificaciones.routes.js";
 import configRoutes from "./routes/config.js"; // ← AGREGAR
 import usersRoutes from './routes/users.routes.js';
 
+//nuevo import - admin
+import statsRoutes from './routes/stats.js';
+// nuevo import - staff
+import staffRoutes from './routes/staff.js';
+
 
 // Importar funciones de notificaciones
 import { sendSSE } from "./routes/notificaciones.js";
@@ -92,7 +97,10 @@ app.use("/api/notificaciones", notificacionesRoutes);
 app.use("/api/config", configRoutes); // ← AGREGAR
 //usuarios
 app.use('/api/users', usersRoutes);
-
+//nuevo _ dashboard admin
+app.use('/api/stats', statsRoutes);
+//nuevo ----- staff
+app.use('/api/staff', staffRoutes);
 
 // =========================================
 // 🔔 Server Sent Events (SSE) para notificaciones en tiempo real

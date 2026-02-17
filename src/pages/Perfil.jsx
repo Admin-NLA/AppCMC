@@ -15,6 +15,8 @@ import {
   Download,
   Copy,
   Check,
+  Camera,
+  Loader,
 } from "lucide-react";
 
 export default function Perfil() {
@@ -25,6 +27,7 @@ export default function Perfil() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [copiedQR, setCopiedQR] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Formulario
   const [formData, setFormData] = useState({
@@ -34,6 +37,7 @@ export default function Perfil() {
     empresa: "",
     cargo: "",
     ciudad: "",
+    foto_url: "",
   });
 
   // ========================================================
@@ -48,12 +52,13 @@ export default function Perfil() {
         empresa: userProfile.empresa || "",
         cargo: userProfile.cargo || "",
         ciudad: userProfile.ciudad || "",
+        foto_url: userProfile.foto_url || "",
       });
     }
   }, [userProfile]);
 
   // ========================================================
-  // GENERAR vCARD (formato estándar para contactos)
+  // GENERAR vCARD
   // ========================================================
   const generateVCard = () => {
     const vcard = `BEGIN:VCARD
@@ -67,7 +72,6 @@ TITLE:${formData.cargo || userProfile?.cargo || ""}
 NICKNAME:CMC Attendee
 URL:https://app-cmc.web.app
 END:VCARD`;
-
     return vcard;
   };
 
@@ -89,7 +93,6 @@ END:VCARD`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
-
     console.log("✅ vCard descargada");
   };
 
@@ -101,7 +104,6 @@ END:VCARD`;
     navigator.clipboard.writeText(vcard);
     setCopiedQR(true);
     setTimeout(() => setCopiedQR(false), 2000);
-
     console.log("✅ vCard copiada al portapapeles");
   };
 
@@ -117,6 +119,45 @@ END:VCARD`;
   };
 
   // ========================================================
+  // UPLOAD DE FOTO
+  // ========================================================
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingPhoto(true);
+      console.log("📸 Subiendo foto...", file.name);
+
+      // Crear FormData para enviar archivo
+      const formDataFile = new FormData();
+      formDataFile.append("file", file);
+
+      // Subir a API (endpoint debe estar en backend)
+      const res = await API.post("/upload/photo", formDataFile, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      console.log("✅ Foto subida:", res.data);
+
+      // Actualizar formulario con URL de foto
+      setFormData((prev) => ({
+        ...prev,
+        foto_url: res.data.url,
+      }));
+
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error("❌ Error al subir foto:", err);
+      setError(err.response?.data?.error || "Error al subir la foto");
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // ========================================================
   // GUARDAR PERFIL
   // ========================================================
   const handleSave = async () => {
@@ -127,12 +168,10 @@ END:VCARD`;
 
       console.log("💾 Guardando perfil...", formData);
 
-      // ✅ USAR API INSTANCE EN LUGAR DE FIRESTORE
-      const res = await API.put("/auth/me", formData);
+      const res = await API.put("/users/" + userProfile.id, formData);
 
       console.log("✅ Perfil guardado:", res.data);
 
-      // Actualizar contexto de autenticación
       if (updateProfile) {
         updateProfile({
           ...userProfile,
@@ -142,16 +181,11 @@ END:VCARD`;
 
       setSuccess(true);
       setIsEditing(false);
-
-      // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccess(false), 3000);
-
     } catch (err) {
       console.error("❌ Error al guardar perfil:", err);
       setError(
-        err.response?.data?.error || 
-        err.message || 
-        "Error al guardar el perfil"
+        err.response?.data?.error || err.message || "Error al guardar el perfil"
       );
     } finally {
       setLoading(false);
@@ -162,7 +196,6 @@ END:VCARD`;
   // CANCELAR EDICIÓN
   // ========================================================
   const handleCancel = () => {
-    // Restaurar valores originales
     if (userProfile) {
       setFormData({
         nombre: userProfile.nombre || "",
@@ -171,6 +204,7 @@ END:VCARD`;
         empresa: userProfile.empresa || "",
         cargo: userProfile.cargo || "",
         ciudad: userProfile.ciudad || "",
+        foto_url: userProfile.foto_url || "",
       });
     }
     setIsEditing(false);
@@ -191,13 +225,14 @@ END:VCARD`;
   const vcard = generateVCard();
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Mi Perfil</h1>
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold">Mi Perfil</h1>
         {!isEditing && (
           <button
             onClick={() => setIsEditing(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+            className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium"
           >
             <Edit2 size={18} />
             Editar Perfil
@@ -205,10 +240,10 @@ END:VCARD`;
         )}
       </div>
 
-      {/* Mensajes de estado */}
+      {/* MENSAJES DE ESTADO */}
       {error && (
         <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-6 flex items-start gap-3">
-          <AlertCircle size={20} className="text-red-600 mt-0.5" />
+          <AlertCircle size={20} className="text-red-600 mt-0.5 flex-shrink-0" />
           <div>
             <p className="font-semibold text-red-900">Error</p>
             <p className="text-red-800 text-sm">{error}</p>
@@ -218,7 +253,7 @@ END:VCARD`;
 
       {success && (
         <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-6 flex items-start gap-3">
-          <Check size={20} className="text-green-600 mt-0.5" />
+          <Check size={20} className="text-green-600 mt-0.5 flex-shrink-0" />
           <div>
             <p className="font-semibold text-green-900">Éxito</p>
             <p className="text-green-800 text-sm">Perfil actualizado correctamente</p>
@@ -226,10 +261,49 @@ END:VCARD`;
         </div>
       )}
 
+      {/* CONTENIDO PRINCIPAL */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Formulario - 2 columnas */}
+        {/* COLUMNA IZQUIERDA - Información Principal */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Información básica */}
+          {/* FOTO DE PERFIL */}
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-xl font-bold mb-4">Foto de Perfil</h2>
+
+            <div className="flex flex-col sm:flex-row items-center gap-6">
+              {/* Foto actual */}
+              <div className="w-32 h-32 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden border-4 border-blue-200">
+                {formData.foto_url ? (
+                  <img
+                    src={formData.foto_url}
+                    alt="Perfil"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User size={48} className="text-gray-400" />
+                )}
+              </div>
+
+              {/* Botón Upload */}
+              <div className="flex-1">
+                <label className="block">
+                  <div className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition cursor-pointer font-medium w-full sm:w-auto">
+                    <Camera size={18} />
+                    {uploadingPhoto ? "Subiendo..." : "Cambiar Foto"}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    disabled={uploadingPhoto}
+                    className="hidden"
+                  />
+                </label>
+                <p className="text-xs text-gray-500 mt-2">JPG, PNG. Máx 2MB</p>
+              </div>
+            </div>
+          </div>
+
+          {/* INFORMACIÓN PERSONAL */}
           <div className="bg-white rounded-xl shadow-md p-6">
             <h2 className="text-xl font-bold mb-4">Información Personal</h2>
 
@@ -249,7 +323,10 @@ END:VCARD`;
                     placeholder="Tu nombre"
                   />
                 ) : (
-                  <p className="text-gray-700">{formData.nombre || "No especificado"}</p>
+                  <div className="flex items-center gap-2 text-gray-700 p-2">
+                    <User size={18} className="text-blue-600" />
+                    {formData.nombre || "No especificado"}
+                  </div>
                 )}
               </div>
 
@@ -268,7 +345,7 @@ END:VCARD`;
                     placeholder="tu@email.com"
                   />
                 ) : (
-                  <div className="flex items-center gap-2 text-gray-700">
+                  <div className="flex items-center gap-2 text-gray-700 p-2">
                     <Mail size={18} className="text-blue-600" />
                     {formData.email || "No especificado"}
                   </div>
@@ -290,7 +367,7 @@ END:VCARD`;
                     placeholder="+52 1234567890"
                   />
                 ) : (
-                  <div className="flex items-center gap-2 text-gray-700">
+                  <div className="flex items-center gap-2 text-gray-700 p-2">
                     <Phone size={18} className="text-green-600" />
                     {formData.telefono || "No especificado"}
                   </div>
@@ -312,7 +389,7 @@ END:VCARD`;
                     placeholder="Guadalajara, Jalisco"
                   />
                 ) : (
-                  <div className="flex items-center gap-2 text-gray-700">
+                  <div className="flex items-center gap-2 text-gray-700 p-2">
                     <MapPin size={18} className="text-orange-600" />
                     {formData.ciudad || "No especificado"}
                   </div>
@@ -321,7 +398,7 @@ END:VCARD`;
             </div>
           </div>
 
-          {/* Información laboral */}
+          {/* INFORMACIÓN LABORAL */}
           <div className="bg-white rounded-xl shadow-md p-6">
             <h2 className="text-xl font-bold mb-4">Información Laboral</h2>
 
@@ -341,7 +418,7 @@ END:VCARD`;
                     placeholder="Nombre de la empresa"
                   />
                 ) : (
-                  <div className="flex items-center gap-2 text-gray-700">
+                  <div className="flex items-center gap-2 text-gray-700 p-2">
                     <Briefcase size={18} className="text-purple-600" />
                     {formData.empresa || "No especificado"}
                   </div>
@@ -363,7 +440,7 @@ END:VCARD`;
                     placeholder="Director, Manager, etc."
                   />
                 ) : (
-                  <div className="flex items-center gap-2 text-gray-700">
+                  <div className="flex items-center gap-2 text-gray-700 p-2">
                     <User size={18} className="text-indigo-600" />
                     {formData.cargo || "No especificado"}
                   </div>
@@ -372,16 +449,25 @@ END:VCARD`;
             </div>
           </div>
 
-          {/* Botones de acción */}
+          {/* BOTONES DE ACCIÓN */}
           {isEditing && (
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={handleSave}
                 disabled={loading}
                 className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
               >
-                <Save size={18} />
-                {loading ? "Guardando..." : "Guardar Cambios"}
+                {loading ? (
+                  <>
+                    <Loader size={18} className="animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    Guardar Cambios
+                  </>
+                )}
               </button>
               <button
                 onClick={handleCancel}
@@ -395,25 +481,22 @@ END:VCARD`;
           )}
         </div>
 
-        {/* QR vCard - 1 columna */}
+        {/* COLUMNA DERECHA - QR vCard */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl shadow-md p-6 sticky top-6">
+          <div className="bg-white rounded-xl shadow-md p-6 sticky top-20">
             <h2 className="text-xl font-bold mb-4 text-center">Mi Tarjeta Digital</h2>
 
-            {/* Vista previa QR */}
+            {/* QR */}
             <div className="bg-blue-50 p-4 rounded-lg mb-4 flex justify-center">
               <QRCode
                 value={vcard}
-                size={200}
+                size={180}
                 level="H"
                 includeMargin={true}
-                qrStyle={{
-                  cursor: "pointer",
-                }}
               />
             </div>
 
-            {/* Info de QR */}
+            {/* Info QR */}
             <div className="bg-blue-50 p-3 rounded-lg mb-4 text-xs text-blue-800 border border-blue-200">
               <p className="font-semibold mb-1">📱 Código QR vCard</p>
               <p>Escanea para agregar mis datos a contactos</p>
@@ -450,37 +533,13 @@ END:VCARD`;
               </button>
             </div>
 
-            {/* Detalles de vCard */}
-            <details className="mt-4 pt-4 border-t">
-              <summary className="cursor-pointer text-sm font-semibold text-gray-700 hover:text-gray-900">
+            {/* Detalles vCard */}
+            <details className="mt-4 pt-4 border-t text-xs">
+              <summary className="cursor-pointer font-semibold text-gray-700 hover:text-gray-900">
                 Ver datos de vCard
               </summary>
-              <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-48 whitespace-pre-wrap break-words">
+              <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-40 whitespace-pre-wrap break-words">
                 {vcard}
-              </pre>
-            </details>
-          </div>
-        </div>
-      </div>
-
-      {/* Debug info */}
-      <div className="mt-6 bg-blue-50 border border-blue-200 p-4 rounded-lg text-sm">
-        <div className="flex items-start gap-2">
-          <AlertCircle size={20} className="text-blue-600 mt-0.5" />
-          <div>
-            <p className="font-semibold text-blue-900 mb-1">Información de depuración:</p>
-            <p className="text-blue-800">
-              <strong>Estado de edición:</strong> {isEditing ? "Editando" : "Vista"}
-            </p>
-            <p className="text-blue-800">
-              <strong>Cargando:</strong> {loading ? "Sí" : "No"}
-            </p>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-blue-700 hover:text-blue-900 text-xs">
-                Ver datos del formulario
-              </summary>
-              <pre className="mt-2 p-2 bg-white rounded text-xs overflow-auto max-h-48">
-                {JSON.stringify(formData, null, 2)}
               </pre>
             </details>
           </div>
