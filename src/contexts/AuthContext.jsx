@@ -89,25 +89,38 @@ export function AuthProvider({ children }) {
 
   const [loading, setLoading] = useState(true);
 
+  // 🔥 EFECTO: Guardar en localStorage SIEMPRE que user cambie
+  useEffect(() => {
+    if (user) {
+      console.log("💾 Guardando usuario en localStorage:", user.email, user.rol);
+      try {
+        localStorage.setItem("user", JSON.stringify(user));
+        localStorage.setItem("userProfile", JSON.stringify(user));
+        localStorage.setItem("userRole", user.rol); // Extra para debugging
+        console.log("✅ Usuario guardado exitosamente");
+      } catch (err) {
+        console.error("❌ Error guardando en localStorage:", err);
+      }
+    }
+  }, [user]); // 🔑 IMPORTANTE: Se ejecuta cuando user cambia
+
   const login = async (email, password) => {
     try {
+      console.log("🔐 Iniciando login para:", email);
       const res = await API.post("/auth/login", { email, password });
       
-      console.log("✅ Login response:", res.data);
+      const userData = res.data.user;
+      console.log("✅ Login exitoso, usuario:", userData.email, userData.rol);
       
       // Guardar token
       localStorage.setItem("token", res.data.token);
+      console.log("✅ Token guardado");
       
-      // Guardar usuario completo en localStorage (por si acaso)
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      // Actualizar estados (esto disparará el useEffect de arriba)
+      setUser(userData);
+      setUserProfile(userData);
       
-      // Guardar en estado
-      setUser(res.data.user);
-      setUserProfile(res.data.user);
-      
-      console.log("✅ Usuario guardado:", res.data.user);
-      
-      return res.data.user;
+      return userData;
     } catch (err) {
       console.error("❌ Error en login:", err);
       throw err;
@@ -115,47 +128,55 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    console.log("🚪 Logout");
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("userProfile");
+    localStorage.removeItem("userRole");
     setUser(null);
     setUserProfile(null);
   };
 
+  // 🔑 EFECTO: Al cargar la app, verificar token y obtener usuario
   useEffect(() => {
     const token = localStorage.getItem("token");
     
-    console.log("🔍 Verificando token en useEffect:", token ? "✅ Existe" : "❌ No existe");
+    console.log("🔍 Verificando sesión al cargar...");
+    console.log("Token existe:", token ? "✅ Sí" : "❌ No");
     
     if (!token) {
+      console.log("❌ No hay token, usuario no autenticado");
       setLoading(false);
       return;
     }
 
-    // Intentar obtener usuario desde /auth/me
+    console.log("📡 Llamando a /auth/me...");
+    
     API.get("/auth/me")
       .then((res) => {
-        console.log("✅ AUTH /me OK:", res.data);
+        console.log("✅ /auth/me respondió:", res.data.user.email, res.data.user.rol);
         
         const userData = res.data.user;
+        
+        // Actualizar estados (esto disparará el useEffect de guardar)
         setUser(userData);
         setUserProfile(userData);
         
-        // Guardar en localStorage también
-        localStorage.setItem("user", JSON.stringify(userData));
-        
-        console.log("✅ Usuario cargado:", userData);
+        console.log("✅ Estados actualizados");
       })
       .catch((err) => {
-        console.error("❌ Error en /auth/me:", err);
+        console.error("❌ Error en /auth/me:", err.message);
         localStorage.removeItem("token");
         localStorage.removeItem("user");
+        localStorage.removeItem("userProfile");
+        localStorage.removeItem("userRole");
         setUser(null);
         setUserProfile(null);
       })
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, []); // Solo una vez al montar
 
   return (
     <AuthContext.Provider 

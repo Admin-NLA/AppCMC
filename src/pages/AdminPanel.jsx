@@ -4,22 +4,22 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import API from "../services/api";
 import {
   Plus,
-  Edit2,
-  Trash2,
-  X,
   AlertCircle,
   Bell,
   Users,
-  Building2,
-  BarChart3,
   Save,
-  Upload,
   FileUp,
 } from "lucide-react";
 
 export default function AdminPanel() {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
+
+  // 🔥 HOTFIX: Si userProfile NO tiene rol, intentar desde localStorage
+  const actualUserProfile = userProfile || JSON.parse(localStorage.getItem("userProfile") || localStorage.getItem("user") || "{}");
+
+  console.log("📋 AdminPanel - actualUserProfile:", actualUserProfile);
+  console.log("📋 AdminPanel - rol:", actualUserProfile.rol);
 
   // Tabs del panel
   const [activeTab, setActiveTab] = useState("sesiones");
@@ -60,7 +60,7 @@ export default function AdminPanel() {
     titulo: "",
     mensaje: "",
     tipo: "info",
-    usuarios: [], // IDs de usuarios
+    usuarios: [],
   });
   const [users, setUsers] = useState([]);
   const [notificationLoading, setNotificationLoading] = useState(false);
@@ -325,8 +325,6 @@ export default function AdminPanel() {
     }
 
     try {
-      // TODO: Crear endpoint para desactivar usuarios
-      // await API.delete(`/users/${userId}`);
       alert("Función de eliminación no implementada aún");
     } catch (err) {
       console.error("Error al eliminar usuario:", err);
@@ -336,7 +334,7 @@ export default function AdminPanel() {
   // ========================================================
   // RENDERIZADO
   // ========================================================
-  if (!userProfile) {
+  if (!actualUserProfile) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-500">
         Cargando...
@@ -344,12 +342,15 @@ export default function AdminPanel() {
     );
   }
 
-  if (userProfile.rol !== "super_admin" && userProfile.rol !== "admin") {
+  if (actualUserProfile.rol !== "super_admin" && actualUserProfile.rol !== "admin") {
     return (
       <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
         <AlertCircle className="inline mr-2 text-red-600" />
         <p className="text-red-800 font-semibold">
           No tienes permisos para acceder al panel de administración
+        </p>
+        <p className="text-red-600 text-sm mt-2">
+          Tu rol es: <strong>{actualUserProfile.rol}</strong>
         </p>
       </div>
     );
@@ -358,6 +359,7 @@ export default function AdminPanel() {
   return (
     <div className="max-w-7xl mx-auto p-6 bg-gray-50 rounded-lg">
       <h1 className="text-3xl font-bold mb-6">Panel de Administración</h1>
+      <p className="text-sm text-gray-600 mb-4">Rol: <strong>{actualUserProfile.rol}</strong></p>
 
       {/* Mensajes de éxito/error */}
       {success && (
