@@ -19,11 +19,15 @@ import {
   User,
   Scan,
   Settings,
-  LogOut
+  LogOut,
+  Map,
+  Network,
+  FileText,
+  Award
 } from "lucide-react";
 
 export default function Layout() {
-  const { logout, userProfile } = useAuth(); 
+  const { logout, userProfile, permisos } = useAuth(); // ← AGREGADO: permisos
   const location = useLocation();
 
   const [open, setOpen] = useState(false);
@@ -53,35 +57,53 @@ export default function Layout() {
     localStorage.setItem("theme", newMode ? "dark" : "light");
   };
 
-  const baseMenu = [
-    { to: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { to: "/agenda", label: "Agenda", icon: <Calendar size={18} /> },
-    { to: "/speakers", label: "Speakers", icon: <Users size={18} /> },
-    { to: "/expositores", label: "Expositores", icon: <Layers size={18} /> },
+  // ========== NUEVO: MENÚ DINÁMICO BASADO EN PERMISOS ==========
+  /**
+   * Construye el menú dinámicamente según permisos del usuario
+   * Usa permisos.menuItems de sedeHelper.js
+   */
+  const buildMenu = () => {
+    if (!permisos) return [];
 
-    // ❌ ESTA ruta de notificaciones puedes mantenerla aunque ya no será necesaria
-    { to: "/notificaciones", label: "Notificaciones", icon: <Bell size={18} /> },
+    // Mapeo de nombres a rutas e íconos
+    const menuMap = {
+      "Dashboard": { to: "/dashboard", icon: <LayoutDashboard size={18} /> },
+      "Agenda (D1-D2)": { to: "/agenda", icon: <Calendar size={18} /> },
+      "Agenda (D3-D4)": { to: "/agenda", icon: <Calendar size={18} /> },
+      "Agenda (D1-4)": { to: "/agenda", icon: <Calendar size={18} /> },
+      "Agenda": { to: "/agenda", icon: <Calendar size={18} /> },
+      "Agenda (lectura)": { to: "/agenda", icon: <Calendar size={18} /> },
+      "Mapa Expo": { to: "/mapa-expo", icon: <Map size={18} /> },
+      "Expositores": { to: "/expositores", icon: <Layers size={18} /> },
+      "Speakers": { to: "/speakers", icon: <Users size={18} /> },
+      "Perfil": { to: "/perfil", icon: <User size={18} /> },
+      "Mi Perfil": { to: "/perfil", icon: <User size={18} /> },
+      "Mi Sesión": { to: "/mi-sesion", icon: <Award size={18} /> },
+      "Mi Marca": { to: "/mi-marca", icon: <Layers size={18} /> },
+      "Mi QR": { to: "/qr", icon: <FileText size={18} /> },
+      "Networking": { to: "/networking", icon: <Network size={18} /> },
+      "Mis Registros": { to: "/mis-registros", icon: <FileText size={18} /> },
+      "Mis Cursos": { to: "/mis-cursos", icon: <Calendar size={18} /> },
+      "Staff Panel": { to: "/staff", icon: <Scan size={18} /> },
+      "Usuarios": { to: "/usuarios", icon: <Users size={18} /> },
+      "Usuarios (ver)": { to: "/usuarios", icon: <Users size={18} /> },
+      "Notificaciones": { to: "/notificaciones", icon: <Bell size={18} /> },
+      "Admin Panel": { to: "/admin", icon: <Settings size={18} /> },
+      "Agenda (ver)": { to: "/agenda", icon: <Calendar size={18} /> },
+      "Speakers (ver)": { to: "/speakers", icon: <Users size={18} /> },
+      "Expositores (ver)": { to: "/expositores", icon: <Layers size={18} /> },
+      "Configuración": { to: "/configuracion", icon: <Settings size={18} /> },
+      "Excel Import": { to: "/excel-import", icon: <FileText size={18} /> },
+    };
 
-    { to: "/perfil", label: "Mi Perfil", icon: <User size={18} /> },
-  ];
+    // Construir menú desde permisos.menuItems
+    return permisos.menuItems
+      .map(itemLabel => menuMap[itemLabel])
+      .filter(Boolean); // Eliminar undefined
+  };
+  // ============================================================
 
-  const staffMenu = [
-    { to: "/staff", label: "Registro Asistencias", icon: <Scan size={18} /> },
-  ];
-
-  const adminMenu = [
-    { to: "/admin", label: "Panel de Administración", icon: <Settings size={18} /> },
-  ];
-
-  let finalMenu = [...baseMenu];
-
-  if (userProfile?.rol === "staff" || userProfile?.rol === "super_admin") {
-    finalMenu.push(...staffMenu);
-  }
-
-  if (userProfile?.rol === "super_admin") {
-    finalMenu.push(...adminMenu);
-  }
+  const menu = buildMenu();
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
@@ -101,22 +123,30 @@ export default function Layout() {
             Navegación
           </div>
 
-          {finalMenu.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              onClick={() => setOpen(false)}
-              className={`flex items-center gap-3 p-2 rounded-lg text-sm font-medium transition-colors
-                ${
-                  location.pathname === item.to
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          ))}
+          {/* ========== MENÚ DINÁMICO ==========  */}
+          {menu.length > 0 ? (
+            menu.map((item, index) => (
+              <Link
+                key={`${item.to}-${index}`}
+                to={item.to}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-3 p-2 rounded-lg text-sm font-medium transition-colors
+                  ${
+                    location.pathname === item.to
+                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+              >
+                {item.icon}
+                {item.to.replace("/", "").charAt(0).toUpperCase() + item.to.replace("/", "").slice(1)}
+              </Link>
+            ))
+          ) : (
+            <div className="p-2 text-xs text-gray-500">
+              ⚠️ No hay permisos disponibles
+            </div>
+          )}
+          {/* ==================================== */}
 
           <div className="border-t pt-4 mt-4 dark:border-gray-700">
             <button
@@ -152,7 +182,7 @@ export default function Layout() {
           {/* ACCIONES DEL HEADER */}
           <div className="flex items-center gap-4">
 
-            {/* ---------------- 🔔 NOTIFICACIONES ---------------- */}
+            {/* 🔔 NOTIFICACIONES */}
             <button onClick={() => setPanelOpen(true)} className="relative">
               <Bell size={20} className="text-gray-700 dark:text-gray-300" />
               {unreadCount > 0 && (
@@ -186,7 +216,7 @@ export default function Layout() {
         </main>
       </div>
 
-      {/* ---------------- PANEL DE NOTIFICACIONES ---------------- */}
+      {/* ---------- PANEL DE NOTIFICACIONES ---------- */}
       <NotificationsPanel open={panelOpen} onClose={() => setPanelOpen(false)} />
 
     </div>

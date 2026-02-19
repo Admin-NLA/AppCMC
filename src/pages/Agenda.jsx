@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 export default function Agenda() {
-  const { userProfile, permisos } = useAuth();
+  const { userProfile, permisos } = useAuth(); // ← AGREGADO: permisos
   const navigate = useNavigate();
 
   const [sessions, setSessions] = useState([]);
@@ -35,54 +35,11 @@ export default function Agenda() {
   const [availableEdiciones, setAvailableEdiciones] = useState([]);
 
   // ========================================================
-  // NUEVO: Estado para Favoritos
+  // Estado para Favoritos
   // ========================================================
   const [favorites, setFavorites] = useState(new Set());
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
-
-  // ========================================================
-  // Obtener días permitidos según tipo_pase
-  // ========================================================
-  const getDiasPermitidos = () => {
-    if (!userProfile) return [];
-
-    const tipoPase = userProfile.tipo_pase?.toLowerCase();
-
-    switch (tipoPase) {
-      case "curso":
-        return [1, 2];
-      case "sesiones":
-        return [3, 4];
-      case "combo":
-        return [1, 2, 3, 4];
-      case "general":
-        return [];
-      default:
-        return [1, 2, 3, 4];
-    }
-  };
-
-  // ========================================================
-  // Validar acceso en base a tipo_pase
-  // ========================================================
-  const validateAccess = () => {
-    if (!userProfile) return false;
-
-    const tipoPase = userProfile.tipo_pase?.toLowerCase();
-
-    if (tipoPase === "general") {
-      setAccessDenied(true);
-      setAccessMessage(
-        "Tu pase General no incluye acceso a la Agenda. Puedes ver Expositores y hacer Networking."
-      );
-      console.warn("❌ Acceso denegado: Usuario con pase General");
-      return false;
-    }
-
-    console.log(`✅ Acceso concedido: ${tipoPase}`);
-    return true;
-  };
 
   const days = [
     { id: "todos", label: "Todos", numero: 0 },
@@ -91,6 +48,29 @@ export default function Agenda() {
     { id: "miercoles", label: "Miércoles", numero: 3 },
     { id: "jueves", label: "Jueves", numero: 4 },
   ];
+
+  // ========================================================
+  // NUEVO: Validar acceso usando permisos de sedeHelper
+  // ========================================================
+  const validateAccess = () => {
+    if (!permisos) {
+      console.warn("⚠️ Permisos aún no cargados");
+      return false;
+    }
+
+    // Si verAgenda es false, denegar acceso
+    if (!permisos.verAgenda) {
+      setAccessDenied(true);
+      setAccessMessage(
+        `Tu pase (${userProfile?.tipo_pase}) no incluye acceso a la Agenda.`
+      );
+      console.warn("❌ Acceso denegado: Usuario sin permiso para ver Agenda");
+      return false;
+    }
+
+    console.log(`✅ Acceso concedido: Agenda visible para ${userProfile?.tipo_pase}`);
+    return true;
+  };
 
   // ========================================================
   // Cargar sesiones al montar el componente
@@ -103,14 +83,14 @@ export default function Agenda() {
 
     loadSessions();
     loadFavorites();
-  }, [userProfile]);
+  }, [permisos, userProfile]);
 
   // ========================================================
   // Filtrar sesiones cuando cambian los filtros
   // ========================================================
   useEffect(() => {
     filterSessions();
-  }, [selectedDay, selectedSede, selectedEdicion, sessions, userProfile, favorites, showOnlyFavorites]);
+  }, [selectedDay, selectedSede, selectedEdicion, sessions, userProfile, favorites, showOnlyFavorites, permisos]);
 
   // ========================================================
   // CARGAR SESIONES DESDE API CON FILTROS
@@ -125,6 +105,17 @@ export default function Agenda() {
       });
 
       const params = new URLSearchParams();
+      
+      // Aplicar filtro de sede si el usuario tiene filtraSede = true
+      if (permisos?.filtraSede && userProfile?.sede) {
+        params.append("sede", userProfile.sede);
+      }
+      
+      // Aplicar filtro de edición si el usuario tiene filtraEdicion = true
+      if (permisos?.filtraEdicion && userProfile?.edicion) {
+        params.append("edicion", userProfile.edicion);
+      }
+
       if (selectedSede) params.append("sede", selectedSede);
       if (selectedEdicion) params.append("edicion", selectedEdicion);
 
@@ -155,7 +146,7 @@ export default function Agenda() {
   };
 
   // ========================================================
-  // NUEVO: Cargar favoritos del usuario
+  // Cargar favoritos del usuario
   // ========================================================
   const loadFavorites = async () => {
     if (!userProfile?.id) return;
@@ -164,17 +155,14 @@ export default function Agenda() {
       setLoadingFavorites(true);
       console.log("⭐ Cargando favoritos del usuario...");
 
-      // Intentar cargar favoritos desde API
       const res = await API.get(`/users/${userProfile.id}`);
       
-      // Si el backend retorna un campo de favoritos
       if (res.data.favoritos) {
         setFavorites(new Set(res.data.favoritos));
         console.log("✅ Favoritos cargados:", res.data.favoritos);
       }
     } catch (error) {
-      console.log("ℹ️ No se pudieron cargar favoritos del servidor (API aún no implementada)");
-      // Si falla, intentar desde localStorage
+      console.log("ℹ️ No se pudieron cargar favoritos del servidor");
       try {
         const savedFavorites = localStorage.getItem(`favorites_${userProfile.id}`);
         if (savedFavorites) {
@@ -201,12 +189,12 @@ export default function Agenda() {
   // FILTRAR SESIONES POR DÍA + PERMISOS + FAVORITOS
   // ========================================================
   const filterSessions = () => {
-    if (!userProfile) {
+    if (!userProfile || !permisos) {
       setFilteredSessions([]);
       return;
     }
 
-    const diasPermitidos = getDiasPermitidos();
+    const diasPermitidos = permisos.diasPermitidos || [];
 
     console.log("🔍 Filtrando por:", {
       selectedDay,
@@ -242,7 +230,17 @@ export default function Agenda() {
       }
     }
 
-    // 3. NUEVO: Filtrar solo favoritos si está activado
+    // 3. Filtrar por sede si el usuario está filtrando
+    if (selectedSede) {
+      filtered = filtered.filter((s) => s.sede === selectedSede);
+    }
+
+    // 4. Filtrar por edición si el usuario está filtrando
+    if (selectedEdicion) {
+      filtered = filtered.filter((s) => s.edicion === selectedEdicion);
+    }
+
+    // 5. Filtrar solo favoritos si está activado
     if (showOnlyFavorites) {
       filtered = filtered.filter((s) => favorites.has(s.id));
       console.log(`📌 Después de filtro de favoritos: ${filtered.length} sesiones`);
@@ -252,17 +250,22 @@ export default function Agenda() {
   };
 
   // ========================================================
-  // NUEVO: Agregar/Quitar de Favoritos
+  // Agregar/Quitar de Favoritos
   // ========================================================
   const toggleFavorite = async (sessionId) => {
     if (!userProfile) return;
+
+    // Validar que el usuario puede marcar favoritos
+    if (!permisos?.puedeFavoritos) {
+      alert("Tu pase no permite marcar favoritos");
+      return;
+    }
 
     try {
       const isFavorite = favorites.has(sessionId);
 
       console.log(`${isFavorite ? "❌ Removiendo" : "⭐ Agregando"} favorito: ${sessionId}`);
 
-      // Actualizar estado local inmediatamente (optimistic update)
       const newFavorites = new Set(favorites);
       if (isFavorite) {
         newFavorites.delete(sessionId);
@@ -271,10 +274,8 @@ export default function Agenda() {
       }
       setFavorites(newFavorites);
 
-      // Guardar en localStorage
       localStorage.setItem(`favorites_${userProfile.id}`, JSON.stringify([...newFavorites]));
 
-      // Llamar a API (opcional, para persistencia en servidor)
       if (isFavorite) {
         await API.delete(`/agenda/favorite/${sessionId}`);
       } else {
@@ -286,7 +287,6 @@ export default function Agenda() {
       console.log(`✅ Favorito actualizado`);
     } catch (error) {
       console.error("❌ Error al actualizar favorito:", error);
-      // Revertir cambio si falla
       loadFavorites();
     }
   };
@@ -302,6 +302,14 @@ export default function Agenda() {
     );
   }
 
+  if (!permisos) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        Cargando permisos…
+      </div>
+    );
+  }
+
   // ❌ ACCESO DENEGADO
   if (accessDenied) {
     return (
@@ -311,12 +319,14 @@ export default function Agenda() {
           <div>
             <h2 className="text-lg font-bold text-blue-900 mb-2">Acceso Limitado</h2>
             <p className="text-blue-800 mb-4">{accessMessage}</p>
-            <button
-              onClick={() => navigate("/expositores")}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-            >
-              Ver Expositores →
-            </button>
+            {permisos?.verExpositores && (
+              <button
+                onClick={() => navigate("/expositores")}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+              >
+                Ver Expositores →
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -337,7 +347,7 @@ export default function Agenda() {
   // ========================================================
   // INFORMACIÓN DE ACCESO
   // ========================================================
-  const diasPermitidos = getDiasPermitidos();
+  const diasPermitidos = permisos.diasPermitidos || [];
   const diasTexto = {
     1: "Lunes",
     2: "Martes",
@@ -420,21 +430,23 @@ export default function Agenda() {
             </select>
           </div>
 
-          {/* NUEVO: Toggle Favoritos */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Ver</label>
-            <button
-              onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-              className={`w-full px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
-                showOnlyFavorites
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-              }`}
-            >
-              <Heart size={18} fill={showOnlyFavorites ? "currentColor" : "none"} />
-              {showOnlyFavorites ? "Solo Favoritos" : "Todas"}
-            </button>
-          </div>
+          {/* Toggle Favoritos - SOLO SI TIENE PERMISO */}
+          {permisos?.puedeFavoritos && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Ver</label>
+              <button
+                onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
+                className={`w-full px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
+                  showOnlyFavorites
+                    ? "bg-red-600 text-white hover:bg-red-700"
+                    : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                }`}
+              >
+                <Heart size={18} fill={showOnlyFavorites ? "currentColor" : "none"} />
+                {showOnlyFavorites ? "Solo Favoritos" : "Todas"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Info de filtros activos */}
@@ -543,6 +555,8 @@ export default function Agenda() {
               isFavorite={favorites.has(session.id)}
               onToggleFavorite={toggleFavorite}
               onViewDetails={() => setSelectedSession(session)}
+              canMarkFavorites={permisos?.puedeFavoritos}
+              esLectura={permisos?.esLectura}
             />
           ))
         )}
@@ -555,6 +569,8 @@ export default function Agenda() {
           isFavorite={favorites.has(selectedSession.id)}
           onToggleFavorite={toggleFavorite}
           onClose={() => setSelectedSession(null)}
+          canMarkFavorites={permisos?.puedeFavoritos}
+          esLectura={permisos?.esLectura}
         />
       )}
     </div>
@@ -562,9 +578,9 @@ export default function Agenda() {
 }
 
 // ========================================================
-// TARJETA DE SESIÓN - ACTUALIZADA CON FAVORITOS
+// TARJETA DE SESIÓN - ACTUALIZADA CON PERMISOS
 // ========================================================
-function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails }) {
+function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails, canMarkFavorites, esLectura }) {
   const formatTime = (dateString) => {
     if (!dateString) return "Sin hora";
     try {
@@ -579,7 +595,7 @@ function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails }) {
 
   return (
     <div
-      className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition cursor-pointer"
+      className={`bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition ${!esLectura ? 'cursor-pointer' : ''}`}
       onClick={onViewDetails}
     >
       <div className="flex justify-between items-start">
@@ -611,6 +627,11 @@ function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails }) {
             {session.edicion && (
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
                 {session.edicion}
+              </span>
+            )}
+            {esLectura && (
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 flex items-center gap-1">
+                <Lock size={12} /> Lectura
               </span>
             )}
           </div>
@@ -645,28 +666,30 @@ function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails }) {
           </div>
         </div>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite(session.id);
-          }}
-          className="ml-4 p-2 hover:bg-gray-100 rounded-lg transition"
-          title={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
-        >
-          <Heart
-            size={24}
-            className={isFavorite ? "text-red-600 fill-red-600" : "text-gray-400"}
-          />
-        </button>
+        {canMarkFavorites && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(session.id);
+            }}
+            className="ml-4 p-2 hover:bg-gray-100 rounded-lg transition"
+            title={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+          >
+            <Heart
+              size={24}
+              className={isFavorite ? "text-red-600 fill-red-600" : "text-gray-400"}
+            />
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 // ========================================================
-// MODAL DE DETALLES DE SESIÓN - ACTUALIZADO CON FAVORITOS
+// MODAL DE DETALLES - ACTUALIZADO CON PERMISOS
 // ========================================================
-function SessionModal({ session, isFavorite, onToggleFavorite, onClose }) {
+function SessionModal({ session, isFavorite, onToggleFavorite, onClose, canMarkFavorites, esLectura }) {
   const formatTime = (dateString) => {
     if (!dateString) return "Sin hora";
     try {
@@ -709,22 +732,29 @@ function SessionModal({ session, isFavorite, onToggleFavorite, onClose }) {
                     {session.edicion}
                   </span>
                 )}
+                {esLectura && (
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-900 flex items-center gap-1">
+                    <Lock size={14} /> Lectura
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleFavorite(session.id);
-                }}
-                className="text-white hover:bg-white/20 p-2 rounded-lg transition"
-                title={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
-              >
-                <Heart
-                  size={24}
-                  className={isFavorite ? "fill-current" : ""}
-                />
-              </button>
+              {canMarkFavorites && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(session.id);
+                  }}
+                  className="text-white hover:bg-white/20 p-2 rounded-lg transition"
+                  title={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+                >
+                  <Heart
+                    size={24}
+                    className={isFavorite ? "fill-current" : ""}
+                  />
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="text-white hover:bg-white/20 p-2 rounded-lg transition"
@@ -798,20 +828,22 @@ function SessionModal({ session, isFavorite, onToggleFavorite, onClose }) {
 
           {/* Botones */}
           <div className="flex gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(session.id);
-              }}
-              className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                isFavorite
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-              }`}
-            >
-              <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
-              {isFavorite ? "En Favoritos" : "Agregar a Favoritos"}
-            </button>
+            {canMarkFavorites && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFavorite(session.id);
+                }}
+                className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                  isFavorite
+                    ? "bg-red-600 text-white hover:bg-red-700"
+                    : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                }`}
+              >
+                <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
+                {isFavorite ? "En Favoritos" : "Agregar a Favoritos"}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"

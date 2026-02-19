@@ -9,14 +9,12 @@ import {
   Twitter,
   Globe,
   AlertCircle,
-  Plus,
-  Edit,
-  Trash2,
+  Lock,
   X,
 } from "lucide-react";
 
 export default function Speakers() {
-  const { userProfile } = useAuth();
+  const { userProfile, permisos } = useAuth(); // ← AGREGADO: permisos
 
   const [speakers, setSpeakers] = useState([]);
   const [filteredSpeakers, setFilteredSpeakers] = useState([]);
@@ -24,23 +22,61 @@ export default function Speakers() {
   const [selectedSpeaker, setSelectedSpeaker] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [accessMessage, setAccessMessage] = useState("");
+
+  // ========================================================
+  // FILTROS: Sede y Edición
+  // ========================================================
+  const [selectedSede, setSelectedSede] = useState("");
+  const [selectedEdicion, setSelectedEdicion] = useState("");
+  const [availableSedes, setAvailableSedes] = useState([]);
+  const [availableEdiciones, setAvailableEdiciones] = useState([]);
+
+  // ========================================================
+  // NUEVO: Validar acceso usando permisos de sedeHelper
+  // ========================================================
+  const validateAccess = () => {
+    if (!permisos) {
+      console.warn("⚠️ Permisos aún no cargados");
+      return false;
+    }
+
+    // Si verSpeakers es false, denegar acceso
+    if (!permisos.verSpeakers) {
+      setAccessDenied(true);
+      setAccessMessage(
+        `Tu pase (${userProfile?.tipo_pase}) no incluye acceso a Speakers.`
+      );
+      console.warn("❌ Acceso denegado: Usuario sin permiso para ver Speakers");
+      return false;
+    }
+
+    console.log(`✅ Acceso concedido: Speakers visible para ${userProfile?.tipo_pase}`);
+    return true;
+  };
 
   // ========================================================
   // Cargar speakers al montar el componente
   // ========================================================
   useEffect(() => {
+    if (!validateAccess()) {
+      setLoading(false);
+      return;
+    }
+
     loadSpeakers();
-  }, []);
+  }, [permisos, userProfile]);
 
   // ========================================================
   // Filtrar speakers cuando cambia el término de búsqueda
   // ========================================================
   useEffect(() => {
     filterSpeakers();
-  }, [searchTerm, speakers]);
+  }, [searchTerm, speakers, selectedSede, selectedEdicion]);
 
   // ========================================================
-  // CARGAR SPEAKERS DESDE API
+  // CARGAR SPEAKERS DESDE API CON FILTROS
   // ========================================================
   const loadSpeakers = async () => {
     try {
@@ -49,17 +85,37 @@ export default function Speakers() {
 
       console.log("📢 Cargando speakers...");
 
-      // ✅ USAR API INSTANCE DIRECTAMENTE
-      const res = await API.get("/speakers");
+      const params = new URLSearchParams();
 
-      console.log("📢 Response tipo:", typeof res.data);
-      console.log("📢 Es array?", Array.isArray(res.data));
-      console.log("📢 Primeras 3 items:", res.data.slice(0, 3));
+      // Aplicar filtro de sede si el usuario tiene filtraSede = true
+      if (permisos?.filtraSede && userProfile?.sede) {
+        params.append("sede", userProfile.sede);
+      }
 
-      // ✅ Validar que es un array
-      const speakersData = Array.isArray(res.data) ? res.data : [];
+      // Aplicar filtro de edición si el usuario tiene filtraEdicion = true
+      if (permisos?.filtraEdicion && userProfile?.edicion) {
+        params.append("edicion", userProfile.edicion);
+      }
+
+      if (selectedSede) params.append("sede", selectedSede);
+      if (selectedEdicion) params.append("edicion", selectedEdicion);
+
+      const queryString = params.toString();
+      const url = `/speakers${queryString ? `?${queryString}` : ""}`;
+
+      console.log("🔗 URL:", url);
+
+      const res = await API.get(url);
+
+      const speakersData = Array.isArray(res.data) ? res.data : res.data.speakers || [];
 
       console.log(`✅ ${speakersData.length} speakers cargados`);
+
+      const sedes = [...new Set(speakersData.map((s) => s.sede).filter(Boolean))];
+      setAvailableSedes(sedes.sort());
+
+      const ediciones = [...new Set(speakersData.map((s) => s.edicion).filter(Boolean))];
+      setAvailableEdiciones(ediciones.sort());
 
       setSpeakers(speakersData);
 
@@ -73,34 +129,44 @@ export default function Speakers() {
   };
 
   // ========================================================
-  // FILTRAR SPEAKERS POR BÚSQUEDA
+  // Recargar cuando cambian filtros sede/edición
+  // ========================================================
+  useEffect(() => {
+    if (!accessDenied && userProfile) {
+      loadSpeakers();
+    }
+  }, [selectedSede, selectedEdicion]);
+
+  // ========================================================
+  // FILTRAR SPEAKERS POR BÚSQUEDA + SEDE + EDICIÓN
   // ========================================================
   const filterSpeakers = () => {
     console.log("🔍 Filtrando speakers. Término:", searchTerm, "Total:", speakers.length);
 
-    if (!searchTerm.trim()) {
-      setFilteredSpeakers(speakers);
-      console.log("📌 Sin filtro, mostrando todos:", speakers.length);
-      return;
+    let filtered = speakers;
+
+    // Filtro por búsqueda
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter((s) => {
+        const nombreMatch = s.nombre?.toLowerCase().includes(search);
+        const cargoMatch = s.cargo?.toLowerCase().includes(search);
+        const empresaMatch = s.empresa?.toLowerCase().includes(search);
+        const sedeMatch = s.sede?.toLowerCase().includes(search);
+
+        return nombreMatch || cargoMatch || empresaMatch || sedeMatch;
+      });
     }
 
-    const search = searchTerm.toLowerCase();
-    const filtered = speakers.filter((s) => {
-      const nombreMatch = s.nombre?.toLowerCase().includes(search);
-      const cargoMatch = s.cargo?.toLowerCase().includes(search);
-      const empresaMatch = s.empresa?.toLowerCase().includes(search);
-      const sedeMatch = s.sede?.toLowerCase().includes(search);
+    // Filtro por sede seleccionado
+    if (selectedSede) {
+      filtered = filtered.filter((s) => s.sede === selectedSede);
+    }
 
-      const match = nombreMatch || cargoMatch || empresaMatch || sedeMatch;
-
-      if (match) {
-        console.log(
-          `✅ Match encontrado: ${s.nombre} (${s.cargo} - ${s.empresa})`
-        );
-      }
-
-      return match;
-    });
+    // Filtro por edición seleccionado
+    if (selectedEdicion) {
+      filtered = filtered.filter((s) => s.edicion === selectedEdicion);
+    }
 
     console.log("📌 Speakers filtrados:", filtered.length);
     setFilteredSpeakers(filtered);
@@ -117,11 +183,39 @@ export default function Speakers() {
     );
   }
 
+  if (!permisos) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        Cargando permisos…
+      </div>
+    );
+  }
+
+  // ❌ ACCESO DENEGADO
+  if (accessDenied) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-blue-50 border border-blue-200 p-6 rounded-lg flex gap-4">
+          <Lock className="text-blue-600 flex-shrink-0 mt-1" size={24} />
+          <div>
+            <h2 className="text-lg font-bold text-blue-900 mb-2">Acceso Limitado</h2>
+            <p className="text-blue-800 mb-4">{accessMessage}</p>
+            <p className="text-sm text-blue-700">
+              Solo Asistentes de Sesiones, Combo y Speakers pueden ver esta sección.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        <p className="ml-4 text-gray-600">Cargando speakers...</p>
+        <div className="text-center">
+          <div className="animate-spin h-12 w-12 border-b-2 border-blue-600 rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando speakers...</p>
+        </div>
       </div>
     );
   }
@@ -146,8 +240,11 @@ export default function Speakers() {
         </div>
       )}
 
-      {/* Búsqueda */}
-      <div className="mb-6">
+      {/* ========================================================
+          FILTROS: Búsqueda, Sede y Edición
+          ======================================================== */}
+      <div className="space-y-4 mb-6">
+        {/* Búsqueda */}
         <div className="relative">
           <Search size={20} className="absolute left-3 top-3 text-gray-400" />
           <input
@@ -158,35 +255,67 @@ export default function Speakers() {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
-      </div>
 
-      {/* Debug info */}
-      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-4 text-sm">
-        <div className="flex items-start gap-2">
-          <AlertCircle size={20} className="text-blue-600 mt-0.5" />
+        {/* Filtros Sede y Edición */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Filtro Sede */}
           <div>
-            <p className="font-semibold text-blue-900 mb-1">Información de depuración:</p>
-            <p className="text-blue-800">
-              <strong>Total speakers cargados:</strong> {speakers.length}
-            </p>
-            <p className="text-blue-800">
-              <strong>Búsqueda actual:</strong> "{searchTerm || 'ninguna'}"
-            </p>
-            <p className="text-blue-800">
-              <strong>Speakers mostrados:</strong> {filteredSpeakers.length}
-            </p>
-            {speakers.length > 0 && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-blue-700 hover:text-blue-900">
-                  Ver estructura de primer speaker
-                </summary>
-                <pre className="mt-2 p-2 bg-white rounded text-xs overflow-auto max-h-48">
-                  {JSON.stringify(speakers[0], null, 2)}
-                </pre>
-              </details>
-            )}
+            <label className="block text-sm font-medium text-gray-700 mb-2">Sede</label>
+            <select
+              value={selectedSede}
+              onChange={(e) => setSelectedSede(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todas las sedes</option>
+              {availableSedes.map((sede) => (
+                <option key={sede} value={sede}>
+                  {sede.charAt(0).toUpperCase() + sede.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro Edición */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Edición</label>
+            <select
+              value={selectedEdicion}
+              onChange={(e) => setSelectedEdicion(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todas las ediciones</option>
+              {availableEdiciones.map((edicion) => (
+                <option key={edicion} value={edicion}>
+                  {edicion}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
+
+        {/* Info de filtros activos */}
+        {(searchTerm || selectedSede || selectedEdicion) && (
+          <div className="text-sm text-gray-600">
+            <p>
+              Filtros activos:{" "}
+              {searchTerm && (
+                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-2">
+                  Búsqueda: "{searchTerm}"
+                </span>
+              )}
+              {selectedSede && (
+                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-2">
+                  Sede: {selectedSede}
+                </span>
+              )}
+              {selectedEdicion && (
+                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                  Edición: {selectedEdicion}
+                </span>
+              )}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Grid de speakers */}
@@ -197,14 +326,18 @@ export default function Speakers() {
             <p className="text-gray-600 font-medium mb-2">
               {speakers.length === 0
                 ? "No hay speakers disponibles"
-                : `No se encontraron speakers para "${searchTerm}"`}
+                : `No se encontraron speakers para "${searchTerm || selectedSede || selectedEdicion}"`}
             </p>
-            {speakers.length > 0 && searchTerm && (
+            {speakers.length > 0 && (searchTerm || selectedSede || selectedEdicion) && (
               <button
-                onClick={() => setSearchTerm("")}
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedSede("");
+                  setSelectedEdicion("");
+                }}
                 className="mt-3 text-blue-600 hover:text-blue-700 underline"
               >
-                Limpiar búsqueda
+                Limpiar filtros
               </button>
             )}
           </div>
@@ -214,6 +347,7 @@ export default function Speakers() {
               key={speaker.id}
               speaker={speaker}
               onViewDetails={() => setSelectedSpeaker(speaker)}
+              userRole={userProfile?.rol}
             />
           ))
         )}
@@ -224,6 +358,7 @@ export default function Speakers() {
         <SpeakerModal
           speaker={selectedSpeaker}
           onClose={() => setSelectedSpeaker(null)}
+          userRole={userProfile?.rol}
         />
       )}
     </div>
@@ -233,17 +368,26 @@ export default function Speakers() {
 // ========================================================
 // TARJETA DE SPEAKER
 // ========================================================
-function SpeakerCard({ speaker, onViewDetails }) {
+function SpeakerCard({ speaker, onViewDetails, userRole }) {
+  const isHighlighted = speaker.destacado || speaker.es_destacado;
+
   return (
     <div
-      className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition cursor-pointer h-full flex flex-col"
+      className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition cursor-pointer h-full flex flex-col relative"
       onClick={onViewDetails}
     >
+      {/* Badge destacado para speakers */}
+      {isHighlighted && userRole === "speaker" && (
+        <div className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 z-10">
+          ⭐ DESTACADO
+        </div>
+      )}
+
       {/* Foto */}
       <div className="w-full h-48 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center overflow-hidden">
-        {speaker.foto ? (
+        {speaker.foto || speaker.photo_url ? (
           <img
-            src={speaker.foto}
+            src={speaker.foto || speaker.photo_url}
             alt={speaker.nombre}
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -297,9 +441,9 @@ function SpeakerCard({ speaker, onViewDetails }) {
               {speaker.edicion}
             </span>
           )}
-          {speaker.source === "wordpress" && (
-            <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-              📡 WP
+          {isHighlighted && (
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+              ⭐ Destacado
             </span>
           )}
         </div>
@@ -361,7 +505,9 @@ function SpeakerCard({ speaker, onViewDetails }) {
 // ========================================================
 // MODAL DE DETALLES DEL SPEAKER
 // ========================================================
-function SpeakerModal({ speaker, onClose }) {
+function SpeakerModal({ speaker, onClose, userRole }) {
+  const isHighlighted = speaker.destacado || speaker.es_destacado;
+
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
@@ -375,9 +521,9 @@ function SpeakerModal({ speaker, onClose }) {
         <div className="relative">
           {/* Foto de fondo */}
           <div className="w-full h-64 bg-gradient-to-br from-blue-500 to-blue-700 overflow-hidden relative">
-            {speaker.foto ? (
+            {speaker.foto || speaker.photo_url ? (
               <img
-                src={speaker.foto}
+                src={speaker.foto || speaker.photo_url}
                 alt={speaker.nombre}
                 className="w-full h-full object-cover"
                 onError={(e) => {
@@ -389,6 +535,13 @@ function SpeakerModal({ speaker, onClose }) {
                 <div className="text-7xl font-bold text-white/30">
                   {speaker.nombre?.charAt(0).toUpperCase()}
                 </div>
+              </div>
+            )}
+
+            {/* Badge destacado */}
+            {isHighlighted && userRole === "speaker" && (
+              <div className="absolute top-4 right-4 bg-yellow-400 text-yellow-900 px-4 py-2 rounded-full font-bold flex items-center gap-2">
+                ⭐ DESTACADO
               </div>
             )}
 
@@ -514,6 +667,9 @@ function SpeakerModal({ speaker, onClose }) {
             )}
             {speaker.source === "local" && (
               <p>💾 <strong>Fuente:</strong> Creado localmente</p>
+            )}
+            {isHighlighted && (
+              <p className="mt-2">⭐ <strong>Estado:</strong> Este speaker es destacado del evento</p>
             )}
           </div>
 

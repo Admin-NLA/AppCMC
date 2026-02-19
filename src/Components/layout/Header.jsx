@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { LogOut, User, Menu, X, Bell } from "lucide-react";
+import { LogOut, User, Menu, X, Bell, Map, Network, Calendar, Layers, Users, Scan, Settings, FileText, Award } from "lucide-react";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 
 export default function Header() {
-  const { userProfile, logout } = useAuth();
+  const { userProfile, logout, permisos } = useAuth(); // ← AGREGADO: permisos
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -65,6 +65,52 @@ export default function Header() {
     }
   };
 
+  // ========== NUEVO: MENÚ DINÁMICO BASADO EN PERMISOS ==========
+  /**
+   * Construye el menú móvil dinámicamente según permisos del usuario
+   * Usa permisos.menuItems de sedeHelper.js
+   */
+  const buildMobileMenu = () => {
+    if (!permisos) return [];
+
+    const menuMap = {
+      "Dashboard": { to: "/dashboard", icon: <Layers size={16} /> },
+      "Agenda (D1-D2)": { to: "/agenda", icon: <Calendar size={16} /> },
+      "Agenda (D3-D4)": { to: "/agenda", icon: <Calendar size={16} /> },
+      "Agenda (D1-4)": { to: "/agenda", icon: <Calendar size={16} /> },
+      "Agenda": { to: "/agenda", icon: <Calendar size={16} /> },
+      "Agenda (lectura)": { to: "/agenda", icon: <Calendar size={16} /> },
+      "Mapa Expo": { to: "/mapa-expo", icon: <Map size={16} /> },
+      "Expositores": { to: "/expositores", icon: <Layers size={16} /> },
+      "Speakers": { to: "/speakers", icon: <Users size={16} /> },
+      "Networking": { to: "/networking", icon: <Network size={16} /> },
+      "Perfil": { to: "/perfil", icon: <User size={16} /> },
+      "Mi Perfil": { to: "/perfil", icon: <User size={16} /> },
+      "Mi Sesión": { to: "/mi-sesion", icon: <Award size={16} /> },
+      "Mi Marca": { to: "/mi-marca", icon: <Layers size={16} /> },
+      "Mi QR": { to: "/qr", icon: <FileText size={16} /> },
+      "Mis Registros": { to: "/mis-registros", icon: <FileText size={16} /> },
+      "Mis Cursos": { to: "/mis-cursos", icon: <Calendar size={16} /> },
+      "Staff Panel": { to: "/staff", icon: <Scan size={16} /> },
+      "Usuarios": { to: "/usuarios", icon: <Users size={16} /> },
+      "Usuarios (ver)": { to: "/usuarios", icon: <Users size={16} /> },
+      "Notificaciones": { to: "/notificaciones", icon: <Bell size={16} /> },
+      "Admin Panel": { to: "/admin", icon: <Settings size={16} /> },
+      "Agenda (ver)": { to: "/agenda", icon: <Calendar size={16} /> },
+      "Speakers (ver)": { to: "/speakers", icon: <Users size={16} /> },
+      "Expositores (ver)": { to: "/expositores", icon: <Layers size={16} /> },
+      "Configuración": { to: "/configuracion", icon: <Settings size={16} /> },
+      "Excel Import": { to: "/excel-import", icon: <FileText size={16} /> },
+    };
+
+    return permisos.menuItems
+      .map(itemLabel => menuMap[itemLabel])
+      .filter(Boolean);
+  };
+  // ============================================================
+
+  const mobileMenu = buildMobileMenu();
+
   return (
     <header className="bg-blue-600 text-white shadow-md sticky top-0 z-50">
       <div className="px-4 md:px-6 py-3">
@@ -78,8 +124,8 @@ export default function Header() {
               onError={(e) => (e.target.style.display = "none")}
             />
             <div className="hidden sm:block">
-              <h1 className="text-sm md:text-lg font-bold leading-tight">CMC LATAM 2025</h1>
-              <p className="text-xs text-blue-100">Gestión del Congreso</p>
+              <h1 className="text-sm md:text-lg font-bold leading-tight">CMC LATAM APP</h1>
+              <p className="text-xs text-blue-100">Gestión del Evento</p>
             </div>
           </div>
 
@@ -224,7 +270,7 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Mobile Menu - Dropdown */}
+        {/* Mobile Menu - Dropdown (DINÁMICO) */}
         {menuOpen && (
           <div className="md:hidden mt-4 pb-4 space-y-3 border-t border-blue-500 pt-4">
             {userProfile ? (
@@ -237,17 +283,27 @@ export default function Header() {
                   </p>
                 </div>
 
-                {/* Link Perfil Mobile */}
-                <button
-                  onClick={() => {
-                    navigate("/perfil");
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 hover:bg-blue-700 transition px-3 py-2 rounded-lg text-sm font-medium"
-                >
-                  <User size={16} />
-                  Mi Perfil
-                </button>
+                {/* ========== MENÚ DINÁMICO MOBILE ========== */}
+                {mobileMenu.length > 0 ? (
+                  mobileMenu.map((item, index) => (
+                    <button
+                      key={`mobile-${item.to}-${index}`}
+                      onClick={() => {
+                        navigate(item.to);
+                        setMenuOpen(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2 hover:bg-blue-700 transition px-3 py-2 rounded-lg text-sm font-medium"
+                    >
+                      {item.icon}
+                      {item.to.replace("/", "").charAt(0).toUpperCase() + item.to.replace("/", "").slice(1)}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-xs text-blue-100">
+                    ⚠️ No hay menú disponible
+                  </div>
+                )}
+                {/* ========================================== */}
 
                 {/* Logout Mobile */}
                 <button

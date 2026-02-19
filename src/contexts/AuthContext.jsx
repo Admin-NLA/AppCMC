@@ -1,93 +1,52 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import API from "../services/api";
+import { getPermisosPorRolYPase } from "../utils/sedeHelper"; // ← NUEVA IMPORTACIÓN
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-
-  //NUEVA SECCIÓN DE BUILDPERMISOS ------------------------------------>
-  function buildPermisos(user) {
-    // super admin y staff → TODO
-    if (user.rol === "super_admin" || user.rol === "staff") {
-      return {
-        verAgenda: true,
-        verCursos: true,
-        verSesiones: true,
-        verExpositores: true,
-        verSpeakers: true,
-        networking: true,
-        puedeFavoritos: true,
-        diasPermitidos: [1, 2, 3, 4],
-      };
-    }
-
-    // asistentes por tipo de pase
-    switch (user.tipo_pase) {
-      case "curso":
-        return {
-          verAgenda: true,
-          verCursos: true,
-          verSesiones: false,
-          verExpositores: false,
-          verSpeakers: false,
-          networking: false,
-          puedeFavoritos: false,
-          diasPermitidos: [1, 2],
-        };
-
-      case "sesiones":
-        return {
-          verAgenda: true,
-          verCursos: false,
-          verSesiones: true,
-          verExpositores: true,
-          verSpeakers: true,
-          networking: true,
-          puedeFavoritos: true,
-          diasPermitidos: [3, 4],
-        };
-
-      case "combo":
-        return {
-          verAgenda: true,
-          verCursos: true,
-          verSesiones: true,
-          verExpositores: true,
-          verSpeakers: true,
-          networking: true,
-          puedeFavoritos: true,
-          diasPermitidos: [1, 2, 3, 4],
-        };
-
-      case "general":
-        return {
-          verAgenda: false,
-          verCursos: false,
-          verSesiones: false,
-          verExpositores: true,
-          verSpeakers: false,
-          networking: true,
-          puedeFavoritos: false,
-          diasPermitidos: [],
-        };
-
-      default:
-        return {};
-    }
-  }
-  //------------------------------------------------------------------>
   const [permisos, setPermisos] = useState(null);
+  const [loading, setLoading] = useState(true);
 
+  // ========== NUEVA: buildPermisos usa sedeHelper ==========
+  /**
+   * Construye permisos usando sedeHelper.js
+   * 
+   * @param {Object} userObj - Usuario con rol, tipo_pase, sede, edicion, etc
+   * @returns {Object} Objeto de permisos completo
+   */
+  function buildPermisos(userObj) {
+    if (!userObj) {
+      console.warn("⚠️ buildPermisos: userObj no definido");
+      return {};
+    }
+
+    const { rol, tipo_pase } = userObj;
+
+    console.log(`🔑 buildPermisos: rol=${rol}, tipo_pase=${tipo_pase}`);
+
+    // Llamar a sedeHelper para obtener permisos
+    const permisosCentralizados = getPermisosPorRolYPase(rol, tipo_pase, userObj);
+
+    // Log para debugging
+    console.log("✅ Permisos obtenidos de sedeHelper:", permisosCentralizados);
+
+    return permisosCentralizados;
+  }
+  // ========================================================
+
+  // 🔥 EFECTO: Recalcular permisos cuando userProfile cambia
   useEffect(() => {
     if (userProfile) {
-      setPermisos(buildPermisos(userProfile));
+      console.log("🔄 Actualizando permisos para:", userProfile.email);
+      const nuevosPermisos = buildPermisos(userProfile);
+      setPermisos(nuevosPermisos);
+    } else {
+      setPermisos(null);
     }
-  }, [userProfile]);
-  //------------------------------------------------------------------>
-
-  const [loading, setLoading] = useState(true);
+  }, [userProfile]); // Se ejecuta cuando userProfile cambia
 
   // 🔥 EFECTO: Guardar en localStorage SIEMPRE que user cambie
   useEffect(() => {
@@ -102,24 +61,25 @@ export function AuthProvider({ children }) {
         console.error("❌ Error guardando en localStorage:", err);
       }
     }
-  }, [user]); // 🔑 IMPORTANTE: Se ejecuta cuando user cambia
+  }, [user]); // Se ejecuta cuando user cambia
 
+  // ========== LOGIN ==========
   const login = async (email, password) => {
     try {
       console.log("🔐 Iniciando login para:", email);
       const res = await API.post("/auth/login", { email, password });
-      
+
       const userData = res.data.user;
       console.log("✅ Login exitoso, usuario:", userData.email, userData.rol);
-      
+
       // Guardar token
       localStorage.setItem("token", res.data.token);
       console.log("✅ Token guardado");
-      
-      // Actualizar estados (esto disparará el useEffect de arriba)
+
+      // Actualizar estados (esto disparará useEffect de permisos y localStorage)
       setUser(userData);
       setUserProfile(userData);
-      
+
       return userData;
     } catch (err) {
       console.error("❌ Error en login:", err);
@@ -127,6 +87,7 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // ========== LOGOUT ==========
   const logout = () => {
     console.log("🚪 Logout");
     localStorage.removeItem("token");
@@ -135,15 +96,16 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("userRole");
     setUser(null);
     setUserProfile(null);
+    setPermisos(null);
   };
 
-  // 🔑 EFECTO: Al cargar la app, verificar token y obtener usuario
+  // ========== VERIFICAR SESIÓN AL CARGAR LA APP ==========
   useEffect(() => {
     const token = localStorage.getItem("token");
-    
+
     console.log("🔍 Verificando sesión al cargar...");
     console.log("Token existe:", token ? "✅ Sí" : "❌ No");
-    
+
     if (!token) {
       console.log("❌ No hay token, usuario no autenticado");
       setLoading(false);
@@ -151,17 +113,21 @@ export function AuthProvider({ children }) {
     }
 
     console.log("📡 Llamando a /auth/me...");
-    
+
     API.get("/auth/me")
       .then((res) => {
-        console.log("✅ /auth/me respondió:", res.data.user.email, res.data.user.rol);
-        
+        console.log(
+          "✅ /auth/me respondió:",
+          res.data.user.email,
+          res.data.user.rol
+        );
+
         const userData = res.data.user;
-        
-        // Actualizar estados (esto disparará el useEffect de guardar)
+
+        // Actualizar estados (esto disparará useEffects)
         setUser(userData);
         setUserProfile(userData);
-        
+
         console.log("✅ Estados actualizados");
       })
       .catch((err) => {
@@ -172,29 +138,35 @@ export function AuthProvider({ children }) {
         localStorage.removeItem("userRole");
         setUser(null);
         setUserProfile(null);
+        setPermisos(null);
       })
       .finally(() => {
         setLoading(false);
       });
   }, []); // Solo una vez al montar
 
+  // ========== VALORES EXPORTADOS ==========
+  const value = {
+    // Estados
+    user,
+    userProfile,
+    permisos, // ← Ahora usa sedeHelper
+    currentUser: user,
+    loading,
+
+    // Métodos
+    login,
+    logout,
+  };
+
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
-        userProfile,
-        permisos,
-        currentUser: user,
-        login, 
-        logout, 
-        loading 
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
 
+// ========== CUSTOM HOOK ==========
 export function useAuth() {
   return useContext(AuthContext);
 }

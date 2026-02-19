@@ -20,6 +20,13 @@ import AdminPanel from "./pages/AdminPanel.jsx";
 import ExcelImport from "./pages/ExcelImport.jsx";
 import NotFound from "./pages/notfound-page.jsx";
 
+// Agregar después de tus otros imports
+import QR from "./pages/QR";
+import MisRegistros from "./pages/MisRegistros";
+import Networking from "./pages/Networking";
+import MiMarca from "./pages/MiMarca";
+import MiSesion from "./pages/MiSesion";
+
 // 🔐 Protección de rutas
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -134,6 +141,13 @@ function AppWithEvent() {
                 </PrivateRoute>
               }
             />
+
+            {/* NUEVOS */}
+            <Route path="/qr" element={<QR />} />
+            <Route path="/mis-registros" element={<MisRegistros />} />
+            <Route path="/networking" element={<Networking />} />
+            <Route path="/mi-marca" element={<MiMarca />} />
+            <Route path="/mi-sesion" element={<MiSesion />} />
 
           </Route>
 

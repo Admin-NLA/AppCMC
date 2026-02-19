@@ -9,10 +9,12 @@ import {
   Phone,
   Mail,
   ExternalLink,
+  Lock,
+  X,
 } from "lucide-react";
 
 export default function Expositores() {
-  const { userProfile } = useAuth();
+  const { userProfile, permisos } = useAuth(); // ← AGREGADO: permisos
 
   const [expositores, setExpositores] = useState([]);
   const [filteredExpositores, setFilteredExpositores] = useState([]);
@@ -21,23 +23,61 @@ export default function Expositores() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filterCategory, setFilterCategory] = useState("todos");
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [accessMessage, setAccessMessage] = useState("");
+
+  // ========================================================
+  // FILTROS: Sede y Edición
+  // ========================================================
+  const [selectedSede, setSelectedSede] = useState("");
+  const [selectedEdicion, setSelectedEdicion] = useState("");
+  const [availableSedes, setAvailableSedes] = useState([]);
+  const [availableEdiciones, setAvailableEdiciones] = useState([]);
+
+  // ========================================================
+  // NUEVO: Validar acceso usando permisos de sedeHelper
+  // ========================================================
+  const validateAccess = () => {
+    if (!permisos) {
+      console.warn("⚠️ Permisos aún no cargados");
+      return false;
+    }
+
+    // Si verExpositores es false, denegar acceso
+    if (!permisos.verExpositores) {
+      setAccessDenied(true);
+      setAccessMessage(
+        `Tu pase (${userProfile?.tipo_pase}) no incluye acceso a Expositores.`
+      );
+      console.warn("❌ Acceso denegado: Usuario sin permiso para ver Expositores");
+      return false;
+    }
+
+    console.log(`✅ Acceso concedido: Expositores visible para ${userProfile?.tipo_pase}`);
+    return true;
+  };
 
   // ========================================================
   // Cargar expositores al montar el componente
   // ========================================================
   useEffect(() => {
+    if (!validateAccess()) {
+      setLoading(false);
+      return;
+    }
+
     loadExpositores();
-  }, []);
+  }, [permisos, userProfile]);
 
   // ========================================================
   // Filtrar expositores cuando cambia búsqueda o categoría
   // ========================================================
   useEffect(() => {
     filterExpositores();
-  }, [searchTerm, filterCategory, expositores]);
+  }, [searchTerm, filterCategory, expositores, selectedSede, selectedEdicion]);
 
   // ========================================================
-  // CARGAR EXPOSITORES DESDE API
+  // CARGAR EXPOSITORES DESDE API CON FILTROS
   // ========================================================
   const loadExpositores = async () => {
     try {
@@ -46,17 +86,37 @@ export default function Expositores() {
 
       console.log("🏢 Cargando expositores...");
 
-      // ✅ USAR API INSTANCE DIRECTAMENTE
-      const res = await API.get("/expositores");
+      const params = new URLSearchParams();
 
-      console.log("🏢 Response tipo:", typeof res.data);
-      console.log("🏢 Es array?", Array.isArray(res.data));
-      console.log("🏢 Primeras 3 items:", res.data.slice(0, 3));
+      // Aplicar filtro de sede si el usuario tiene filtraSede = true
+      if (permisos?.filtraSede && userProfile?.sede) {
+        params.append("sede", userProfile.sede);
+      }
 
-      // ✅ Validar que es un array
+      // Aplicar filtro de edición si el usuario tiene filtraEdicion = true
+      if (permisos?.filtraEdicion && userProfile?.edicion) {
+        params.append("edicion", userProfile.edicion);
+      }
+
+      if (selectedSede) params.append("sede", selectedSede);
+      if (selectedEdicion) params.append("edicion", selectedEdicion);
+
+      const queryString = params.toString();
+      const url = `/expositores${queryString ? `?${queryString}` : ""}`;
+
+      console.log("🔗 URL:", url);
+
+      const res = await API.get(url);
+
       const expositoresData = Array.isArray(res.data) ? res.data : [];
 
       console.log(`✅ ${expositoresData.length} expositores cargados`);
+
+      const sedes = [...new Set(expositoresData.map((e) => e.sede).filter(Boolean))];
+      setAvailableSedes(sedes.sort());
+
+      const ediciones = [...new Set(expositoresData.map((e) => e.edicion).filter(Boolean))];
+      setAvailableEdiciones(ediciones.sort());
 
       setExpositores(expositoresData);
 
@@ -70,7 +130,16 @@ export default function Expositores() {
   };
 
   // ========================================================
-  // FILTRAR EXPOSITORES POR BÚSQUEDA Y CATEGORÍA
+  // Recargar cuando cambian filtros sede/edición
+  // ========================================================
+  useEffect(() => {
+    if (!accessDenied && userProfile) {
+      loadExpositores();
+    }
+  }, [selectedSede, selectedEdicion]);
+
+  // ========================================================
+  // FILTRAR EXPOSITORES POR BÚSQUEDA, CATEGORÍA, SEDE Y EDICIÓN
   // ========================================================
   const filterExpositores = () => {
     console.log("🔍 Filtrando expositores. Término:", searchTerm, "Categoría:", filterCategory, "Total:", expositores.length);
@@ -96,6 +165,24 @@ export default function Expositores() {
       filtered = filtered.filter((e) => e.categoria?.toLowerCase() === categoryLower);
     }
 
+    // Filtro por sede seleccionado
+    if (selectedSede) {
+      filtered = filtered.filter((e) => e.sede === selectedSede);
+    }
+
+    // Filtro por edición seleccionado
+    if (selectedEdicion) {
+      filtered = filtered.filter((e) => e.edicion === selectedEdicion);
+    }
+
+    // ========================================================
+    // ESPECIAL: Si es EXPOSITOR, mostrar SOLO su fila
+    // ========================================================
+    if (userProfile?.rol === "expositor") {
+      filtered = filtered.filter((e) => e.usuario_id === userProfile.id);
+      console.log(`🔐 Expositor ${userProfile.nombre}: mostrando SOLO su fila`);
+    }
+
     console.log("📌 Expositores filtrados:", filtered.length);
     setFilteredExpositores(filtered);
   };
@@ -119,6 +206,32 @@ export default function Expositores() {
     );
   }
 
+  if (!permisos) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        Cargando permisos…
+      </div>
+    );
+  }
+
+  // ❌ ACCESO DENEGADO
+  if (accessDenied) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-blue-50 border border-blue-200 p-6 rounded-lg flex gap-4">
+          <Lock className="text-blue-600 flex-shrink-0 mt-1" size={24} />
+          <div>
+            <h2 className="text-lg font-bold text-blue-900 mb-2">Acceso Limitado</h2>
+            <p className="text-blue-800 mb-4">{accessMessage}</p>
+            <p className="text-sm text-blue-700">
+              Solo Asistentes de Sesiones, Combo, Expositores y Speakers pueden ver esta sección.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -133,9 +246,16 @@ export default function Expositores() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Expositores del Evento</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Expositores del Evento</h1>
+          {userProfile?.rol === "expositor" && (
+            <p className="text-gray-600 text-sm mt-1">
+              Mostrando tu información de expositor
+            </p>
+          )}
+        </div>
         <span className="text-sm text-gray-500">
-          {expositores.length} expositores totales
+          {filteredExpositores.length} {userProfile?.rol === "expositor" ? "expositor" : "expositores"}
         </span>
       </div>
 
@@ -164,8 +284,45 @@ export default function Expositores() {
           />
         </div>
 
-        {/* Filtro por categoría */}
-        {categories.length > 0 && (
+        {/* Filtros Sede y Edición */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Filtro Sede */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Sede</label>
+            <select
+              value={selectedSede}
+              onChange={(e) => setSelectedSede(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todas las sedes</option>
+              {availableSedes.map((sede) => (
+                <option key={sede} value={sede}>
+                  {sede.charAt(0).toUpperCase() + sede.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro Edición */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Edición</label>
+            <select
+              value={selectedEdicion}
+              onChange={(e) => setSelectedEdicion(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todas las ediciones</option>
+              {availableEdiciones.map((edicion) => (
+                <option key={edicion} value={edicion}>
+                  {edicion}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Filtro por categoría - SOLO SI NO ES EXPOSITOR */}
+        {userProfile?.rol !== "expositor" && categories.length > 0 && (
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setFilterCategory("todos")}
@@ -192,38 +349,35 @@ export default function Expositores() {
             ))}
           </div>
         )}
-      </div>
 
-      {/* Debug info */}
-      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-4 text-sm">
-        <div className="flex items-start gap-2">
-          <AlertCircle size={20} className="text-blue-600 mt-0.5" />
-          <div>
-            <p className="font-semibold text-blue-900 mb-1">Información de depuración:</p>
-            <p className="text-blue-800">
-              <strong>Total expositores cargados:</strong> {expositores.length}
+        {/* Info de filtros activos */}
+        {(searchTerm || selectedSede || selectedEdicion || filterCategory !== "todos") && (
+          <div className="text-sm text-gray-600">
+            <p>
+              Filtros activos:{" "}
+              {searchTerm && (
+                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-2">
+                  Búsqueda: "{searchTerm}"
+                </span>
+              )}
+              {selectedSede && (
+                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-2">
+                  Sede: {selectedSede}
+                </span>
+              )}
+              {selectedEdicion && (
+                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-2">
+                  Edición: {selectedEdicion}
+                </span>
+              )}
+              {filterCategory !== "todos" && (
+                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                  Categoría: {filterCategory}
+                </span>
+              )}
             </p>
-            <p className="text-blue-800">
-              <strong>Búsqueda actual:</strong> "{searchTerm || 'ninguna'}"
-            </p>
-            <p className="text-blue-800">
-              <strong>Categoría:</strong> {filterCategory}
-            </p>
-            <p className="text-blue-800">
-              <strong>Expositores mostrados:</strong> {filteredExpositores.length}
-            </p>
-            {expositores.length > 0 && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-blue-700 hover:text-blue-900">
-                  Ver estructura de primer expositor
-                </summary>
-                <pre className="mt-2 p-2 bg-white rounded text-xs overflow-auto max-h-48">
-                  {JSON.stringify(expositores[0], null, 2)}
-                </pre>
-              </details>
-            )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Grid de expositores */}
@@ -234,13 +388,17 @@ export default function Expositores() {
             <p className="text-gray-600 font-medium mb-2">
               {expositores.length === 0
                 ? "No hay expositores disponibles"
-                : `No se encontraron expositores para "${searchTerm || filterCategory}"`}
+                : userProfile?.rol === "expositor"
+                ? "Tu información de expositor no está disponible"
+                : `No se encontraron expositores para "${searchTerm || filterCategory || selectedSede || selectedEdicion}"`}
             </p>
-            {expositores.length > 0 && (searchTerm || filterCategory !== "todos") && (
+            {expositores.length > 0 && (searchTerm || filterCategory !== "todos" || selectedSede || selectedEdicion) && (
               <button
                 onClick={() => {
                   setSearchTerm("");
                   setFilterCategory("todos");
+                  setSelectedSede("");
+                  setSelectedEdicion("");
                 }}
                 className="mt-3 text-blue-600 hover:text-blue-700 underline"
               >
@@ -254,6 +412,7 @@ export default function Expositores() {
               key={expositor.id}
               expositor={expositor}
               onViewDetails={() => setSelectedExpositor(expositor)}
+              isOwn={userProfile?.rol === "expositor" && expositor.usuario_id === userProfile.id}
             />
           ))
         )}
@@ -264,6 +423,7 @@ export default function Expositores() {
         <ExpositorModal
           expositor={selectedExpositor}
           onClose={() => setSelectedExpositor(null)}
+          isOwn={userProfile?.rol === "expositor" && selectedExpositor.usuario_id === userProfile.id}
         />
       )}
     </div>
@@ -273,12 +433,19 @@ export default function Expositores() {
 // ========================================================
 // TARJETA DE EXPOSITOR
 // ========================================================
-function ExpositorCard({ expositor, onViewDetails }) {
+function ExpositorCard({ expositor, onViewDetails, isOwn }) {
   return (
     <div
-      className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition cursor-pointer h-full flex flex-col"
+      className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition cursor-pointer h-full flex flex-col relative"
       onClick={onViewDetails}
     >
+      {/* Badge propio para expositor */}
+      {isOwn && (
+        <div className="absolute top-2 right-2 bg-blue-400 text-white px-3 py-1 rounded-full text-xs font-bold z-10">
+          🏢 TU EXPOSITOR
+        </div>
+      )}
+
       {/* Logo */}
       <div className="w-full h-40 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center overflow-hidden">
         {expositor.logo_url ? (
@@ -325,14 +492,19 @@ function ExpositorCard({ expositor, onViewDetails }) {
           </p>
         )}
 
-        {/* Tags: sede */}
-        {expositor.sede && (
-          <div className="mb-4">
+        {/* Tags: sede y edición */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {expositor.sede && (
             <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
               {expositor.sede.toUpperCase()}
             </span>
-          </div>
-        )}
+          )}
+          {expositor.edicion && (
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+              {expositor.edicion}
+            </span>
+          )}
+        </div>
 
         {/* Enlaces */}
         <div className="flex gap-2 border-t pt-3">
@@ -377,7 +549,7 @@ function ExpositorCard({ expositor, onViewDetails }) {
 // ========================================================
 // MODAL DE DETALLES DEL EXPOSITOR
 // ========================================================
-function ExpositorModal({ expositor, onClose }) {
+function ExpositorModal({ expositor, onClose, isOwn }) {
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
@@ -408,12 +580,19 @@ function ExpositorModal({ expositor, onClose }) {
               </div>
             )}
 
+            {/* Badge propio */}
+            {isOwn && (
+              <div className="absolute top-4 right-4 bg-blue-400 text-white px-4 py-2 rounded-full font-bold flex items-center gap-2">
+                🏢 TU EXPOSITOR
+              </div>
+            )}
+
             {/* Botón cerrar */}
             <button
               onClick={onClose}
               className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-lg transition"
             >
-              ✕
+              <X size={24} />
             </button>
           </div>
 
