@@ -1,6 +1,6 @@
 // cmc-backend/cron/notificacionesCron.js
 import pool from "../db.js";
-import { sendSSE } from "../routes/notificaciones.routes.js";
+import { sendSSE } from "../routes/notificaciones.js";
 
 export async function procesarNotificacionesProgramadas() {
   try {
