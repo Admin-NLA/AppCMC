@@ -133,56 +133,6 @@ export default function Header() {
           <div className="hidden md:flex items-center gap-4">
             {userProfile ? (
               <>
-                {/* Notificaciones Desktop */}
-                <div className="relative">
-                  <button
-                    onClick={() => setNotificationsOpen(!notificationsOpen)}
-                    className="relative p-2 hover:bg-blue-700 rounded-lg transition"
-                    title="Notificaciones"
-                  >
-                    <Bell size={20} />
-                    {unreadCount > 0 && (
-                      <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Dropdown de Notificaciones */}
-                  {notificationsOpen && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white text-gray-800 rounded-lg shadow-xl z-50">
-                      <div className="p-4 border-b border-gray-200">
-                        <h3 className="font-bold text-lg">Notificaciones</h3>
-                      </div>
-                      <div className="max-h-96 overflow-y-auto">
-                        {notifications.length === 0 ? (
-                          <div className="p-4 text-center text-gray-500">
-                            No hay notificaciones
-                          </div>
-                        ) : (
-                          notifications.map((notif) => (
-                            <div
-                              key={notif.id}
-                              className={`p-4 border-b last:border-b-0 cursor-pointer hover:bg-gray-50 transition ${
-                                !notif.read ? "bg-blue-50" : ""
-                              }`}
-                            >
-                              <p className="font-semibold text-sm">{notif.title}</p>
-                              <p className="text-xs text-gray-600 mt-1">{notif.message}</p>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                      <button
-                        onClick={() => setNotificationsOpen(false)}
-                        className="w-full p-2 text-center text-blue-600 text-sm font-semibold hover:bg-gray-50 border-t"
-                      >
-                        Ver todas
-                      </button>
-                    </div>
-                  )}
-                </div>
-
                 {/* Perfil Desktop */}
                 <div className="flex items-center gap-2 bg-blue-700 rounded-lg px-3 py-1.5">
                   <User size={16} />

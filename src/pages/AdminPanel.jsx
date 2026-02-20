@@ -27,9 +27,12 @@ export default function AdminPanel() {
   // Tabs del panel
   const [activeTab, setActiveTab] = useState("sesiones");
 
-  // Estados para Sesiones
+  // ========================================================
+  // SESIONES: Estados
+  // ========================================================
   const [sessions, setSessions] = useState([]);
   const [showSessionForm, setShowSessionForm] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState(null);
   const [sessionFormData, setSessionFormData] = useState({
     titulo: "",
     descripcion: "",
@@ -42,9 +45,12 @@ export default function AdminPanel() {
     edicion: 2025,
   });
 
-  // Estados para Expositores
+  // ========================================================
+  // EXPOSITORES: Estados
+  // ========================================================
   const [expositores, setExpositores] = useState([]);
   const [showExpositorForm, setShowExpositorForm] = useState(false);
+  const [editingExpositorId, setEditingExpositorId] = useState(null);
   const [expositorFormData, setExpositorFormData] = useState({
     nombre: "",
     logo_url: "",
@@ -114,7 +120,7 @@ export default function AdminPanel() {
   }, [activeTab]);
 
   // ========================================================
-  // SESIONES
+  // SESIONES: CARGAR
   // ========================================================
   const loadSessions = async () => {
     try {
@@ -126,18 +132,30 @@ export default function AdminPanel() {
     }
   };
 
+  // ========================================================
+  // SESIONES: CREAR O ACTUALIZAR
+  // ========================================================
   const handleSessionSubmit = async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
       setError(null);
 
-      console.log("📝 Creando sesión:", sessionFormData);
+      console.log("📝 Sesión:", sessionFormData);
 
-      await API.post("/agenda/sessions", sessionFormData);
+      if (editingSessionId) {
+        // ACTUALIZAR
+        console.log("✏️ Actualizando sesión:", editingSessionId);
+        await API.put(`/agenda/sessions/${editingSessionId}`, sessionFormData);
+      } else {
+        // CREAR
+        console.log("📝 Creando sesión");
+        await API.post("/agenda/sessions", sessionFormData);
+      }
 
       setSuccess(true);
       setShowSessionForm(false);
+      setEditingSessionId(null);
       setSessionFormData({
         titulo: "",
         descripcion: "",
@@ -154,14 +172,55 @@ export default function AdminPanel() {
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError(err.response?.data?.error || err.message);
-      console.error("Error al crear sesión:", err);
+      console.error("Error en sesión:", err);
     } finally {
       setLoading(false);
     }
   };
 
   // ========================================================
-  // EXPOSITORES
+  // SESIONES: EDITAR (abrir formulario)
+  // ========================================================
+  const handleEditSession = (session) => {
+    setEditingSessionId(session.id);
+    setSessionFormData({
+      titulo: session.titulo || "",
+      descripcion: session.descripcion || "",
+      dia: session.dia || "",
+      horaInicio: session.horaInicio || "",
+      horaFin: session.horaFin || "",
+      sala: session.sala || "",
+      tipo: session.tipo || "conferencia",
+      sede: session.sede || "chile",
+      edicion: session.edicion || 2025,
+    });
+    setShowSessionForm(true);
+    setError(null);
+  };
+
+  // ========================================================
+  // SESIONES: ELIMINAR
+  // ========================================================
+  const handleDeleteSession = async (sessionId) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar esta sesión?")) return;
+
+    try {
+      setLoading(true);
+      console.log("🗑️ Eliminando sesión:", sessionId);
+      await API.delete(`/agenda/sessions/${sessionId}`);
+      setSuccess(true);
+      loadSessions();
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+      console.error("Error eliminando sesión:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ========================================================
+  // EXPOSITORES: CARGAR
   // ========================================================
   const loadExpositores = async () => {
     try {
@@ -173,13 +232,16 @@ export default function AdminPanel() {
     }
   };
 
+  // ========================================================
+  // EXPOSITORES: CREAR O ACTUALIZAR
+  // ========================================================
   const handleExpositorSubmit = async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
       setError(null);
 
-      console.log("📝 Creando expositor:", expositorFormData);
+      console.log("📝 Expositor:", expositorFormData);
 
       if (!expositorFormData.nombre || !expositorFormData.categoria) {
         setError("Nombre y categoría son requeridos");
@@ -187,10 +249,19 @@ export default function AdminPanel() {
         return;
       }
 
-      await API.post("/expositores", expositorFormData);
+      if (editingExpositorId) {
+        // ACTUALIZAR
+        console.log("✏️ Actualizando expositor:", editingExpositorId);
+        await API.put(`/expositores/${editingExpositorId}`, expositorFormData);
+      } else {
+        // CREAR
+        console.log("📝 Creando expositor");
+        await API.post("/expositores", expositorFormData);
+      }
 
       setSuccess(true);
       setShowExpositorForm(false);
+      setEditingExpositorId(null);
       setExpositorFormData({
         nombre: "",
         logo_url: "",
@@ -207,7 +278,48 @@ export default function AdminPanel() {
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError(err.response?.data?.error || err.message);
-      console.error("Error al crear expositor:", err);
+      console.error("Error en expositor:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ========================================================
+  // EXPOSITORES: EDITAR (abrir formulario)
+  // ========================================================
+  const handleEditExpositor = (expositor) => {
+    setEditingExpositorId(expositor.id);
+    setExpositorFormData({
+      nombre: expositor.nombre || "",
+      logo_url: expositor.logo_url || "",
+      website: expositor.website || "",
+      telefono: expositor.telefono || "",
+      email: expositor.email || "",
+      categoria: expositor.categoria || "",
+      stand: expositor.stand || "",
+      descripcion: expositor.descripcion || "",
+      sede: expositor.sede || "chile",
+    });
+    setShowExpositorForm(true);
+    setError(null);
+  };
+
+  // ========================================================
+  // EXPOSITORES: ELIMINAR
+  // ========================================================
+  const handleDeleteExpositor = async (expositorId) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar este expositor?")) return;
+
+    try {
+      setLoading(true);
+      console.log("🗑️ Eliminando expositor:", expositorId);
+      await API.delete(`/expositores/${expositorId}`);
+      setSuccess(true);
+      loadExpositores();
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+      console.error("Error eliminando expositor:", err);
     } finally {
       setLoading(false);
     }
@@ -460,7 +572,11 @@ export default function AdminPanel() {
       {/* Tabs */}
       <div className="flex gap-2 mb-6 flex-wrap overflow-x-auto">
         <button
-          onClick={() => setActiveTab("sesiones")}
+          onClick={() => {
+            setActiveTab("sesiones");
+            setShowSessionForm(false);
+            setEditingSessionId(null);
+          }}
           className={`px-4 py-2 rounded-lg font-semibold transition whitespace-nowrap ${
             activeTab === "sesiones"
               ? "bg-blue-600 text-white"
@@ -470,7 +586,11 @@ export default function AdminPanel() {
           📅 Sesiones
         </button>
         <button
-          onClick={() => setActiveTab("expositores")}
+          onClick={() => {
+            setActiveTab("expositores");
+            setShowExpositorForm(false);
+            setEditingExpositorId(null);
+          }}
           className={`px-4 py-2 rounded-lg font-semibold transition whitespace-nowrap ${
             activeTab === "expositores"
               ? "bg-blue-600 text-white"
@@ -511,7 +631,263 @@ export default function AdminPanel() {
 
       {/* Contenido de cada tab */}
       <div className="bg-white p-6 rounded-lg">
-        {/* USUARIOS - TAB ACTUALIZADO CON EDIT/DELETE */}
+        {/* ========================================================
+            SESIONES
+            ======================================================== */}
+        {activeTab === "sesiones" && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">
+                {editingSessionId ? "✏️ Editar Sesión" : "Sesiones"}
+              </h2>
+              <button
+                onClick={() => {
+                  if (editingSessionId) {
+                    setEditingSessionId(null);
+                    setSessionFormData({
+                      titulo: "",
+                      descripcion: "",
+                      dia: "",
+                      horaInicio: "",
+                      horaFin: "",
+                      sala: "",
+                      tipo: "conferencia",
+                      sede: "chile",
+                      edicion: 2025,
+                    });
+                  }
+                  setShowSessionForm(!showSessionForm);
+                }}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                <Plus size={18} />
+                {editingSessionId ? "Cancelar Edición" : "Nueva Sesión"}
+              </button>
+            </div>
+
+            {showSessionForm && (
+              <SessionForm
+                formData={sessionFormData}
+                onChange={(e) =>
+                  setSessionFormData({
+                    ...sessionFormData,
+                    [e.target.name]: e.target.value,
+                  })
+                }
+                onSubmit={handleSessionSubmit}
+                onCancel={() => {
+                  setShowSessionForm(false);
+                  setEditingSessionId(null);
+                  setSessionFormData({
+                    titulo: "",
+                    descripcion: "",
+                    dia: "",
+                    horaInicio: "",
+                    horaFin: "",
+                    sala: "",
+                    tipo: "conferencia",
+                    sede: "chile",
+                    edicion: 2025,
+                  });
+                }}
+                loading={loading}
+                isEditing={!!editingSessionId}
+              />
+            )}
+
+            <div className="mt-6 space-y-4">
+              {sessions.length === 0 ? (
+                <p className="text-gray-500">No hay sesiones registradas</p>
+              ) : (
+                sessions.map((session) => (
+                  <div key={session.id} className="border p-4 rounded-lg hover:shadow-lg transition flex justify-between items-start">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg">{session.titulo}</h3>
+                      <p className="text-gray-600 text-sm">{session.descripcion}</p>
+                      <div className="mt-2 text-sm text-gray-500">
+                        {session.dia} | {session.horaInicio} - {session.horaFin} | {session.sala}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <button
+                        onClick={() => handleEditSession(session)}
+                        className="text-blue-600 hover:text-blue-800 p-2 transition"
+                        title="Editar"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSession(session.id)}
+                        className="text-red-600 hover:text-red-800 p-2 transition"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            EXPOSITORES
+            ======================================================== */}
+        {activeTab === "expositores" && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">
+                {editingExpositorId ? "✏️ Editar Expositor" : "Expositores"}
+              </h2>
+              <button
+                onClick={() => {
+                  if (editingExpositorId) {
+                    setEditingExpositorId(null);
+                    setExpositorFormData({
+                      nombre: "",
+                      logo_url: "",
+                      website: "",
+                      telefono: "",
+                      email: "",
+                      categoria: "",
+                      stand: "",
+                      descripcion: "",
+                      sede: "chile",
+                    });
+                  }
+                  setShowExpositorForm(!showExpositorForm);
+                }}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                <Plus size={18} />
+                {editingExpositorId ? "Cancelar Edición" : "Nuevo Expositor"}
+              </button>
+            </div>
+
+            {showExpositorForm && (
+              <ExpositorForm
+                formData={expositorFormData}
+                onChange={(e) =>
+                  setExpositorFormData({
+                    ...expositorFormData,
+                    [e.target.name]: e.target.value,
+                  })
+                }
+                onSubmit={handleExpositorSubmit}
+                onCancel={() => {
+                  setShowExpositorForm(false);
+                  setEditingExpositorId(null);
+                  setExpositorFormData({
+                    nombre: "",
+                    logo_url: "",
+                    website: "",
+                    telefono: "",
+                    email: "",
+                    categoria: "",
+                    stand: "",
+                    descripcion: "",
+                    sede: "chile",
+                  });
+                }}
+                loading={loading}
+                isEditing={!!editingExpositorId}
+              />
+            )}
+
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {expositores.length === 0 ? (
+                <p className="text-gray-500">No hay expositores registrados</p>
+              ) : (
+                expositores.map((expositor) => (
+                  <div key={expositor.id} className="border p-4 rounded-lg hover:shadow-lg transition">
+                    {expositor.logo_url && (
+                      <img
+                        src={expositor.logo_url}
+                        alt={expositor.nombre}
+                        className="w-full h-24 object-cover rounded mb-2"
+                      />
+                    )}
+                    <h3 className="font-bold text-lg">{expositor.nombre}</h3>
+                    <p className="text-sm text-gray-600">{expositor.categoria}</p>
+                    <p className="text-sm text-gray-500 line-clamp-2">{expositor.descripcion}</p>
+                    
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => handleEditExpositor(expositor)}
+                        className="flex-1 text-blue-600 hover:text-blue-800 p-2 transition flex items-center justify-center gap-1"
+                        title="Editar"
+                      >
+                        <Edit2 size={16} />
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteExpositor(expositor.id)}
+                        className="flex-1 text-red-600 hover:text-red-800 p-2 transition flex items-center justify-center gap-1"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={16} />
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            NOTIFICACIONES (igual que antes)
+            ======================================================== */}
+        {activeTab === "notificaciones" && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Notificaciones</h2>
+              <button
+                onClick={() => setShowNotificationForm(!showNotificationForm)}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                <Plus size={18} />
+                Nueva Notificación
+              </button>
+            </div>
+
+            {showNotificationForm && (
+              <NotificationForm
+                formData={notificationFormData}
+                onChange={(e) =>
+                  setNotificationFormData({
+                    ...notificationFormData,
+                    [e.target.name]: e.target.value,
+                  })
+                }
+                onUserSelect={(userId) => {
+                  if (notificationFormData.usuarios.includes(userId)) {
+                    setNotificationFormData({
+                      ...notificationFormData,
+                      usuarios: notificationFormData.usuarios.filter((id) => id !== userId),
+                    });
+                  } else {
+                    setNotificationFormData({
+                      ...notificationFormData,
+                      usuarios: [...notificationFormData.usuarios, userId],
+                    });
+                  }
+                }}
+                onSubmit={handleNotificationSubmit}
+                onCancel={() => setShowNotificationForm(false)}
+                users={users}
+                loading={notificationLoading}
+                error={notificationError}
+              />
+            )}
+          </div>
+        )}
+
+        {/* ========================================================
+            USUARIOS (igual que antes, ya tiene edit/delete)
+            ======================================================== */}
         {activeTab === "usuarios" && (
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -621,155 +997,10 @@ export default function AdminPanel() {
             </div>
           </div>
         )}
-
-        {/* SESIONES */}
-        {activeTab === "sesiones" && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">Sesiones</h2>
-              <button
-                onClick={() => setShowSessionForm(!showSessionForm)}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-              >
-                <Plus size={18} />
-                Nueva Sesión
-              </button>
-            </div>
-
-            {showSessionForm && (
-              <SessionForm
-                formData={sessionFormData}
-                onChange={(e) =>
-                  setSessionFormData({
-                    ...sessionFormData,
-                    [e.target.name]: e.target.value,
-                  })
-                }
-                onSubmit={handleSessionSubmit}
-                onCancel={() => setShowSessionForm(false)}
-                loading={loading}
-              />
-            )}
-
-            <div className="mt-6 space-y-4">
-              {sessions.length === 0 ? (
-                <p className="text-gray-500">No hay sesiones registradas</p>
-              ) : (
-                sessions.map((session) => (
-                  <div key={session.id} className="border p-4 rounded-lg hover:shadow-lg transition">
-                    <h3 className="font-bold text-lg">{session.titulo}</h3>
-                    <p className="text-gray-600 text-sm">{session.descripcion}</p>
-                    <div className="mt-2 text-sm text-gray-500">
-                      {session.dia} | {session.horaInicio} - {session.horaFin} | {session.sala}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* EXPOSITORES */}
-        {activeTab === "expositores" && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">Expositores</h2>
-              <button
-                onClick={() => setShowExpositorForm(!showExpositorForm)}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-              >
-                <Plus size={18} />
-                Nuevo Expositor
-              </button>
-            </div>
-
-            {showExpositorForm && (
-              <ExpositorForm
-                formData={expositorFormData}
-                onChange={(e) =>
-                  setExpositorFormData({
-                    ...expositorFormData,
-                    [e.target.name]: e.target.value,
-                  })
-                }
-                onSubmit={handleExpositorSubmit}
-                onCancel={() => setShowExpositorForm(false)}
-                loading={loading}
-              />
-            )}
-
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {expositores.length === 0 ? (
-                <p className="text-gray-500">No hay expositores registrados</p>
-              ) : (
-                expositores.map((expositor) => (
-                  <div key={expositor.id} className="border p-4 rounded-lg hover:shadow-lg transition">
-                    {expositor.logo_url && (
-                      <img
-                        src={expositor.logo_url}
-                        alt={expositor.nombre}
-                        className="w-full h-24 object-cover rounded mb-2"
-                      />
-                    )}
-                    <h3 className="font-bold text-lg">{expositor.nombre}</h3>
-                    <p className="text-sm text-gray-600">{expositor.categoria}</p>
-                    <p className="text-sm text-gray-500">{expositor.descripcion}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* NOTIFICACIONES */}
-        {activeTab === "notificaciones" && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">Notificaciones</h2>
-              <button
-                onClick={() => setShowNotificationForm(!showNotificationForm)}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-              >
-                <Plus size={18} />
-                Nueva Notificación
-              </button>
-            </div>
-
-            {showNotificationForm && (
-              <NotificationForm
-                formData={notificationFormData}
-                onChange={(e) =>
-                  setNotificationFormData({
-                    ...notificationFormData,
-                    [e.target.name]: e.target.value,
-                  })
-                }
-                onUserSelect={(userId) => {
-                  if (notificationFormData.usuarios.includes(userId)) {
-                    setNotificationFormData({
-                      ...notificationFormData,
-                      usuarios: notificationFormData.usuarios.filter((id) => id !== userId),
-                    });
-                  } else {
-                    setNotificationFormData({
-                      ...notificationFormData,
-                      usuarios: [...notificationFormData.usuarios, userId],
-                    });
-                  }
-                }}
-                onSubmit={handleNotificationSubmit}
-                onCancel={() => setShowNotificationForm(false)}
-                users={users}
-                loading={notificationLoading}
-                error={notificationError}
-              />
-            )}
-          </div>
-        )}
       </div>
 
       {/* ========================================================
-          MODAL DE EDICIÓN
+          MODAL DE EDICIÓN DE USUARIO
           ======================================================== */}
       {showEditModal && editingUserData && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -977,13 +1208,15 @@ export default function AdminPanel() {
 }
 
 // ========================================================
-// COMPONENTES DE FORMULARIO
+// FORMULARIOS
 // ========================================================
 
-function SessionForm({ formData, onChange, onSubmit, onCancel, loading }) {
+function SessionForm({ formData, onChange, onSubmit, onCancel, loading, isEditing }) {
   return (
-    <form onSubmit={onSubmit} className="bg-white p-6 rounded-lg shadow-md space-y-4 mb-6">
-      <h3 className="text-xl font-bold">Nueva Sesión</h3>
+    <form onSubmit={onSubmit} className="bg-white p-6 rounded-lg shadow-md space-y-4 mb-6 border-l-4 border-blue-600">
+      <h3 className="text-xl font-bold">
+        {isEditing ? "✏️ Editar Sesión" : "Nueva Sesión"}
+      </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <input
@@ -1052,7 +1285,7 @@ function SessionForm({ formData, onChange, onSubmit, onCancel, loading }) {
           className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
         >
           <Save size={18} />
-          {loading ? "Guardando..." : "Guardar"}
+          {loading ? "Guardando..." : isEditing ? "Guardar Cambios" : "Guardar"}
         </button>
         <button
           type="button"
@@ -1066,10 +1299,12 @@ function SessionForm({ formData, onChange, onSubmit, onCancel, loading }) {
   );
 }
 
-function ExpositorForm({ formData, onChange, onSubmit, onCancel, loading }) {
+function ExpositorForm({ formData, onChange, onSubmit, onCancel, loading, isEditing }) {
   return (
-    <form onSubmit={onSubmit} className="bg-white p-6 rounded-lg shadow-md space-y-4 mb-6">
-      <h3 className="text-xl font-bold">Nuevo Expositor</h3>
+    <form onSubmit={onSubmit} className="bg-white p-6 rounded-lg shadow-md space-y-4 mb-6 border-l-4 border-green-600">
+      <h3 className="text-xl font-bold">
+        {isEditing ? "✏️ Editar Expositor" : "Nuevo Expositor"}
+      </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <input
@@ -1151,7 +1386,7 @@ function ExpositorForm({ formData, onChange, onSubmit, onCancel, loading }) {
           className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
         >
           <Save size={18} />
-          {loading ? "Guardando..." : "Guardar"}
+          {loading ? "Guardando..." : isEditing ? "Guardar Cambios" : "Guardar"}
         </button>
         <button
           type="button"
