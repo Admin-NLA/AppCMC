@@ -1,0 +1,156 @@
+import express from 'express';
+import pool from '../db.js';
+import { authRequired } from '../utils/authMiddleware.js';
+
+const router = express.Router();
+
+/**
+ * GET /api/mi-marca
+ * Obtener visitantes registrados por el expositor
+ */
+router.get('/', authRequired, async (req, res) => {
+  try {
+    const { expositor_id, sede, edicion } = req.query;
+
+    // ✅ Seguridad: Solo el expositor o admin/super_admin puede ver
+    if (req.user.rol !== 'super_admin' && req.user.rol !== 'admin' && req.user.id !== parseInt(expositor_id)) {
+      return res.status(403).json({ 
+        ok: false,
+        error: 'No autorizado' 
+      });
+    }
+
+    let query = `
+      SELECT 
+        id, 
+        nombre, 
+        email, 
+        empresa, 
+        cargo, 
+        telefono, 
+        expositor_id, 
+        fecha, 
+        dia, 
+        sede, 
+        edicion, 
+        created_at
+      FROM visitantes
+      WHERE expositor_id = $1
+    `;
+    const params = [expositor_id];
+    let paramIndex = 2;
+
+    if (sede) {
+      query += ` AND sede = $${paramIndex}`;
+      params.push(sede);
+      paramIndex++;
+    }
+
+    if (edicion) {
+      query += ` AND edicion = $${paramIndex}`;
+      params.push(edicion);
+      paramIndex++;
+    }
+
+    query += ' ORDER BY fecha DESC';
+
+    const result = await pool.query(query, params);
+    const visitantes = result.rows;
+
+    // Calcular estadísticas
+    const hoy = new Date().toDateString();
+    const stats = {
+      total: visitantes.length,
+      hoy: visitantes.filter(v => new Date(v.fecha).toDateString() === hoy).length,
+      por_dia: {}
+    };
+
+    res.json({
+      ok: true,
+      visitantes,
+      stats
+    });
+
+  } catch (err) {
+    console.error('❌ Error en GET /mi-marca:', err.message);
+    res.status(500).json({ 
+      ok: false,
+      error: 'Error interno del servidor' 
+    });
+  }
+});
+
+/**
+ * POST /api/mi-marca/visitante
+ * Registrar nuevo visitante
+ */
+router.post('/visitante', authRequired, async (req, res) => {
+  try {
+    const { nombre, email, empresa, cargo, telefono, expositor_id } = req.body;
+
+    // ✅ Seguridad: Solo el expositor o admin/super_admin puede registrar
+    if (req.user.rol !== 'super_admin' && req.user.rol !== 'admin' && req.user.id !== parseInt(expositor_id)) {
+      return res.status(403).json({ 
+        ok: false,
+        error: 'No autorizado' 
+      });
+    }
+
+    // Validar datos requeridos
+    if (!nombre || !expositor_id) {
+      return res.status(400).json({ 
+        ok: false,
+        error: 'Nombre y expositor_id requeridos' 
+      });
+    }
+
+    const fecha = new Date();
+    const dia = fecha.getDay(); // 0-6 (domingo-sábado)
+
+    const result = await pool.query(
+      `INSERT INTO visitantes (
+        id, 
+        nombre, 
+        email, 
+        empresa, 
+        cargo, 
+        telefono, 
+        expositor_id, 
+        fecha, 
+        dia, 
+        created_at
+      )
+      VALUES (
+        gen_random_uuid(),
+        $1, $2, $3, $4, $5, $6, $7, $8, $9
+      )
+      RETURNING *`,
+      [
+        nombre, 
+        email || null, 
+        empresa || null, 
+        cargo || null, 
+        telefono || null, 
+        expositor_id, 
+        fecha, 
+        dia, 
+        fecha
+      ]
+    );
+
+    res.status(201).json({
+      ok: true,
+      visitante: result.rows[0],
+      message: 'Visitante registrado exitosamente'
+    });
+
+  } catch (err) {
+    console.error('❌ Error en POST /mi-marca/visitante:', err.message);
+    res.status(500).json({ 
+      ok: false,
+      error: 'Error interno del servidor' 
+    });
+  }
+});
+
+export default router;
