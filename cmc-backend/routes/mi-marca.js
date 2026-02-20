@@ -66,7 +66,7 @@ router.get("/:usuario_id", authRequired, async (req, res) => {
  * POST /api/mi-marca/visitante
  * Registrar nuevo visitante
  */
-router.post("/visitante", authMiddleware, async (req, res) => {
+router.post("/visitante", authRequired, async (req, res) => {
   try {
     const { nombre, email, empresa, cargo, telefono, expositor_id } = req.body;
 
