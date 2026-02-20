@@ -9,7 +9,7 @@ import agendaRoutes from "./routes/agenda.js"; // ← Nota: agenda.routes.js
 import speakersRoutes from "./routes/speakers.routes.js"; // ← Nota: speakers.routes.js
 import expositoresRoutes from "./routes/expositores.routes.js";
 import dashboardRoutes from "./routes/dashboard.js";
-import notificacionesRoutes from "./routes/notificaciones.routes.js";
+import notificacionesRoutes from "./routes/notificaciones.js";
 import configRoutes from "./routes/config.js"; // ← AGREGAR
 import usersRoutes from './routes/users.routes.js';
 
@@ -113,37 +113,6 @@ app.use('/api/networking', networkingRoutes);
 app.use('/api/mi-marca', miMarcaRoutes);
 app.use('/api/mi-sesion', miSesionRoutes);
 
-// =========================================
-// 🔔 Server Sent Events (SSE) para notificaciones en tiempo real
-// =========================================
-app.get("/events", (req, res) => {
-  const origin = req.headers.origin;
-
-  // Configurar headers SSE
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
-
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
-
-  console.log("📡 Nueva conexión SSE establecida");
-
-  // Enviar ping cada 15 segundos para mantener conexión viva
-  const pingInterval = setInterval(() => {
-    res.write(`data: ${JSON.stringify({ type: "ping", timestamp: Date.now() })}\n\n`);
-  }, 15000);
-
-  // Limpiar al cerrar conexión
-  req.on("close", () => {
-    clearInterval(pingInterval);
-    console.log("❌ Conexión SSE cerrada");
-  });
-});
-
 // ==============================
 // ⏰ CRON - Notificaciones programadas
 // Ejecuta cada 60 segundos
@@ -230,7 +199,7 @@ app.listen(PORT, () => {
 ╚════════════════════════════════════════╝
   `);
   console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔔 SSE endpoint: http://localhost:${PORT}/events`);
+  console.log(`🔔 SSE endpoint: http://localhost:${PORT}/api/notificaciones/events`);
   console.log(`⏰ CRON jobs: ACTIVE`);
   console.log('========================================');
   console.log('');
@@ -245,6 +214,7 @@ app.listen(PORT, () => {
   console.log('  DELETE /api/agenda/sessions/:id');
   console.log('  GET  /api/speakers');
   console.log('  GET  /api/expositores');
+  console.log('  GET  /api/notificaciones/events (SSE)');
   console.log('========================================');
   console.log('');
 });

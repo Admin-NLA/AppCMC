@@ -215,10 +215,6 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
-
-      {/* ---------- PANEL DE NOTIFICACIONES ---------- */}
-      <NotificationsPanel open={panelOpen} onClose={() => setPanelOpen(false)} />
-
     </div>
   );
 }

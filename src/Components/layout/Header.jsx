@@ -1,25 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { LogOut, User, Menu, X, Bell, Map, Network, Calendar, Layers, Users, Scan, Settings, FileText, Award } from "lucide-react";
+import { LogOut, User, Menu, X, Map, Network, Calendar, Layers, Users, Scan, Settings, FileText, Award } from "lucide-react";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 
 export default function Header() {
-  const { userProfile, logout, permisos } = useAuth(); // ← AGREGADO: permisos
+  const { userProfile, logout, permisos } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-
-  // ========================================================
-  // SIMULADAS: Notificaciones (puedes conectar a API real)
-  // ========================================================
-  const [notifications] = useState([
-    { id: 1, title: "Bienvenida", message: "Te damos la bienvenida al evento", read: false },
-    { id: 2, title: "Nueva sesión", message: "Se agregó una nueva sesión a tu agenda", read: true },
-  ]);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const handleLogout = async () => {
     const result = await Swal.fire({
@@ -65,11 +54,7 @@ export default function Header() {
     }
   };
 
-  // ========== NUEVO: MENÚ DINÁMICO BASADO EN PERMISOS ==========
-  /**
-   * Construye el menú móvil dinámicamente según permisos del usuario
-   * Usa permisos.menuItems de sedeHelper.js
-   */
+  // ========== MENÚ DINÁMICO BASADO EN PERMISOS ==========
   const buildMobileMenu = () => {
     if (!permisos) return [];
 
@@ -94,7 +79,7 @@ export default function Header() {
       "Staff Panel": { to: "/staff", icon: <Scan size={16} /> },
       "Usuarios": { to: "/usuarios", icon: <Users size={16} /> },
       "Usuarios (ver)": { to: "/usuarios", icon: <Users size={16} /> },
-      "Notificaciones": { to: "/notificaciones", icon: <Bell size={16} /> },
+      "Notificaciones": { to: "/notificaciones", icon: <FileText size={16} /> },
       "Admin Panel": { to: "/admin", icon: <Settings size={16} /> },
       "Agenda (ver)": { to: "/agenda", icon: <Calendar size={16} /> },
       "Speakers (ver)": { to: "/speakers", icon: <Users size={16} /> },
@@ -107,7 +92,6 @@ export default function Header() {
       .map(itemLabel => menuMap[itemLabel])
       .filter(Boolean);
   };
-  // ============================================================
 
   const mobileMenu = buildMobileMenu();
 
@@ -165,51 +149,6 @@ export default function Header() {
 
           {/* Mobile Menu Button - Visible en pantallas < md */}
           <div className="md:hidden flex items-center gap-2">
-            {/* Notificaciones Mobile */}
-            {userProfile && (
-              <div className="relative">
-                <button
-                  onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  className="relative p-2 hover:bg-blue-700 rounded-lg transition"
-                >
-                  <Bell size={18} />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center text-xs">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-
-                {/* Dropdown Notificaciones Mobile */}
-                {notificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white text-gray-800 rounded-lg shadow-xl z-50">
-                    <div className="p-4 border-b border-gray-200">
-                      <h3 className="font-bold text-lg">Notificaciones</h3>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">
-                          No hay notificaciones
-                        </div>
-                      ) : (
-                        notifications.map((notif) => (
-                          <div
-                            key={notif.id}
-                            className={`p-3 border-b last:border-b-0 cursor-pointer hover:bg-gray-50 transition ${
-                              !notif.read ? "bg-blue-50" : ""
-                            }`}
-                          >
-                            <p className="font-semibold text-xs">{notif.title}</p>
-                            <p className="text-xs text-gray-600 mt-1">{notif.message}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Hamburger Menu */}
             <button
               onClick={() => setMenuOpen(!menuOpen)}
@@ -233,7 +172,7 @@ export default function Header() {
                   </p>
                 </div>
 
-                {/* ========== MENÚ DINÁMICO MOBILE ========== */}
+                {/* MENÚ DINÁMICO MOBILE */}
                 {mobileMenu.length > 0 ? (
                   mobileMenu.map((item, index) => (
                     <button
@@ -253,7 +192,6 @@ export default function Header() {
                     ⚠️ No hay menú disponible
                   </div>
                 )}
-                {/* ========================================== */}
 
                 {/* Logout Mobile */}
                 <button

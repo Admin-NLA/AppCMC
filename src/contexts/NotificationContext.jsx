@@ -69,7 +69,7 @@ export function NotificationProvider({ children }) {
 
       setNotificaciones((prev) =>
         prev.map((n) =>
-          n.id === id ? { ...n, read: true } : n
+          n.id === id ? { ...n, leida: true } : n
         )
       );
 
@@ -81,7 +81,7 @@ export function NotificationProvider({ children }) {
 
   const MARK_ALL_READ = () => {
     setNotificaciones((prev) =>
-      prev.map((n) => ({ ...n, read: true }))
+      prev.map((n) => ({ ...n, leida: true }))
     );
     setUnreadCount(0);
   };
@@ -97,7 +97,7 @@ export function NotificationProvider({ children }) {
   useEffect(() => {
     const URL =
       import.meta.env.VITE_NOTIF_URL ||
-      "https://cmc-app.onrender.com/notificaciones/events";
+      "https://cmc-app.onrender.com/api/notificaciones/events";
 
     function connect() {
       try {
@@ -116,7 +116,7 @@ export function NotificationProvider({ children }) {
               tipo: d.tipo || "info",
               creadoEn: d.created_at || new Date().toISOString(),
               meta: d.meta || {},
-              read: false,
+              leida: false,
             };
 
             ADD(item);
