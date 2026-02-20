@@ -15,8 +15,13 @@ import usersRoutes from './routes/users.routes.js';
 
 //nuevo import - admin
 import statsRoutes from './routes/stats.js';
-// nuevo import - staff
+// nuevo import
 import staffRoutes from './routes/staff.js';
+import qrRoutes from './routes/qr.js';
+import misRegistrosRoutes from './routes/mis-registros.js';
+import networkingRoutes from './routes/networking.js';
+import miMarcaRoutes from './routes/mi-marca.js';
+import miSesionRoutes from './routes/mi-sesion.js';
 
 
 // Importar funciones de notificaciones
@@ -101,6 +106,12 @@ app.use('/api/users', usersRoutes);
 app.use('/api/stats', statsRoutes);
 //nuevo ----- staff
 app.use('/api/staff', staffRoutes);
+// ============ NUEVAS RUTAS ============================
+app.use('/api/qr', qrRoutes);
+app.use('/api/mis-registros', misRegistrosRoutes);
+app.use('/api/networking', networkingRoutes);
+app.use('/api/mi-marca', miMarcaRoutes);
+app.use('/api/mi-sesion', miSesionRoutes);
 
 // =========================================
 // 🔔 Server Sent Events (SSE) para notificaciones en tiempo real
