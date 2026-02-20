@@ -56,7 +56,7 @@ router.get("/:usuario_id", authRequired, async (req, res) => {
  * GET /api/mi-sesion/asistentes/:sesion_id
  * Obtener asistentes de la sesión del speaker
  */
-router.get("/asistentes/:sesion_id", authMiddleware, async (req, res) => {
+router.get("/asistentes/:sesion_id", authRequired, async (req, res) => {
   try {
     const { sesion_id } = req.params;
 
