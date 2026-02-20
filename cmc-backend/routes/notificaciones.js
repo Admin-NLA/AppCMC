@@ -462,4 +462,5 @@ router.get("/historial/completo", authRequired, async (req, res) => {
   }
 });
 
+export { sendSSE };
 export default router;
