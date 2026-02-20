@@ -1,6 +1,6 @@
 import express from "express";
 import pool from "../db.js";
-import { authMiddleware } from "../utils/authMiddleware.js";
+import { authRequired } from "../utils/authMiddleware.js";
 
 const router = express.Router();
 
@@ -8,7 +8,7 @@ const router = express.Router();
  * GET /api/qr/:usuario_id
  * Obtener datos para generar QR del usuario
  */
-router.get("/:usuario_id", authMiddleware, async (req, res) => {
+router.get("/:usuario_id", authRequired, async (req, res) => {
   try {
     const { usuario_id } = req.params;
 
