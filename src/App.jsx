@@ -27,6 +27,10 @@ import Networking from "./pages/Networking";
 import MiMarca from "./pages/MiMarca";
 import MiSesion from "./pages/MiSesion";
 
+// AGREGAR DESPUÉS DE LOS OTROS IMPORTS:
+import UsuariosPanel from "./pages/UsuariosPanel.jsx";
+import ConfiguracionPanel from "./pages/ConfiguracionPanel.jsx";
+
 // 🔐 Protección de rutas
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -122,12 +126,22 @@ function AppWithEvent() {
               }
             />
 
-            {/* Admin Panel */}
+            {/* Usuarios Panel */}
             <Route
-              path="admin"
+              path="usuarios"
+              element={
+                <PrivateRoute roles={['staff', 'super_admin']}>
+                  <UsuariosPanel />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Configuración Panel */}
+            <Route
+              path="configuracion"
               element={
                 <PrivateRoute roles={['super_admin']}>
-                  <AdminPanel />
+                  <ConfiguracionPanel />
                 </PrivateRoute>
               }
             />

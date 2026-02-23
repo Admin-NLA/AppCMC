@@ -15,6 +15,8 @@ import usersRoutes from './routes/users.routes.js';
 
 //nuevo import - admin
 import statsRoutes from './routes/stats.js';
+import uploadRoutes from './routes/upload.js';
+
 // nuevo import
 import staffRoutes from './routes/staff.js';
 import qrRoutes from './routes/qr.js';
@@ -106,12 +108,14 @@ app.use('/api/users', usersRoutes);
 app.use('/api/stats', statsRoutes);
 //nuevo ----- staff
 app.use('/api/staff', staffRoutes);
+app.use('/api/upload', uploadRoutes);
 // ============ NUEVAS RUTAS ============================
 app.use('/api/qr', qrRoutes);
 app.use('/api/mis-registros', misRegistrosRoutes);
 app.use('/api/networking', networkingRoutes);
 app.use('/api/mi-marca', miMarcaRoutes);
 app.use('/api/mi-sesion', miSesionRoutes);
+
 
 // ==============================
 // ⏰ CRON - Notificaciones programadas

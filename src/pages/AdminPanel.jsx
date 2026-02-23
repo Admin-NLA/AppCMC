@@ -27,6 +27,35 @@ export default function AdminPanel() {
   // Tabs del panel
   const [activeTab, setActiveTab] = useState("sesiones");
 
+    // Nuevos estados para Speakers
+  const [speakers, setSpeakers] = useState([]);
+  const [showSpeakerForm, setShowSpeakerForm] = useState(false);
+  const [editingSpeakerId, setEditingSpeakerId] = useState(null);
+  const [speakerFormData, setSpeakerFormData] = useState({
+    nombre: "",
+    email: "",
+    telefono: "",
+    bio: "",
+    imagen: "",
+    empresa: "",
+    cargo: "",
+    sesiones: [],
+    sede: "chile",
+  });
+  
+  // Nuevos estados para Encuestas
+  const [encuestas, setEncuestas] = useState([]);
+  const [showEncuestaForm, setShowEncuestaForm] = useState(false);
+  const [editingEncuestaId, setEditingEncuestaId] = useState(null);
+  const [encuestaFormData, setEncuestaFormData] = useState({
+    titulo: "",
+    descripcion: "",
+    preguntas: [],
+    activa: true,
+    fecha_inicio: "",
+    fecha_fin: "",
+  });
+
   // ========================================================
   // SESIONES: Estados
   // ========================================================
@@ -43,6 +72,7 @@ export default function AdminPanel() {
     tipo: "conferencia",
     sede: "chile",
     edicion: 2025,
+    estado_edicion: "abierta",
   });
 
   // ========================================================
@@ -61,6 +91,7 @@ export default function AdminPanel() {
     stand: "",
     descripcion: "",
     sede: "chile",
+    estado_edicion: "abierto",
   });
 
   // Estados para Notificaciones
@@ -620,6 +651,16 @@ export default function AdminPanel() {
           <Users size={18} />
           Usuarios
         </button>
+         <button
+          onClick={() => setActiveTab("speakers")}
+          className={`px-4 py-2 rounded-lg font-semibold transition whitespace-nowrap ${
+            activeTab === "speakers"
+              ? "bg-blue-600 text-white"
+              : "bg-white text-gray-700 hover:bg-gray-200"
+          }`}
+        >
+          🎤 Speakers
+        </button>
         <button
           onClick={() => navigate("/admin/import")}
           className="px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2 bg-green-600 text-white hover:bg-green-700 whitespace-nowrap"
@@ -995,6 +1036,177 @@ export default function AdminPanel() {
                 </tbody>
               </table>
             </div>
+            
+          </div>
+        )}
+
+        {/* ========================================================
+            SPEAKERS
+            ======================================================== */}
+        {activeTab === "speakers" && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Gestión de Speakers</h2>
+              <button
+                onClick={() => setShowSpeakerForm(!showSpeakerForm)}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                <Plus size={18} />
+                Nuevo Speaker
+              </button>
+            </div>
+
+            {showSpeakerForm && (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  setLoading(true);
+                  if (editingSpeakerId) {
+                    await API.put(`/speakers/${editingSpeakerId}`, speakerFormData);
+                  } else {
+                    await API.post("/speakers", speakerFormData);
+                  }
+                  setSuccess(true);
+                  setShowSpeakerForm(false);
+                  setSpeakerFormData({
+                    nombre: "",
+                    email: "",
+                    telefono: "",
+                    bio: "",
+                    imagen: "",
+                    empresa: "",
+                    cargo: "",
+                    sesiones: [],
+                    sede: "chile",
+                  });
+                  setEditingSpeakerId(null);
+                  setTimeout(() => setSuccess(false), 3000);
+                } catch (err) {
+                  setError(err.response?.data?.error || err.message);
+                } finally {
+                  setLoading(false);
+                }
+              }} className="bg-white p-6 rounded-lg shadow-md space-y-4 mb-6 border-l-4 border-purple-600">
+                <h3 className="text-xl font-bold">{editingSpeakerId ? "✏️ Editar Speaker" : "Nuevo Speaker"}</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    placeholder="Nombre completo"
+                    value={speakerFormData.nombre}
+                    onChange={(e) => setSpeakerFormData({...speakerFormData, nombre: e.target.value})}
+                    required
+                    className="px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={speakerFormData.email}
+                    onChange={(e) => setSpeakerFormData({...speakerFormData, email: e.target.value})}
+                    className="px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="tel"
+                    placeholder="Teléfono"
+                    value={speakerFormData.telefono}
+                    onChange={(e) => setSpeakerFormData({...speakerFormData, telefono: e.target.value})}
+                    className="px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Cargo"
+                    value={speakerFormData.cargo}
+                    onChange={(e) => setSpeakerFormData({...speakerFormData, cargo: e.target.value})}
+                    className="px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Empresa"
+                    value={speakerFormData.empresa}
+                    onChange={(e) => setSpeakerFormData({...speakerFormData, empresa: e.target.value})}
+                    className="px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="url"
+                    placeholder="URL Imagen"
+                    value={speakerFormData.imagen}
+                    onChange={(e) => setSpeakerFormData({...speakerFormData, imagen: e.target.value})}
+                    className="px-4 py-2 border rounded-lg"
+                  />
+                  <textarea
+                    placeholder="Biografía"
+                    value={speakerFormData.bio}
+                    onChange={(e) => setSpeakerFormData({...speakerFormData, bio: e.target.value})}
+                    className="px-4 py-2 border rounded-lg md:col-span-2"
+                  />
+                  <select value={speakerFormData.sede} onChange={(e) => setSpeakerFormData({...speakerFormData, sede: e.target.value})} className="px-4 py-2 border rounded-lg">
+                    <option value="chile">Chile</option>
+                    <option value="mexico">México</option>
+                    <option value="colombia">Colombia</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2">
+                  <button type="submit" disabled={loading} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    <Save size={18} />
+                    {loading ? "Guardando..." : "Guardar"}
+                  </button>
+                  <button type="button" onClick={() => setShowSpeakerForm(false)} className="bg-gray-400 text-white px-4 py-2 rounded-lg hover:bg-gray-500">
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {speakers.length === 0 ? (
+                <p className="text-gray-500">No hay speakers registrados</p>
+              ) : (
+                speakers.map((speaker) => (
+                  <div key={speaker.id} className="border p-4 rounded-lg hover:shadow-lg transition">
+                    {speaker.imagen && (
+                      <img src={speaker.imagen} alt={speaker.nombre} className="w-full h-32 object-cover rounded mb-2" />
+                    )}
+                    <h3 className="font-bold">{speaker.nombre}</h3>
+                    <p className="text-sm text-gray-600">{speaker.cargo}</p>
+                    <p className="text-sm text-gray-500">{speaker.empresa}</p>
+                    <p className="text-xs text-gray-400 mt-2 line-clamp-2">{speaker.bio}</p>
+                    
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => {
+                          setEditingSpeakerId(speaker.id);
+                          setSpeakerFormData(speaker);
+                          setShowSpeakerForm(true);
+                        }}
+                        className="flex-1 text-blue-600 hover:text-blue-800 p-2 transition flex items-center justify-center gap-1"
+                      >
+                        <Edit2 size={16} />
+                        Editar
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm("¿Eliminar este speaker?")) {
+                            try {
+                              await API.delete(`/speakers/${speaker.id}`);
+                              setSpeakers(speakers.filter(s => s.id !== speaker.id));
+                              setSuccess(true);
+                              setTimeout(() => setSuccess(false), 3000);
+                            } catch (err) {
+                              setError(err.message);
+                            }
+                          }
+                        }}
+                        className="flex-1 text-red-600 hover:text-red-800 p-2 transition flex items-center justify-center gap-1"
+                      >
+                        <Trash2 size={16} />
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1276,6 +1488,11 @@ function SessionForm({ formData, onChange, onSubmit, onCancel, loading, isEditin
           <option value="mexico">México</option>
           <option value="colombia">Colombia</option>
         </select>
+        <select name="estado_edicion" value={formData.estado_edicion} onChange={onChange} className="px-4 py-2 border rounded-lg">
+          <option value="abierta">Abierta</option>
+          <option value="cerrada">Cerrada</option>
+          <option value="cancelada">Cancelada</option>
+        </select>
       </div>
 
       <div className="flex gap-2">
@@ -1376,6 +1593,11 @@ function ExpositorForm({ formData, onChange, onSubmit, onCancel, loading, isEdit
           <option value="chile">Chile</option>
           <option value="mexico">México</option>
           <option value="colombia">Colombia</option>
+        </select>
+        <select name="estado_edicion" value={formData.estado_edicion} onChange={onChange} className="px-4 py-2 border rounded-lg">
+          <option value="abierto">Abierto</option>
+          <option value="cerrado">Cerrado</option>
+          <option value="pausado">Pausado</option>
         </select>
       </div>
 
