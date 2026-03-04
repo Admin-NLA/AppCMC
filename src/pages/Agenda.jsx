@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 export default function Agenda() {
-  const { userProfile, permisos } = useAuth(); // ← AGREGADO: permisos
+  const { userProfile, permisos } = useAuth();
   const navigate = useNavigate();
 
   const [sessions, setSessions] = useState([]);
@@ -27,7 +27,7 @@ export default function Agenda() {
   const [accessMessage, setAccessMessage] = useState("");
 
   // ========================================================
-  // FILTROS: Sede y Edición
+  // FILTROS: Sede y Edición (solo para super_admin / staff)
   // ========================================================
   const [selectedSede, setSelectedSede] = useState("");
   const [selectedEdicion, setSelectedEdicion] = useState("");
@@ -35,101 +35,76 @@ export default function Agenda() {
   const [availableEdiciones, setAvailableEdiciones] = useState([]);
 
   // ========================================================
-  // Estado para Favoritos
+  // Favoritos
   // ========================================================
   const [favorites, setFavorites] = useState(new Set());
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
 
   const days = [
-    { id: "todos", label: "Todos", numero: 0 },
-    { id: "lunes", label: "Lunes", numero: 1 },
-    { id: "martes", label: "Martes", numero: 2 },
-    { id: "miercoles", label: "Miércoles", numero: 3 },
-    { id: "jueves", label: "Jueves", numero: 4 },
+    { id: "todos",     label: "Todos",      numero: 0 },
+    { id: "lunes",     label: "Lunes",      numero: 1 },
+    { id: "martes",    label: "Martes",     numero: 2 },
+    { id: "miercoles", label: "Miércoles",  numero: 3 },
+    { id: "jueves",    label: "Jueves",     numero: 4 },
   ];
 
   // ========================================================
-  // NUEVO: Validar acceso usando permisos de sedeHelper
+  // Validar acceso
   // ========================================================
-  const validateAccess = () => {
-    if (!permisos) {
-      console.warn("⚠️ Permisos aún no cargados");
-      return false;
-    }
+  const validateAccess = useCallback(() => {
+    if (!permisos) return false;
 
-    // Si verAgenda es false, denegar acceso
     if (!permisos.verAgenda) {
       setAccessDenied(true);
       setAccessMessage(
-        `Tu pase (${userProfile?.tipo_pase}) no incluye acceso a la Agenda.`
+        `Tu pase (${userProfile?.tipo_pase || userProfile?.rol}) no incluye acceso a la Agenda.`
       );
-      console.warn("❌ Acceso denegado: Usuario sin permiso para ver Agenda");
       return false;
     }
 
-    console.log(`✅ Acceso concedido: Agenda visible para ${userProfile?.tipo_pase}`);
+    setAccessDenied(false);
     return true;
-  };
-
-  // ========================================================
-  // Cargar sesiones al montar el componente
-  // ========================================================
-  useEffect(() => {
-    if (!validateAccess()) {
-      setLoading(false);
-      return;
-    }
-
-    loadSessions();
-    loadFavorites();
   }, [permisos, userProfile]);
 
   // ========================================================
-  // Filtrar sesiones cuando cambian los filtros
+  // Cargar sesiones — FIX: un solo conjunto de params limpios
   // ========================================================
-  useEffect(() => {
-    filterSessions();
-  }, [selectedDay, selectedSede, selectedEdicion, sessions, userProfile, favorites, showOnlyFavorites, permisos]);
+  const loadSessions = useCallback(async () => {
+    if (!permisos || !userProfile) return;
 
-  // ========================================================
-  // CARGAR SESIONES DESDE API CON FILTROS
-  // ========================================================
-  const loadSessions = async () => {
     try {
       setLoading(true);
 
-      console.log("📅 Cargando sesiones con filtros...", {
-        sede: selectedSede || "todas",
-        edicion: selectedEdicion || "todas",
-      });
-
       const params = new URLSearchParams();
-      
-      // Aplicar filtro de sede si el usuario tiene filtraSede = true
-      if (permisos?.filtraSede && userProfile?.sede) {
+
+      // FIX Bug 1: el filtro manual tiene precedencia sobre el automático.
+      // Si el usuario eligió sede manualmente (super_admin/staff), usar esa.
+      // Si no, y el rol requiere filtrar por sede, usar la sede del perfil.
+      if (selectedSede) {
+        params.append("sede", selectedSede);
+      } else if (permisos.filtraSede && userProfile.sede) {
         params.append("sede", userProfile.sede);
       }
-      
-      // Aplicar filtro de edición si el usuario tiene filtraEdicion = true
-      if (permisos?.filtraEdicion && userProfile?.edicion) {
+
+      // Mismo patrón para edición
+      if (selectedEdicion) {
+        params.append("edicion", selectedEdicion);
+      } else if (permisos.filtraEdicion && userProfile.edicion) {
         params.append("edicion", userProfile.edicion);
       }
-
-      if (selectedSede) params.append("sede", selectedSede);
-      if (selectedEdicion) params.append("edicion", selectedEdicion);
 
       const queryString = params.toString();
       const url = `/agenda/sessions${queryString ? `?${queryString}` : ""}`;
 
-      console.log("🔗 URL:", url);
+      console.log("[Agenda] Cargando:", url);
 
       const res = await API.get(url);
-
       const sessionData = Array.isArray(res.data.sessions) ? res.data.sessions : [];
 
-      console.log("✅ Sesiones cargadas:", sessionData.length);
+      console.log("[Agenda] Sesiones recibidas del backend:", sessionData.length);
 
+      // Extraer sedes y ediciones disponibles para los selectores
       const sedes = [...new Set(sessionData.map((s) => s.sede).filter(Boolean))];
       setAvailableSedes(sedes.sort());
 
@@ -138,38 +113,114 @@ export default function Agenda() {
 
       setSessions(sessionData);
     } catch (error) {
-      console.error("❌ Error al cargar sesiones:", error);
+      console.error("[Agenda] Error al cargar sesiones:", error);
       setSessions([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [permisos, userProfile, selectedSede, selectedEdicion]);
 
   // ========================================================
-  // Cargar favoritos del usuario
+  // FIX Bug 2: cargar solo cuando permisos y usuario están listos
+  // ========================================================
+  useEffect(() => {
+    if (!permisos || !userProfile) return;
+
+    if (!validateAccess()) {
+      setLoading(false);
+      return;
+    }
+
+    loadSessions();
+    loadFavorites();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permisos, userProfile]);
+
+  // Recargar cuando cambian los filtros manuales de sede/edición
+  useEffect(() => {
+    if (!accessDenied && permisos && userProfile) {
+      loadSessions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSede, selectedEdicion]);
+
+  // ========================================================
+  // FIX Bug 3: filterSessions — dias null no descartan la sesión
+  // para super_admin/staff (diasPermitidos vacío = sin restricción)
+  // ========================================================
+  useEffect(() => {
+    if (!userProfile || !permisos) {
+      setFilteredSessions([]);
+      return;
+    }
+
+    const diasPermitidos = permisos.diasPermitidos || [];
+    const sinRestriccionDias = diasPermitidos.length === 0;
+
+    console.log("[Agenda] Filtrando:", {
+      selectedDay,
+      diasPermitidos,
+      sinRestriccionDias,
+      totalSesiones: sessions.length,
+    });
+
+    let filtered = sessions.filter((s) => {
+      const diaSesion = s.dia !== null && s.dia !== undefined ? parseInt(s.dia) : null;
+
+      // Sin restricción de días (super_admin, staff, combo): mostrar todas
+      if (sinRestriccionDias) return true;
+
+      // Con restricción: descartar día null o fuera del rango permitido
+      if (diaSesion === null || isNaN(diaSesion)) return false;
+      return diasPermitidos.includes(diaSesion);
+    });
+
+    // Filtro por día seleccionado en el tab
+    if (selectedDay !== "todos") {
+      const diaNumero = days.find((d) => d.id === selectedDay)?.numero;
+      if (diaNumero !== undefined) {
+        filtered = filtered.filter((s) => parseInt(s.dia) === diaNumero);
+      }
+    }
+
+    // Filtros manuales de sede/edición (para cuando el usuario los cambia
+    // en el selector — ya se aplican en el backend, pero si el backend
+    // retornó datos mixtos por algún motivo, esto actúa como segunda barrera)
+    if (selectedSede) {
+      filtered = filtered.filter((s) => s.sede === selectedSede);
+    }
+    if (selectedEdicion) {
+      filtered = filtered.filter(
+        (s) => String(s.edicion) === String(selectedEdicion)
+      );
+    }
+
+    // Solo favoritos
+    if (showOnlyFavorites) {
+      filtered = filtered.filter((s) => favorites.has(s.id));
+    }
+
+    setFilteredSessions(filtered);
+  }, [selectedDay, selectedSede, selectedEdicion, sessions, userProfile, permisos, favorites, showOnlyFavorites]);
+
+  // ========================================================
+  // Cargar favoritos
   // ========================================================
   const loadFavorites = async () => {
     if (!userProfile?.id) return;
 
     try {
       setLoadingFavorites(true);
-      console.log("⭐ Cargando favoritos del usuario...");
-
       const res = await API.get(`/users/${userProfile.id}`);
-      
       if (res.data.favoritos) {
         setFavorites(new Set(res.data.favoritos));
-        console.log("✅ Favoritos cargados:", res.data.favoritos);
       }
-    } catch (error) {
-      console.log("ℹ️ No se pudieron cargar favoritos del servidor");
+    } catch {
       try {
-        const savedFavorites = localStorage.getItem(`favorites_${userProfile.id}`);
-        if (savedFavorites) {
-          setFavorites(new Set(JSON.parse(savedFavorites)));
-        }
-      } catch (e) {
-        console.log("ℹ️ Sin favoritos guardados");
+        const saved = localStorage.getItem(`favorites_${userProfile.id}`);
+        if (saved) setFavorites(new Set(JSON.parse(saved)));
+      } catch {
+        // sin favoritos guardados
       }
     } finally {
       setLoadingFavorites(false);
@@ -177,85 +228,11 @@ export default function Agenda() {
   };
 
   // ========================================================
-  // Recargar cuando cambian filtros sede/edición
-  // ========================================================
-  useEffect(() => {
-    if (!accessDenied && userProfile) {
-      loadSessions();
-    }
-  }, [selectedSede, selectedEdicion]);
-
-  // ========================================================
-  // FILTRAR SESIONES POR DÍA + PERMISOS + FAVORITOS
-  // ========================================================
-  const filterSessions = () => {
-    if (!userProfile || !permisos) {
-      setFilteredSessions([]);
-      return;
-    }
-
-    const diasPermitidos = permisos.diasPermitidos || [];
-
-    console.log("🔍 Filtrando por:", {
-      selectedDay,
-      diasPermitidos,
-      totalSesiones: sessions.length,
-      tipoPase: userProfile.tipo_pase,
-      showOnlyFavorites,
-    });
-
-    // 1. Filtrar por permisos (días permitidos)
-    let filtered = sessions.filter((s) => {
-      const diaSesion = s.dia ? parseInt(s.dia) : null;
-
-      if (diaSesion === null) return false;
-
-      const tienePermiso = diasPermitidos.includes(diaSesion);
-
-      if (!tienePermiso && selectedDay === "todos") {
-        console.log(
-          `❌ Sin permiso para día ${diaSesion} (permitidos: ${diasPermitidos})`
-        );
-      }
-
-      return tienePermiso;
-    });
-
-    // 2. Filtrar por día seleccionado (si no es "todos")
-    if (selectedDay !== "todos") {
-      const diaNumero = days.find((d) => d.id === selectedDay)?.numero;
-
-      if (diaNumero !== undefined) {
-        filtered = filtered.filter((s) => parseInt(s.dia) === diaNumero);
-      }
-    }
-
-    // 3. Filtrar por sede si el usuario está filtrando
-    if (selectedSede) {
-      filtered = filtered.filter((s) => s.sede === selectedSede);
-    }
-
-    // 4. Filtrar por edición si el usuario está filtrando
-    if (selectedEdicion) {
-      filtered = filtered.filter((s) => s.edicion === selectedEdicion);
-    }
-
-    // 5. Filtrar solo favoritos si está activado
-    if (showOnlyFavorites) {
-      filtered = filtered.filter((s) => favorites.has(s.id));
-      console.log(`📌 Después de filtro de favoritos: ${filtered.length} sesiones`);
-    }
-
-    setFilteredSessions(filtered);
-  };
-
-  // ========================================================
-  // Agregar/Quitar de Favoritos
+  // Toggle favorito
   // ========================================================
   const toggleFavorite = async (sessionId) => {
     if (!userProfile) return;
 
-    // Validar que el usuario puede marcar favoritos
     if (!permisos?.puedeFavoritos) {
       alert("Tu pase no permite marcar favoritos");
       return;
@@ -263,54 +240,33 @@ export default function Agenda() {
 
     try {
       const isFavorite = favorites.has(sessionId);
-
-      console.log(`${isFavorite ? "❌ Removiendo" : "⭐ Agregando"} favorito: ${sessionId}`);
-
       const newFavorites = new Set(favorites);
-      if (isFavorite) {
-        newFavorites.delete(sessionId);
-      } else {
-        newFavorites.add(sessionId);
-      }
+      isFavorite ? newFavorites.delete(sessionId) : newFavorites.add(sessionId);
       setFavorites(newFavorites);
-
       localStorage.setItem(`favorites_${userProfile.id}`, JSON.stringify([...newFavorites]));
 
       if (isFavorite) {
         await API.delete(`/agenda/favorite/${sessionId}`);
       } else {
-        await API.post(`/agenda/favorite/${sessionId}`, {
-          userId: userProfile.id,
-        });
+        await API.post(`/agenda/favorite/${sessionId}`, { userId: userProfile.id });
       }
-
-      console.log(`✅ Favorito actualizado`);
     } catch (error) {
-      console.error("❌ Error al actualizar favorito:", error);
+      console.error("[Agenda] Error al actualizar favorito:", error);
       loadFavorites();
     }
   };
 
   // ========================================================
-  // RENDERIZADO
+  // Guards de render
   // ========================================================
-  if (!userProfile) {
+  if (!userProfile || !permisos) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-500">
-        Cargando perfil…
+        Cargando…
       </div>
     );
   }
 
-  if (!permisos) {
-    return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
-        Cargando permisos…
-      </div>
-    );
-  }
-
-  // ❌ ACCESO DENEGADO
   if (accessDenied) {
     return (
       <div className="space-y-4">
@@ -345,36 +301,40 @@ export default function Agenda() {
   }
 
   // ========================================================
-  // INFORMACIÓN DE ACCESO
+  // Render principal
   // ========================================================
   const diasPermitidos = permisos.diasPermitidos || [];
-  const diasTexto = {
-    1: "Lunes",
-    2: "Martes",
-    3: "Miércoles",
-    4: "Jueves",
-  };
+  const sinRestriccionDias = diasPermitidos.length === 0;
+  const diasTexto = { 1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves" };
   const diasPermitidosTexto = diasPermitidos.map((d) => diasTexto[d]).join(", ");
+
+  // Mostrar el selector de sede/edición solo para roles sin restricción (admin/staff)
+  const puedeVerFiltroManual = !permisos.filtraSede || permisos.puedeEditar;
 
   return (
     <div>
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Agenda del Evento</h1>
           <p className="text-gray-600 text-sm mt-1">
-            Pase: <span className="font-semibold capitalize">{userProfile.tipo_pase}</span> | 
-            Acceso: <span className="font-semibold">{diasPermitidosTexto}</span>
+            {userProfile.tipo_pase
+              ? <>Pase: <span className="font-semibold capitalize">{userProfile.tipo_pase}</span> | </>
+              : null}
+            {sinRestriccionDias
+              ? "Acceso completo"
+              : <>Acceso: <span className="font-semibold">{diasPermitidosTexto}</span></>}
           </p>
         </div>
         <span className="text-sm text-gray-500">
-          {showOnlyFavorites 
-            ? `${filteredSessions.length} favorito${filteredSessions.length !== 1 ? 's' : ''}`
+          {showOnlyFavorites
+            ? `${filteredSessions.length} favorito${filteredSessions.length !== 1 ? "s" : ""}`
             : `${filteredSessions.length} de ${sessions.length} sesiones`}
         </span>
       </div>
 
-      {/* ⚠️ INFORMACIÓN DE PERMISOS */}
-      {diasPermitidos.length > 0 && diasPermitidos.length < 4 && (
+      {/* Banner de acceso limitado */}
+      {!sinRestriccionDias && diasPermitidos.length < 4 && (
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg mb-6 flex gap-3">
           <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
           <div>
@@ -386,9 +346,7 @@ export default function Agenda() {
         </div>
       )}
 
-      {/* ========================================================
-          FILTROS: Sede y Edición
-          ======================================================== */}
+      {/* Panel de filtros */}
       <div className="bg-white rounded-xl shadow-md p-4 mb-6">
         <div className="flex items-center gap-2 mb-4">
           <Filter size={20} className="text-blue-600" />
@@ -396,41 +354,45 @@ export default function Agenda() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Filtro Sede */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sede</label>
-            <select
-              value={selectedSede}
-              onChange={(e) => setSelectedSede(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Todas las sedes</option>
-              {availableSedes.map((sede) => (
-                <option key={sede} value={sede}>
-                  {sede.charAt(0).toUpperCase() + sede.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Sede — solo visible para roles sin restricción */}
+          {puedeVerFiltroManual && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Sede</label>
+              <select
+                value={selectedSede}
+                onChange={(e) => setSelectedSede(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Todas las sedes</option>
+                {availableSedes.map((sede) => (
+                  <option key={sede} value={sede}>
+                    {sede.charAt(0).toUpperCase() + sede.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          {/* Filtro Edición */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Edición</label>
-            <select
-              value={selectedEdicion}
-              onChange={(e) => setSelectedEdicion(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Todas las ediciones</option>
-              {availableEdiciones.map((edicion) => (
-                <option key={edicion} value={edicion}>
-                  {edicion}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Edición — solo visible para roles sin restricción */}
+          {puedeVerFiltroManual && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Edición</label>
+              <select
+                value={selectedEdicion}
+                onChange={(e) => setSelectedEdicion(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Todas las ediciones</option>
+                {availableEdiciones.map((edicion) => (
+                  <option key={edicion} value={edicion}>
+                    {edicion}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          {/* Toggle Favoritos - SOLO SI TIENE PERMISO */}
+          {/* Toggle favoritos — solo si tiene permiso */}
           {permisos?.puedeFavoritos && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Ver</label>
@@ -449,32 +411,33 @@ export default function Agenda() {
           )}
         </div>
 
-        {/* Info de filtros activos */}
+        {/* Filtros activos */}
         {(selectedSede || selectedEdicion || showOnlyFavorites) && (
-          <div className="mt-3 text-sm text-gray-600">
-            <p>
-              Filtros activos:{" "}
-              {selectedSede && (
-                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-2">
-                  Sede: {selectedSede}
-                </span>
-              )}
-              {selectedEdicion && (
-                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-2">
-                  Edición: {selectedEdicion}
-                </span>
-              )}
-              {showOnlyFavorites && (
-                <span className="inline-block bg-red-100 text-red-800 px-2 py-1 rounded">
-                  ♥ Solo Favoritos
-                </span>
-              )}
-            </p>
+          <div className="mt-3 text-sm text-gray-600 flex flex-wrap gap-2 items-center">
+            <span className="text-gray-500">Filtros activos:</span>
+            {selectedSede && (
+              <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Sede: {selectedSede}
+                <button onClick={() => setSelectedSede("")} className="hover:text-blue-600"><X size={12} /></button>
+              </span>
+            )}
+            {selectedEdicion && (
+              <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Edición: {selectedEdicion}
+                <button onClick={() => setSelectedEdicion("")} className="hover:text-blue-600"><X size={12} /></button>
+              </span>
+            )}
+            {showOnlyFavorites && (
+              <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2 py-1 rounded">
+                ♥ Solo Favoritos
+                <button onClick={() => setShowOnlyFavorites(false)} className="hover:text-red-600"><X size={12} /></button>
+              </span>
+            )}
           </div>
         )}
       </div>
 
-      {/* Filtros por día */}
+      {/* Tabs de días */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
         <button
           onClick={() => setSelectedDay("todos")}
@@ -484,41 +447,32 @@ export default function Agenda() {
               : "bg-white text-gray-700 hover:bg-gray-100"
           }`}
         >
-          Todos ({diasPermitidos.length > 0 ? "permitidos" : "0"})
+          Todos
         </button>
 
         {days
-          .filter((day) => day.numero === 0 || diasPermitidos.includes(day.numero))
+          .filter((day) => day.numero > 0)
           .map((day) => {
-            if (day.numero === 0) return null;
-
+            const permitido = sinRestriccionDias || diasPermitidos.includes(day.numero);
             return (
               <button
                 key={day.id}
-                onClick={() => setSelectedDay(day.id)}
+                onClick={() => permitido && setSelectedDay(day.id)}
+                disabled={!permitido}
+                title={!permitido ? `Tu pase no incluye ${day.label}` : undefined}
                 className={`px-6 py-2 rounded-lg font-medium transition whitespace-nowrap ${
-                  selectedDay === day.id
+                  !permitido
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-50"
+                    : selectedDay === day.id
                     ? "bg-blue-600 text-white"
                     : "bg-white text-gray-700 hover:bg-gray-100"
                 }`}
               >
                 {day.label}
+                {!permitido && <Lock size={14} className="inline ml-1" />}
               </button>
             );
           })}
-
-        {days
-          .filter((day) => day.numero > 0 && !diasPermitidos.includes(day.numero))
-          .map((day) => (
-            <button
-              key={day.id}
-              disabled
-              title={`No tienes acceso a ${day.label}`}
-              className="px-6 py-2 rounded-lg font-medium whitespace-nowrap bg-gray-100 text-gray-400 cursor-not-allowed opacity-50"
-            >
-              {day.label} <Lock size={14} className="inline ml-1" />
-            </button>
-          ))}
       </div>
 
       {/* Lista de sesiones */}
@@ -531,21 +485,22 @@ export default function Agenda() {
                 ? "No hay sesiones disponibles"
                 : showOnlyFavorites
                 ? "No tienes sesiones marcadas como favoritas"
-                : `No hay sesiones para ti en ${selectedDay === "todos" ? "los días permitidos" : "este día"}`}
+                : `No hay sesiones para ${selectedDay === "todos" ? "los días permitidos" : "este día"}`}
             </p>
-            {sessions.length > 0 && (selectedDay !== "todos" || selectedSede || selectedEdicion || showOnlyFavorites) && (
-              <button
-                onClick={() => {
-                  setSelectedDay("todos");
-                  setSelectedSede("");
-                  setSelectedEdicion("");
-                  setShowOnlyFavorites(false);
-                }}
-                className="mt-3 text-blue-600 hover:text-blue-700 underline"
-              >
-                Limpiar filtros
-              </button>
-            )}
+            {sessions.length > 0 &&
+              (selectedDay !== "todos" || selectedSede || selectedEdicion || showOnlyFavorites) && (
+                <button
+                  onClick={() => {
+                    setSelectedDay("todos");
+                    setSelectedSede("");
+                    setSelectedEdicion("");
+                    setShowOnlyFavorites(false);
+                  }}
+                  className="mt-3 text-blue-600 hover:text-blue-700 underline"
+                >
+                  Limpiar filtros
+                </button>
+              )}
           </div>
         ) : (
           filteredSessions.map((session) => (
@@ -562,7 +517,7 @@ export default function Agenda() {
         )}
       </div>
 
-      {/* Modal de detalles de sesión */}
+      {/* Modal */}
       {selectedSession && (
         <SessionModal
           session={selectedSession}
@@ -578,45 +533,38 @@ export default function Agenda() {
 }
 
 // ========================================================
-// TARJETA DE SESIÓN - ACTUALIZADA CON PERMISOS
+// SessionCard
 // ========================================================
 function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails, canMarkFavorites, esLectura }) {
   const formatTime = (dateString) => {
     if (!dateString) return "Sin hora";
     try {
-      return new Date(dateString).toLocaleTimeString("es-MX", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch (e) {
+      return new Date(dateString).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    } catch {
       return dateString;
     }
   };
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition ${!esLectura ? 'cursor-pointer' : ''}`}
+      className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition cursor-pointer"
       onClick={onViewDetails}
     >
       <div className="flex justify-between items-start">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             {session.tipo && (
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  session.tipo === "conferencia"
-                    ? "bg-blue-100 text-blue-700"
-                    : session.tipo === "curso"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-purple-100 text-purple-700"
-                }`}
-              >
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                session.tipo === "conferencia" ? "bg-blue-100 text-blue-700"
+                  : session.tipo === "curso" ? "bg-green-100 text-green-700"
+                  : "bg-purple-100 text-purple-700"
+              }`}>
                 {session.tipo.toUpperCase()}
               </span>
             )}
-            {session.dia && (
+            {session.dia !== null && session.dia !== undefined && (
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                {session.dia}
+                Día {session.dia}
               </span>
             )}
             {session.sede && (
@@ -649,14 +597,12 @@ function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails, can
                 {session.horaFin && ` - ${formatTime(session.horaFin)}`}
               </div>
             )}
-
             {session.sala && (
               <div className="flex items-center gap-1">
                 <MapPin size={16} />
                 {session.sala}
               </div>
             )}
-
             {session.speakerNombre && (
               <div className="flex items-center gap-1">
                 <User size={16} />
@@ -668,17 +614,11 @@ function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails, can
 
         {canMarkFavorites && (
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite(session.id);
-            }}
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id); }}
             className="ml-4 p-2 hover:bg-gray-100 rounded-lg transition"
             title={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
           >
-            <Heart
-              size={24}
-              className={isFavorite ? "text-red-600 fill-red-600" : "text-gray-400"}
-            />
+            <Heart size={24} className={isFavorite ? "text-red-600 fill-red-600" : "text-gray-400"} />
           </button>
         )}
       </div>
@@ -687,51 +627,29 @@ function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails, can
 }
 
 // ========================================================
-// MODAL DE DETALLES - ACTUALIZADO CON PERMISOS
+// SessionModal
 // ========================================================
 function SessionModal({ session, isFavorite, onToggleFavorite, onClose, canMarkFavorites, esLectura }) {
   const formatTime = (dateString) => {
     if (!dateString) return "Sin hora";
     try {
-      return new Date(dateString).toLocaleTimeString("es-MX", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch (e) {
+      return new Date(dateString).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    } catch {
       return dateString;
     }
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl sticky top-0">
           <div className="flex justify-between items-start mb-4">
             <div className="flex-1">
               <h2 className="text-2xl font-bold mb-2">{session.titulo}</h2>
               <div className="flex flex-wrap gap-2">
-                {session.tipo && (
-                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/20">
-                    {session.tipo.toUpperCase()}
-                  </span>
-                )}
-                {session.sede && (
-                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/20">
-                    {session.sede.toUpperCase()}
-                  </span>
-                )}
-                {session.edicion && (
-                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/20">
-                    {session.edicion}
-                  </span>
-                )}
+                {session.tipo && <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/20">{session.tipo.toUpperCase()}</span>}
+                {session.sede && <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/20">{session.sede.toUpperCase()}</span>}
+                {session.edicion && <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/20">{session.edicion}</span>}
                 {esLectura && (
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-900 flex items-center gap-1">
                     <Lock size={14} /> Lectura
@@ -741,33 +659,18 @@ function SessionModal({ session, isFavorite, onToggleFavorite, onClose, canMarkF
             </div>
             <div className="flex items-center gap-2">
               {canMarkFavorites && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite(session.id);
-                  }}
-                  className="text-white hover:bg-white/20 p-2 rounded-lg transition"
-                  title={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
-                >
-                  <Heart
-                    size={24}
-                    className={isFavorite ? "fill-current" : ""}
-                  />
+                <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id); }} className="text-white hover:bg-white/20 p-2 rounded-lg transition">
+                  <Heart size={24} className={isFavorite ? "fill-current" : ""} />
                 </button>
               )}
-              <button
-                onClick={onClose}
-                className="text-white hover:bg-white/20 p-2 rounded-lg transition"
-              >
+              <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition">
                 <X size={24} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Descripción */}
           {session.descripcion && (
             <div>
               <h3 className="font-bold text-lg mb-2">Descripción</h3>
@@ -775,38 +678,28 @@ function SessionModal({ session, isFavorite, onToggleFavorite, onClose, canMarkF
             </div>
           )}
 
-          {/* Detalles */}
           <div className="grid grid-cols-2 gap-4">
             {(session.horaInicio || session.horaFin) && (
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <p className="text-xs text-gray-600 mb-1 flex items-center gap-2">
-                  <Clock size={14} />
-                  HORARIO
-                </p>
+                <p className="text-xs text-gray-600 mb-1 flex items-center gap-2"><Clock size={14} /> HORARIO</p>
                 <p className="font-bold text-blue-900">
                   {formatTime(session.horaInicio)}
                   {session.horaFin && ` - ${formatTime(session.horaFin)}`}
                 </p>
               </div>
             )}
-
-            {session.dia && (
+            {session.dia !== null && session.dia !== undefined && (
               <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                 <p className="text-xs text-gray-600 mb-1">DÍA</p>
-                <p className="font-bold text-purple-900 capitalize">{session.dia}</p>
+                <p className="font-bold text-purple-900">Día {session.dia}</p>
               </div>
             )}
-
             {session.sala && (
               <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                <p className="text-xs text-gray-600 mb-1 flex items-center gap-2">
-                  <MapPin size={14} />
-                  SALA
-                </p>
+                <p className="text-xs text-gray-600 mb-1 flex items-center gap-2"><MapPin size={14} /> SALA</p>
                 <p className="font-bold text-green-900">{session.sala}</p>
               </div>
             )}
-
             {session.edicion && (
               <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
                 <p className="text-xs text-gray-600 mb-1">EDICIÓN</p>
@@ -815,39 +708,26 @@ function SessionModal({ session, isFavorite, onToggleFavorite, onClose, canMarkF
             )}
           </div>
 
-          {/* Speaker */}
           {session.speakerNombre && (
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <p className="text-xs text-gray-600 mb-2 flex items-center gap-2">
-                <User size={14} />
-                EXPOSITOR
-              </p>
+              <p className="text-xs text-gray-600 mb-2 flex items-center gap-2"><User size={14} /> EXPOSITOR</p>
               <p className="font-bold text-gray-900">{session.speakerNombre}</p>
             </div>
           )}
 
-          {/* Botones */}
           <div className="flex gap-2">
             {canMarkFavorites && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleFavorite(session.id);
-                }}
+                onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id); }}
                 className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                  isFavorite
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                  isFavorite ? "bg-red-600 text-white hover:bg-red-700" : "bg-gray-200 text-gray-800 hover:bg-gray-300"
                 }`}
               >
                 <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
                 {isFavorite ? "En Favoritos" : "Agregar a Favoritos"}
               </button>
             )}
-            <button
-              onClick={onClose}
-              className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
-            >
+            <button onClick={onClose} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
               Cerrar
             </button>
           </div>
