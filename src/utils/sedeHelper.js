@@ -1,16 +1,18 @@
 // src/utils/sedeHelper.js
-
-/**
- * MAPEO CENTRALIZADO DE PERMISOS POR ROL + TIPO_PASE
- * 
- * Retorna objeto con permisos completos según:
- * - rol: 'asistente' | 'expositor' | 'speaker' | 'staff' | 'super_admin'
- * - tipo_pase: 'general' | 'curso' | 'sesiones' | 'combo' | (null para roles especiales)
- * - user: { sede, multi_sedes, edicion, ... }
- */
+//
+// ============================================================
+// CORRECCIÓN APLICADA:
+//   Los roles en la DB son:
+//     'asistente_general' | 'asistente_curso' |
+//     'asistente_sesiones' | 'asistente_combo'
+//   El código anterior esperaba rol='asistente' + tipo_pase,
+//   lo que dejaba todos los asistentes sin permisos (caían
+//   en el default). Ahora cada rol compuesto se resuelve
+//   directamente sin depender de tipo_pase para ramificar.
+// ============================================================
 
 export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
-  
+
   // ========== PERMISOS POR DEFECTO (TODO BLOQUEADO) ==========
   const permisosPorDefecto = {
     // Vistas principales
@@ -20,45 +22,44 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
     verRegistros: false,
     verMapa: false,
     verNetworking: false,
-    verPerfil: true, // Todos ven su perfil propio
-    
-    // ============ SEMANA 2 - PERMISOS NUEVOS ============
-    verMisRegistros: false,  // Check-ins del usuario
-    verQR: false,             // QR para entrada
-    verMiMarca: false,        // Panel expositor (visitantes)
-    verMiSesion: false,       // Panel speaker (detalles sesión)
-    verStaffPanel: false,     // Panel de staff
-    
+    verPerfil: true,
+
+    // Permisos de sección especial
+    verMisRegistros: false,
+    verQR: false,
+    verMiMarca: false,
+    verMiSesion: false,
+    verStaffPanel: false,
+
     // Funcionalidades
     puedeFavoritos: false,
-    esLectura: false, // true = solo lectura
+    esLectura: false,
     puedeEditar: false,
     puedeCrear: false,
     puedeEliminar: false,
-    
+
     // Filtros
-    diasPermitidos: [], // [1,2,3,4]
-    filtraSede: true, // Por defecto filtra
+    diasPermitidos: [],
+    filtraSede: true,
     filtraEdicion: true,
-    filterByUser: false, // Filtra solo registros del usuario actual
-    
+    filterByUser: false,
+
     // Registros
     verRegistroEntradas: false,
     verRegistroSesion: false,
     verRegistroCurso: false,
-    
-    // Menú
-    menuItems: ['Perfil'], // Mínimo para todos
-    
-    // Extra
-    categoria: null, // 'curso' | 'sesion' | 'todos'
+
+    // Menú dinámico
+    menuItems: ['Perfil'],
+
+    // Categoría de contenido
+    categoria: null,
   };
 
-  // ========== SUPER ADMIN (Desarrollador - Acceso Total) ==========
+  // ========== SUPER ADMIN — acceso total ==========
   if (rol === 'super_admin') {
     return {
       ...permisosPorDefecto,
-      
       verAgenda: true,
       verExpositores: true,
       verSpeakers: true,
@@ -66,29 +67,23 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
       verMapa: true,
       verNetworking: true,
       verPerfil: true,
-      
-      // ============ SEMANA 2 - SUPER ADMIN ============
       verMisRegistros: true,
       verQR: true,
       verMiMarca: true,
       verMiSesion: true,
       verStaffPanel: true,
-      
       puedeFavoritos: false,
       esLectura: false,
       puedeEditar: true,
       puedeCrear: true,
       puedeEliminar: true,
-      
-      filtraSede: false, // Sin filtro
-      filtraEdicion: false, // Sin filtro
+      filtraSede: false,
+      filtraEdicion: false,
       filterByUser: false,
       diasPermitidos: [1, 2, 3, 4],
-      
       verRegistroEntradas: true,
       verRegistroSesion: true,
       verRegistroCurso: true,
-      
       menuItems: [
         'Dashboard',
         'Admin Panel',
@@ -100,18 +95,16 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
         'Notificaciones',
         'Configuración',
         'Perfil',
-        'Excel Import'
+        'Excel Import',
       ],
-      
       categoria: 'todos',
     };
   }
 
-  // ========== STAFF (Admin del evento) ==========
+  // ========== STAFF — admin del evento ==========
   if (rol === 'staff') {
     return {
       ...permisosPorDefecto,
-      
       verAgenda: true,
       verExpositores: true,
       verSpeakers: true,
@@ -119,29 +112,23 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
       verMapa: true,
       verNetworking: false,
       verPerfil: true,
-      
-      // ============ SEMANA 2 - STAFF (Lectura) ============
-      verMisRegistros: false,  // No ve registros de otros
-      verQR: false,             // No necesita QR de otros
-      verMiMarca: true,         // VE registros de expositores (lectura)
-      verMiSesion: true,        // VE sesiones de speakers (lectura)
-      verStaffPanel: true,      // ¡ACCESO al panel!
-      
+      verMisRegistros: false,
+      verQR: false,
+      verMiMarca: true,
+      verMiSesion: true,
+      verStaffPanel: true,
       puedeFavoritos: false,
-      esLectura: true, // Lectura en agenda/speakers/expositores
-      puedeEditar: false, // No edita usuarios
+      esLectura: true,
+      puedeEditar: false,
       puedeCrear: false,
       puedeEliminar: false,
-      
-      filtraSede: false, // Sin filtro
-      filtraEdicion: false, // Sin filtro
+      filtraSede: false,
+      filtraEdicion: false,
       filterByUser: false,
       diasPermitidos: [1, 2, 3, 4],
-      
       verRegistroEntradas: true,
       verRegistroSesion: true,
       verRegistroCurso: true,
-      
       menuItems: [
         'Staff Panel',
         'Usuarios',
@@ -149,206 +136,16 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
         'Speakers',
         'Expositores',
         'Notificaciones',
-        'Perfil'
+        'Perfil',
       ],
-      
       categoria: 'todos',
     };
-  }
-
-  // ========== ASISTENTE (según tipo_pase) ==========
-  if (rol === 'asistente') {
-    
-    // ============ ASISTENTE GENERAL ============
-    if (tipo_pase === 'general') {
-      return {
-        ...permisosPorDefecto,
-        
-        verAgenda: false,
-        verExpositores: true,
-        verSpeakers: false,
-        verRegistros: true,
-        verMapa: true,
-        verNetworking: true,
-        verPerfil: true,
-        
-        // ============ SEMANA 2 - ASISTENTE GENERAL ============
-        verMisRegistros: true,
-        verQR: true,
-        verMiMarca: false,
-        verMiSesion: false,
-        verStaffPanel: false,
-        
-        puedeFavoritos: false,
-        esLectura: false,
-        puedeEditar: false,
-        
-        filtraSede: true,
-        filtraEdicion: true,
-        filterByUser: true,  // Solo sus registros
-        diasPermitidos: [3, 4], // Solo registros D3-D4
-        
-        verRegistroEntradas: true,
-        verRegistroSesion: false,
-        verRegistroCurso: false,
-        
-        menuItems: [
-          'Mapa Expo',
-          'Expositores',
-          'Networking',
-          'Mis Registros',
-          'QR',
-          'Perfil'
-        ],
-        
-        categoria: null,
-      };
-    }
-    
-    // ============ ASISTENTE CURSO ============
-    if (tipo_pase === 'curso') {
-      return {
-        ...permisosPorDefecto,
-        
-        verAgenda: true,
-        verExpositores: false,
-        verSpeakers: false,
-        verRegistros: true,
-        verMapa: false,
-        verNetworking: false,
-        verPerfil: true,
-        
-        // ============ SEMANA 2 - ASISTENTE CURSO ============
-        verMisRegistros: true,
-        verQR: true,
-        verMiMarca: false,
-        verMiSesion: false,
-        verStaffPanel: false,
-        
-        puedeFavoritos: false,
-        esLectura: false,
-        puedeEditar: false,
-        
-        filtraSede: true,
-        filtraEdicion: true,
-        filterByUser: true,  // Solo sus registros
-        diasPermitidos: [1, 2],
-        
-        verRegistroEntradas: true,
-        verRegistroSesion: false,
-        verRegistroCurso: true,
-        
-        menuItems: [
-          'Agenda (D1-D2)',
-          'Mis Registros',
-          'QR',
-          'Perfil'
-        ],
-        
-        categoria: 'curso',
-      };
-    }
-    
-    // ============ ASISTENTE SESIONES ============
-    if (tipo_pase === 'sesiones') {
-      return {
-        ...permisosPorDefecto,
-        
-        verAgenda: true,
-        verExpositores: true,
-        verSpeakers: true,
-        verRegistros: true,
-        verMapa: true,
-        verNetworking: true,
-        verPerfil: true,
-        
-        // ============ SEMANA 2 - ASISTENTE SESIONES ============
-        verMisRegistros: true,
-        verQR: true,
-        verMiMarca: false,
-        verMiSesion: false,
-        verStaffPanel: false,
-        
-        puedeFavoritos: true, // ¡ÚNICO que puede marcar favoritos!
-        esLectura: false,
-        puedeEditar: false,
-        
-        filtraSede: true,
-        filtraEdicion: true,
-        filterByUser: true,  // Solo sus registros
-        diasPermitidos: [3, 4],
-        
-        verRegistroEntradas: true,
-        verRegistroSesion: true,
-        verRegistroCurso: false,
-        
-        menuItems: [
-          'Agenda (D3-D4)',
-          'Expositores',
-          'Speakers',
-          'Networking',
-          'Mis Registros',
-          'QR',
-          'Perfil'
-        ],
-        
-        categoria: 'sesion',
-      };
-    }
-    
-    // ============ ASISTENTE COMBO ============
-    if (tipo_pase === 'combo') {
-      return {
-        ...permisosPorDefecto,
-        
-        verAgenda: true,
-        verExpositores: true,
-        verSpeakers: true,
-        verRegistros: true,
-        verMapa: true,
-        verNetworking: true,
-        verPerfil: true,
-        
-        // ============ SEMANA 2 - ASISTENTE COMBO ============
-        verMisRegistros: true,
-        verQR: true,
-        verMiMarca: false,
-        verMiSesion: false,
-        verStaffPanel: false,
-        
-        puedeFavoritos: true,
-        esLectura: false,
-        puedeEditar: false,
-        
-        filtraSede: true,
-        filtraEdicion: true,
-        filterByUser: true,  // Solo sus registros
-        diasPermitidos: [1, 2, 3, 4],
-        
-        verRegistroEntradas: true,
-        verRegistroSesion: true,
-        verRegistroCurso: true,
-        
-        menuItems: [
-          'Agenda (D1-4)',
-          'Expositores',
-          'Speakers',
-          'Networking',
-          'Mis Registros',
-          'QR',
-          'Perfil'
-        ],
-        
-        categoria: 'todos',
-      };
-    }
   }
 
   // ========== EXPOSITOR ==========
   if (rol === 'expositor') {
     return {
       ...permisosPorDefecto,
-      
       verAgenda: true,
       verExpositores: true,
       verSpeakers: false,
@@ -356,29 +153,23 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
       verMapa: true,
       verNetworking: true,
       verPerfil: true,
-      
-      // ============ SEMANA 2 - EXPOSITOR ============
       verMisRegistros: true,
-      verQR: false,  // No necesita su QR
-      verMiMarca: true,  // ¡PANEL DE VISITANTES!
+      verQR: false,
+      verMiMarca: true,
       verMiSesion: false,
       verStaffPanel: false,
-      
       puedeFavoritos: false,
-      esLectura: true, // Agenda solo lectura
-      puedeEditar: true, // Edita su marca
+      esLectura: true,
+      puedeEditar: true,
       puedeCrear: false,
       puedeEliminar: false,
-      
       filtraSede: true,
       filtraEdicion: true,
-      filterByUser: true,  // Solo sus registros
-      diasPermitidos: [3, 4], // Solo registros D3-D4
-      
+      filterByUser: true,
+      diasPermitidos: [3, 4],
       verRegistroEntradas: true,
       verRegistroSesion: false,
       verRegistroCurso: false,
-      
       menuItems: [
         'Agenda (lectura)',
         'Mapa Expo',
@@ -386,10 +177,8 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
         'Networking',
         'Mi Marca',
         'Mis Registros',
-        'Perfil'
-        //'Mi QR'
+        'Perfil',
       ],
-      
       categoria: null,
     };
   }
@@ -398,7 +187,6 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
   if (rol === 'speaker') {
     return {
       ...permisosPorDefecto,
-      
       verAgenda: true,
       verExpositores: true,
       verSpeakers: true,
@@ -406,45 +194,196 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
       verMapa: true,
       verNetworking: false,
       verPerfil: true,
-      
-      // ============ SEMANA 2 - SPEAKER ============
       verMisRegistros: true,
-      verQR: true,  // Su QR
+      verQR: true,
       verMiMarca: false,
-      verMiSesion: true,  // ¡PANEL DE SESIÓN!
+      verMiSesion: true,
       verStaffPanel: false,
-      
       puedeFavoritos: false,
       esLectura: false,
-      puedeEditar: true, // Edita su perfil (bio, foto)
+      puedeEditar: true,
       puedeCrear: false,
       puedeEliminar: false,
-      
       filtraSede: true,
       filtraEdicion: true,
-      filterByUser: true,  // Solo sus registros
+      filterByUser: true,
       diasPermitidos: [1, 2, 3, 4],
-      
       verRegistroEntradas: true,
-      verRegistroSesion: true, // Ve asistencia de su sesión
+      verRegistroSesion: true,
       verRegistroCurso: false,
-      
       menuItems: [
         'Agenda',
         'Mi Sesión',
         'Mi QR',
         'Mis Registros',
-        'Perfil',
         'Mapa Expo',
-        'Expositores'
+        'Expositores',
+        'Perfil',
       ],
-      
       categoria: null,
     };
   }
 
-  // ========== FALLBACK (Rol no reconocido) ==========
-  console.warn(`⚠️ Rol no reconocido: ${rol}. Retornando permisos por defecto.`);
+  // ========== ASISTENTES — resueltos por rol compuesto ==========
+  // FIX: La DB guarda 'asistente_general', 'asistente_curso', etc.
+  // El código anterior esperaba rol='asistente' y chequeaba tipo_pase,
+  // lo que nunca coincidía y dejaba permisos vacíos.
+  // Ahora cada variante tiene su propio bloque directo.
+
+  // ---- ASISTENTE GENERAL ----
+  if (rol === 'asistente_general' || (rol === 'asistente' && tipo_pase === 'general')) {
+    return {
+      ...permisosPorDefecto,
+      verAgenda: false,
+      verExpositores: true,
+      verSpeakers: false,
+      verRegistros: true,
+      verMapa: true,
+      verNetworking: true,
+      verPerfil: true,
+      verMisRegistros: true,
+      verQR: true,
+      verMiMarca: false,
+      verMiSesion: false,
+      verStaffPanel: false,
+      puedeFavoritos: false,
+      esLectura: false,
+      puedeEditar: false,
+      filtraSede: true,
+      filtraEdicion: true,
+      filterByUser: true,
+      diasPermitidos: [3, 4],
+      verRegistroEntradas: true,
+      verRegistroSesion: false,
+      verRegistroCurso: false,
+      menuItems: [
+        'Mapa Expo',
+        'Expositores',
+        'Networking',
+        'Mis Registros',
+        'QR',
+        'Perfil',
+      ],
+      categoria: null,
+    };
+  }
+
+  // ---- ASISTENTE CURSO ----
+  if (rol === 'asistente_curso' || (rol === 'asistente' && tipo_pase === 'curso')) {
+    return {
+      ...permisosPorDefecto,
+      verAgenda: true,
+      verExpositores: false,
+      verSpeakers: false,
+      verRegistros: true,
+      verMapa: false,
+      verNetworking: false,
+      verPerfil: true,
+      verMisRegistros: true,
+      verQR: true,
+      verMiMarca: false,
+      verMiSesion: false,
+      verStaffPanel: false,
+      puedeFavoritos: false,
+      esLectura: false,
+      puedeEditar: false,
+      filtraSede: true,
+      filtraEdicion: true,
+      filterByUser: true,
+      diasPermitidos: [1, 2],
+      verRegistroEntradas: true,
+      verRegistroSesion: false,
+      verRegistroCurso: true,
+      menuItems: [
+        'Agenda (D1-D2)',
+        'Mis Registros',
+        'QR',
+        'Perfil',
+      ],
+      categoria: 'curso',
+    };
+  }
+
+  // ---- ASISTENTE SESIONES ----
+  if (rol === 'asistente_sesiones' || (rol === 'asistente' && tipo_pase === 'sesiones')) {
+    return {
+      ...permisosPorDefecto,
+      verAgenda: true,
+      verExpositores: true,
+      verSpeakers: true,
+      verRegistros: true,
+      verMapa: true,
+      verNetworking: true,
+      verPerfil: true,
+      verMisRegistros: true,
+      verQR: true,
+      verMiMarca: false,
+      verMiSesion: false,
+      verStaffPanel: false,
+      puedeFavoritos: true,
+      esLectura: false,
+      puedeEditar: false,
+      filtraSede: true,
+      filtraEdicion: true,
+      filterByUser: true,
+      diasPermitidos: [3, 4],
+      verRegistroEntradas: true,
+      verRegistroSesion: true,
+      verRegistroCurso: false,
+      menuItems: [
+        'Agenda (D3-D4)',
+        'Expositores',
+        'Speakers',
+        'Networking',
+        'Mis Registros',
+        'QR',
+        'Perfil',
+      ],
+      categoria: 'sesion',
+    };
+  }
+
+  // ---- ASISTENTE COMBO ----
+  if (rol === 'asistente_combo' || (rol === 'asistente' && tipo_pase === 'combo')) {
+    return {
+      ...permisosPorDefecto,
+      verAgenda: true,
+      verExpositores: true,
+      verSpeakers: true,
+      verRegistros: true,
+      verMapa: true,
+      verNetworking: true,
+      verPerfil: true,
+      verMisRegistros: true,
+      verQR: true,
+      verMiMarca: false,
+      verMiSesion: false,
+      verStaffPanel: false,
+      puedeFavoritos: true,
+      esLectura: false,
+      puedeEditar: false,
+      filtraSede: true,
+      filtraEdicion: true,
+      filterByUser: true,
+      diasPermitidos: [1, 2, 3, 4],
+      verRegistroEntradas: true,
+      verRegistroSesion: true,
+      verRegistroCurso: true,
+      menuItems: [
+        'Agenda (D1-4)',
+        'Expositores',
+        'Speakers',
+        'Networking',
+        'Mis Registros',
+        'QR',
+        'Perfil',
+      ],
+      categoria: 'todos',
+    };
+  }
+
+  // ========== FALLBACK — rol no reconocido ==========
+  console.warn(`⚠️ sedeHelper: rol no reconocido → "${rol}" (tipo_pase: "${tipo_pase}"). Retornando permisos vacíos.`);
   return permisosPorDefecto;
 };
 

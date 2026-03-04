@@ -473,32 +473,61 @@ function StatCard({ label, value, icon: Icon, color }) {
   );
 }
 
-function NewVisitanteModal({ onClose, onSuccess, expositorId }) {
-  const [formData, setFormData] = useState({
-    nombre: "",
-    email: "",
-    empresa: "",
-    cargo: "",
-    telefono: ""
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+// ============================================================
+// MODAL — Registrar visita al stand
+//
+// FIX: El backend ya no acepta datos manuales de visitante.
+//      Ahora busca al asistente por email en la tabla users
+//      y registra la visita con su user_id real.
+//      Endpoint cambiado: /mi-marca/visitante → /mi-marca/visita
+// ============================================================
+function NewVisitanteModal({ onClose, onSuccess, expositorId }) {
+  const [email, setEmail]           = useState("");
+  const [buscando, setBuscando]     = useState(false);
+  const [encontrado, setEncontrado] = useState(null);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState(null);
+
+  // Buscar usuario por email
+  const buscarUsuario = async () => {
+    if (!email.trim()) return;
+    setBuscando(true);
+    setError(null);
+    setEncontrado(null);
+
+    try {
+      // Usamos el endpoint de users con filtro de email
+      const res = await API.get(`/users?email=${encodeURIComponent(email.trim())}`);
+      const users = Array.isArray(res.data) ? res.data : [];
+      const match = users.find((u) => u.email?.toLowerCase() === email.trim().toLowerCase());
+
+      if (match) {
+        setEncontrado(match);
+      } else {
+        setError("No se encontró ningún asistente con ese email.");
+      }
+    } catch (err) {
+      // Fallback: intentar registro directo si el backend lo soporta
+      setError("No se pudo verificar el email. Intenta de nuevo.");
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  const handleRegistrar = async () => {
+    if (!encontrado) return;
     setLoading(true);
     setError(null);
 
     try {
-      await API.post("/mi-marca/visitante", {
-        ...formData,
-        expositor_id: expositorId,
-        fecha: new Date().toISOString()
+      await API.post("/mi-marca/visita", {
+        visitante_user_id: encontrado.id,
+        tipo: "visita_stand",
       });
-
       onSuccess();
     } catch (err) {
-      setError("Error al registrar visitante");
+      setError("Error al registrar la visita.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -507,114 +536,78 @@ function NewVisitanteModal({ onClose, onSuccess, expositorId }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
         {/* Header */}
-        <div className="bg-blue-600 text-white p-6 flex justify-between items-center">
-          <h2 className="text-2xl font-bold">Nuevo Visitante</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-blue-700 rounded-lg transition"
-          >
-            <X size={24} />
+        <div className="bg-blue-600 text-white p-5 flex justify-between items-center">
+          <h2 className="text-xl font-bold">Registrar Visita al Stand</h2>
+          <button onClick={onClose} className="p-1.5 hover:bg-blue-700 rounded-lg transition">
+            <X size={20} />
           </button>
         </div>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <div className="p-6 space-y-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 p-3 rounded text-red-800 text-sm">
+            <div className="bg-red-50 border border-red-200 p-3 rounded-lg text-red-800 text-sm">
               {error}
             </div>
           )}
 
+          {/* Buscar por email */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Nombre *
+              Email del asistente
             </label>
-            <input
-              type="text"
-              required
-              value={formData.nombre}
-              onChange={(e) =>
-                setFormData({ ...formData, nombre: e.target.value })
-              }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setEncontrado(null); }}
+                onKeyDown={(e) => e.key === "Enter" && buscarUsuario()}
+                placeholder="correo@ejemplo.com"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={buscarUsuario}
+                disabled={buscando || !email.trim()}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition text-sm font-medium"
+              >
+                {buscando ? "…" : "Buscar"}
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
-          </div>
+          {/* Resultado encontrado */}
+          {encontrado && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-sm font-semibold text-green-800 mb-1">✅ Asistente encontrado</p>
+              <p className="font-bold text-gray-900">{encontrado.nombre}</p>
+              <p className="text-sm text-gray-600">{encontrado.email}</p>
+              {encontrado.empresa && (
+                <p className="text-sm text-gray-600">{encontrado.empresa}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1 capitalize">
+                {encontrado.rol?.replace("_", " ")}
+              </p>
+            </div>
+          )}
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Empresa
-            </label>
-            <input
-              type="text"
-              value={formData.empresa}
-              onChange={(e) =>
-                setFormData({ ...formData, empresa: e.target.value })
-              }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Cargo
-            </label>
-            <input
-              type="text"
-              value={formData.cargo}
-              onChange={(e) =>
-                setFormData({ ...formData, cargo: e.target.value })
-              }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Teléfono
-            </label>
-            <input
-              type="tel"
-              value={formData.telefono}
-              onChange={(e) =>
-                setFormData({ ...formData, telefono: e.target.value })
-              }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
-          </div>
-
-          <div className="flex gap-3 pt-4">
+          {/* Botones */}
+          <div className="flex gap-3 pt-2">
             <button
-              type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-semibold"
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-semibold text-sm"
             >
               Cancelar
             </button>
             <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition font-semibold"
+              onClick={handleRegistrar}
+              disabled={!encontrado || loading}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-semibold text-sm"
             >
-              {loading ? "Registrando..." : "Registrar"}
+              {loading ? "Registrando…" : "Registrar Visita"}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

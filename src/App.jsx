@@ -1,29 +1,60 @@
-import { Navigate, Route, Routes, BrowserRouter as Router } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext.jsx";
 import { EventProvider } from "./contexts/EventContext.jsx";
 import { NotificationProvider } from "./contexts/NotificationContext.jsx";
 
+// Layout
 import Layout from "./Components/layout/Layout.jsx";
+
+// Páginas públicas
 import Login from "./pages/Login.jsx";
+
+// Páginas comunes
 import Dashboard from "./pages/Dashboard.jsx";
 import Agenda from "./pages/Agenda.jsx";
 import Speakers from "./pages/Speakers.jsx";
 import Expositores from "./pages/Expositores.jsx";
 import Notificaciones from "./pages/Notificaciones.jsx";
 import Perfil from "./pages/Perfil.jsx";
-import StaffPanel from "./pages/StaffPanel.jsx";
-import UsuariosPanel from "./pages/UsuariosPanel.jsx";
-import ConfiguracionPanel from "./pages/ConfiguracionPanel.jsx";
-import ExcelImport from "./pages/ExcelImport.jsx";
-import QR from "./pages/QR.jsx";
-import MisRegistros from "./pages/MisRegistros.jsx";
 import Networking from "./pages/Networking.jsx";
+
+// Páginas de asistente
+import MisRegistros from "./pages/MisRegistros.jsx";
+import QR from "./pages/QR.jsx";
+
+// Páginas de rol especial
 import MiMarca from "./pages/MiMarca.jsx";
 import MiSesion from "./pages/MiSesion.jsx";
+
+// Páginas de staff / admin
+import StaffPanel from "./pages/StaffPanel.jsx";
+import UsuariosPanel from "./pages/UsuariosPanel.jsx";
+import AdminPanel from "./pages/AdminPanel.jsx";
+import ConfiguracionPanel from "./pages/ConfiguracionPanel.jsx";
+import ExcelImport from "./pages/ExcelImport.jsx";
+
+// 404
 import NotFound from "./pages/notfound-page.jsx";
 
 // ============================================================
-// PrivateRoute — guard genérico por rol
+// TODOS LOS ROLES VÁLIDOS DEL SISTEMA
+// FIX: La versión anterior solo incluía 'asistente' (genérico),
+//      bloqueando a los 4 subtipos que la DB guarda con nombres
+//      compuestos como 'asistente_general', 'asistente_curso', etc.
+// ============================================================
+const TODOS_LOS_ROLES = [
+  'asistente_general',
+  'asistente_curso',
+  'asistente_sesiones',
+  'asistente_combo',
+  'expositor',
+  'speaker',
+  'staff',
+  'super_admin',
+];
+
+// ============================================================
+// PrivateRoute — guard por rol exacto
 // ============================================================
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -39,6 +70,7 @@ function PrivateRoute({ children, roles }) {
   if (!user) return <Navigate to="/login" replace />;
 
   if (roles && !roles.includes(user.rol)) {
+    console.warn(`⛔ Acceso denegado: rol "${user.rol}" no está en [${roles.join(', ')}]`);
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -46,8 +78,7 @@ function PrivateRoute({ children, roles }) {
 }
 
 // ============================================================
-// PermRoute — guard basado en un permiso específico de sedeHelper
-// Redirige a /dashboard si el permiso es false
+// PermRoute — guard por permiso específico de sedeHelper
 // ============================================================
 function PermRoute({ children, permiso }) {
   const { user, permisos, loading } = useAuth();
@@ -62,10 +93,11 @@ function PermRoute({ children, permiso }) {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Esperar a que los permisos estén listos
+  // Esperar a que sedeHelper construya los permisos
   if (!permisos) return null;
 
   if (!permisos[permiso]) {
+    console.warn(`⛔ PermRoute: permiso "${permiso}" es false para rol "${user.rol}"`);
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -73,7 +105,7 @@ function PermRoute({ children, permiso }) {
 }
 
 // ============================================================
-// AppWithEvent — rutas principales
+// AppWithEvent — árbol de rutas
 // ============================================================
 function AppWithEvent() {
   const { user } = useAuth();
@@ -82,22 +114,31 @@ function AppWithEvent() {
     <EventProvider user={user}>
       <Router>
         <Routes>
-          {/* Login — sin Layout */}
+
+          {/* ── Login — sin layout ── */}
           <Route path="/login" element={<Login />} />
 
-          {/* Rutas protegidas — dentro del Layout */}
+          {/* ── Rutas protegidas — dentro del Layout ── */}
           <Route
             path="/"
             element={
-              <PrivateRoute roles={["asistente", "staff", "speaker", "expositor", "super_admin"]}>
+              // FIX: incluir los 8 roles reales (antes solo 'asistente' genérico)
+              <PrivateRoute roles={TODOS_LOS_ROLES}>
                 <Layout />
               </PrivateRoute>
             }
           >
-            {/* Dashboard — todos los roles autenticados */}
+
+            {/* Dashboard — todos los roles */}
             <Route path="dashboard" element={<Dashboard />} />
 
-            {/* Agenda — solo roles con verAgenda=true (sedeHelper) */}
+            {/* Perfil — todos los roles */}
+            <Route path="perfil" element={<Perfil />} />
+
+            {/* Notificaciones — todos los roles */}
+            <Route path="notificaciones" element={<Notificaciones />} />
+
+            {/* Agenda — solo quienes tienen verAgenda=true */}
             <Route
               path="agenda"
               element={
@@ -107,7 +148,7 @@ function AppWithEvent() {
               }
             />
 
-            {/* Speakers — solo roles con verSpeakers=true */}
+            {/* Speakers — solo quienes tienen verSpeakers=true */}
             <Route
               path="speakers"
               element={
@@ -117,7 +158,7 @@ function AppWithEvent() {
               }
             />
 
-            {/* Expositores — solo roles con verExpositores=true */}
+            {/* Expositores — solo quienes tienen verExpositores=true */}
             <Route
               path="expositores"
               element={
@@ -127,7 +168,18 @@ function AppWithEvent() {
               }
             />
 
-            {/* Networking — solo roles con verNetworking=true */}
+            {/* Mapa Expo — solo quienes tienen verMapa=true */}
+            {/* FIX: ruta faltante — el menú apuntaba aquí pero no existía */}
+            <Route
+              path="mapa-expo"
+              element={
+                <PermRoute permiso="verMapa">
+                  <Expositores modoMapa />
+                </PermRoute>
+              }
+            />
+
+            {/* Networking — solo quienes tienen verNetworking=true */}
             <Route
               path="networking"
               element={
@@ -137,7 +189,7 @@ function AppWithEvent() {
               }
             />
 
-            {/* Mis Registros — solo roles con verMisRegistros=true */}
+            {/* Mis Registros — asistentes, speaker, expositor */}
             <Route
               path="mis-registros"
               element={
@@ -147,7 +199,7 @@ function AppWithEvent() {
               }
             />
 
-            {/* QR — solo roles con verQR=true */}
+            {/* QR — asistentes y speaker */}
             <Route
               path="qr"
               element={
@@ -177,12 +229,6 @@ function AppWithEvent() {
               }
             />
 
-            {/* Perfil — todos */}
-            <Route path="perfil" element={<Perfil />} />
-
-            {/* Notificaciones — todos */}
-            <Route path="notificaciones" element={<Notificaciones />} />
-
             {/* Staff Panel — staff + super_admin */}
             <Route
               path="staff"
@@ -193,12 +239,23 @@ function AppWithEvent() {
               }
             />
 
-            {/* Usuarios Panel — staff (lectura) + super_admin (CRUD) */}
+            {/* Usuarios — staff (lectura) y super_admin (CRUD) */}
             <Route
               path="usuarios"
               element={
-                <PrivateRoute roles={["staff", "super_admin"]}>
+                <PrivateRoute roles={['staff', 'super_admin']}>
                   <UsuariosPanel />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Admin Panel — super_admin únicamente */}
+            {/* FIX: ruta faltante — AdminPanel.jsx existía pero sin Route */}
+            <Route
+              path="admin"
+              element={
+                <PrivateRoute roles={['super_admin']}>
+                  <AdminPanel />
                 </PrivateRoute>
               }
             />
@@ -207,7 +264,7 @@ function AppWithEvent() {
             <Route
               path="configuracion"
               element={
-                <PrivateRoute roles={["super_admin"]}>
+                <PrivateRoute roles={['super_admin']}>
                   <ConfiguracionPanel />
                 </PrivateRoute>
               }
@@ -217,18 +274,20 @@ function AppWithEvent() {
             <Route
               path="admin/import"
               element={
-                <PrivateRoute roles={["super_admin"]}>
+                <PrivateRoute roles={['super_admin']}>
                   <ExcelImport />
                 </PrivateRoute>
               }
             />
+
           </Route>
 
-          {/* 404 */}
+          {/* ── 404 ── */}
           <Route path="/404" element={<NotFound />} />
 
-          {/* Catch-all → dashboard */}
+          {/* ── Catch-all → dashboard ── */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
         </Routes>
       </Router>
     </EventProvider>
