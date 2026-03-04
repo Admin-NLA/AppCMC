@@ -1,66 +1,43 @@
 import axios from "axios";
 
-// URL base de tu WordPress
-export const WP_BASE_URL = process.env.WP_API_URL || 'https://cmc-latam.com/wp-json/wp/v2';
+// ============================================================
+// config/wordpress.js
+// Cliente HTTP para la API REST de WordPress (cmc-latam.com)
+// ============================================================
 
-// Configuración de autenticación
+export const WP_BASE_URL =
+  process.env.WP_API_URL || "https://cmc-latam.com/wp-json/wp/v2";
+
 const WP_AUTH = {
-  username: process.env.WP_USERNAME || '',
-  password: process.env.WP_APP_PASSWORD || ''
+  username: process.env.WP_USERNAME || "",
+  password: process.env.WP_APP_PASSWORD || "",
 };
 
-// Cliente de WordPress
+/** Cliente axios preconfigurado para WordPress */
 export const wordpressAPI = axios.create({
   baseURL: WP_BASE_URL,
   timeout: 10000,
-  auth: WP_AUTH.username && WP_AUTH.password ? WP_AUTH : undefined
+  auth: WP_AUTH.username && WP_AUTH.password ? WP_AUTH : undefined,
 });
 
-// Helper para obtener posts personalizados
+/** Obtiene una colección de posts personalizados */
 export const getCustomPosts = async (postType, params = {}) => {
   const res = await wordpressAPI.get(`/${postType}`, {
     params: { per_page: 100, ...params },
   });
   return res.data;
 };
-    /*
-    console.log(`[WordPress] Obteniendo ${postType}...`);
-    const response = await wordpressAPI.get(`/${postType}`, { params: defaultParams });
-    console.log(`[WordPress] ✅ ${response.data.length} ${postType} obtenidos`);
-    return response.data;
-  } catch (error) {
-    console.error(`[WordPress] ❌ Error obteniendo ${postType}:`, error.message);
-    if (error.response) {
-      console.error(`[WordPress] Status: ${error.response.status}`);
-    }
-    throw error;
-  }
-}; */
 
-// Obtener un post específico por ID
+/** Obtiene un post específico por ID */
 export const getPostById = async (postType, id) => {
   const res = await wordpressAPI.get(`/${postType}/${id}`);
   return res.data;
 };
-/*  try {
-    console.log(`[WordPress] Obteniendo ${postType} con ID ${id}...`);
-    const response = await wordpressAPI.get(`/${postType}/${id}`);
-    console.log(`[WordPress] ✅ ${postType} obtenido`);
-    return response.data;
-  } catch (error) {
-    console.error(`[WordPress] ❌ Error obteniendo ${postType} ${id}:`, error.message);
-    throw error;
-  }
-};*/
 
-// Funciones específicas para CMC
+/** Shorthand: sesiones del evento */
 export const getSessions = (params = {}) =>
   getCustomPosts("session", params);
 
- /* return await getCustomPosts('session', params);
-};*/
-
+/** Shorthand: speakers (team-members) */
 export const getSpeakers = (params = {}) =>
   getCustomPosts("team-member", params);
- /* return await getCustomPosts('team-member', params);
-};*/

@@ -1,50 +1,33 @@
 import express from 'express';
 import pool from '../db.js';
 import { authRequired } from '../utils/authMiddleware.js';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 
 // ========================================================
-// GET /users - Obtener lista de usuarios (admin solo)
+// GET /users - Obtener lista de usuarios (super_admin o staff)
 // ========================================================
 router.get('/', authRequired, async (req, res) => {
   try {
-    // Verificar que el usuario es admin
-    if (req.user.rol !== 'super_admin' && req.user.rol !== 'admin') {
-      return res.status(403).json({
-        error: 'Solo administradores pueden acceder a esta ruta'
-      });
-    }
+    const { rol } = req.user;
 
-    console.log('[Users] Obteniendo lista de usuarios');
+    if (rol !== 'super_admin' && rol !== 'staff') {
+      return res.status(403).json({ error: 'Sin permisos para listar usuarios' });
+    }
 
     const result = await pool.query(
       `SELECT 
-        id,
-        nombre,
-        email,
-        rol,
-        tipo_pase,
-        sede,
-        empresa,
-        activo,
-        created_at
+        id, nombre, email, rol, tipo_pase, sede, empresa, activo, created_at
       FROM users
       WHERE activo = true
       ORDER BY nombre ASC`
     );
 
-    console.log(`[Users] ✅ ${result.rows.length} usuarios encontrados`);
-
-    // Responder como array directamente
     res.json(result.rows);
-
   } catch (error) {
     console.error('❌ Error en GET /users:', error.message);
-    res.status(500).json({
-      error: 'Error al obtener usuarios',
-      details: error.message
-    });
+    res.status(500).json({ error: 'Error al obtener usuarios', details: error.message });
   }
 });
 
@@ -55,36 +38,15 @@ router.get('/:id', authRequired, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Un usuario puede ver su propio perfil
-    // Un admin puede ver cualquier perfil
-    if (req.user.id !== id && req.user.rol !== 'super_admin' && req.user.rol !== 'admin') {
-      return res.status(403).json({
-        error: 'No tienes permiso para ver este usuario'
-      });
+    if (req.user.id !== id && req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
+      return res.status(403).json({ error: 'No tienes permiso para ver este usuario' });
     }
-
-    console.log(`[Users] Obteniendo usuario: ${id}`);
 
     const result = await pool.query(
       `SELECT 
-        id,
-        nombre,
-        email,
-        rol,
-        tipo_pase,
-        sede,
-        multi_sedes,
-        edicion,
-        empresa,
-        telefono,
-        ciudad,
-        foto_url,
-        bio,
-        linkedin_url,
-        twitter_url,
-        activo,
-        created_at,
-        updated_at
+        id, nombre, email, rol, tipo_pase, sede, multi_sedes, edicion,
+        empresa, telefono, ciudad, foto_url, bio, linkedin_url, twitter_url,
+        activo, created_at, updated_at
       FROM users
       WHERE id = $1`,
       [id]
@@ -94,232 +56,162 @@ router.get('/:id', authRequired, async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    console.log(`[Users] ✅ Usuario encontrado: ${id}`);
     res.json(result.rows[0]);
-
   } catch (error) {
-    console.error('❌ Error obteniendo usuario:', error);
+    console.error('❌ Error en GET /users/:id:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 // ========================================================
-// PUT /users/:id - Editar usuario (admin solo)
+// POST /users - Crear usuario (solo super_admin)
 // ========================================================
-router.put('/:id', authRequired, async (req, res) => {
+router.post('/', authRequired, async (req, res) => {
   try {
-    const { id } = req.params;
+    if (req.user.rol !== 'super_admin') {
+      return res.status(403).json({ error: 'Solo super_admin puede crear usuarios' });
+    }
+
     const {
-      nombre,
       email,
-      rol,
-      tipo_pase,
-      sede,
-      empresa,
-      telefono,
-      ciudad,
-      bio,
-      linkedin_url,
-      twitter_url
+      password,
+      nombre,
+      rol = 'asistente',
+      tipo_pase = 'general',
+      sede = 'chile',
+      empresa = '',
+      telefono = '',
     } = req.body;
 
-    // Verificar permisos
-    if (req.user.rol !== 'super_admin' && req.user.rol !== 'admin') {
-      return res.status(403).json({
-        error: 'Solo administradores pueden editar usuarios'
-      });
+    // Validaciones básicas
+    if (!email || !password || !nombre) {
+      return res.status(400).json({ error: 'Email, contraseña y nombre son requeridos' });
     }
 
-    console.log(`[Users] Editando usuario: ${id}`);
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+    }
 
-    // Verificar que el usuario existe
-    const userExists = await pool.query(
-      'SELECT id FROM users WHERE id = $1',
-      [id]
+    // Roles válidos del sistema
+    const rolesValidos = [
+      'asistente_general', 'asistente_curso', 'asistente_sesiones',
+      'asistente_combo', 'expositor', 'speaker', 'staff', 'super_admin'
+    ];
+    if (!rolesValidos.includes(rol)) {
+      return res.status(400).json({ error: `Rol inválido. Opciones: ${rolesValidos.join(', ')}` });
+    }
+
+    // Verificar email duplicado
+    const emailExists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (emailExists.rows.length > 0) {
+      return res.status(409).json({ error: 'Ya existe un usuario con ese email' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const result = await pool.query(
+      `INSERT INTO users (email, password, nombre, rol, tipo_pase, sede, empresa, telefono, activo, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, NOW(), NOW())
+       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, created_at`,
+      [email, hashedPassword, nombre, rol, tipo_pase, sede, empresa, telefono]
     );
 
-    if (userExists.rows.length === 0) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+    console.log(`[Users] ✅ Usuario creado: ${email} (${rol})`);
 
-    // Construir query dinámicamente (solo actualizar campos proporcionados)
-    const updates = [];
-    const values = [];
-    let paramCount = 1;
-
-    if (nombre !== undefined) {
-      updates.push(`nombre = $${paramCount}`);
-      values.push(nombre);
-      paramCount++;
-    }
-
-    if (email !== undefined) {
-      updates.push(`email = $${paramCount}`);
-      values.push(email);
-      paramCount++;
-    }
-
-    if (rol !== undefined) {
-      updates.push(`rol = $${paramCount}`);
-      values.push(rol);
-      paramCount++;
-    }
-
-    if (tipo_pase !== undefined) {
-      updates.push(`tipo_pase = $${paramCount}`);
-      values.push(tipo_pase);
-      paramCount++;
-    }
-
-    if (sede !== undefined) {
-      updates.push(`sede = $${paramCount}`);
-      values.push(sede);
-      paramCount++;
-    }
-
-    if (empresa !== undefined) {
-      updates.push(`empresa = $${paramCount}`);
-      values.push(empresa);
-      paramCount++;
-    }
-
-    if (telefono !== undefined) {
-      updates.push(`telefono = $${paramCount}`);
-      values.push(telefono);
-      paramCount++;
-    }
-
-    if (ciudad !== undefined) {
-      updates.push(`ciudad = $${paramCount}`);
-      values.push(ciudad);
-      paramCount++;
-    }
-
-    if (bio !== undefined) {
-      updates.push(`bio = $${paramCount}`);
-      values.push(bio);
-      paramCount++;
-    }
-
-    if (linkedin_url !== undefined) {
-      updates.push(`linkedin_url = $${paramCount}`);
-      values.push(linkedin_url);
-      paramCount++;
-    }
-
-    if (twitter_url !== undefined) {
-      updates.push(`twitter_url = $${paramCount}`);
-      values.push(twitter_url);
-      paramCount++;
-    }
-
-    // Si no hay campos para actualizar
-    if (updates.length === 0) {
-      return res.status(400).json({
-        error: 'No hay campos para actualizar'
-      });
-    }
-
-    // Agregar updated_at y id al final
-    updates.push(`updated_at = NOW()`);
-    values.push(id);
-
-    const query = `
-      UPDATE users 
-      SET ${updates.join(', ')}
-      WHERE id = $${paramCount}
-      RETURNING 
-        id,
-        nombre,
-        email,
-        rol,
-        tipo_pase,
-        sede,
-        empresa,
-        telefono,
-        ciudad,
-        bio,
-        linkedin_url,
-        twitter_url,
-        activo,
-        updated_at
-    `;
-
-    const result = await pool.query(query, values);
-
-    console.log(`[Users] ✅ Usuario actualizado: ${id}`);
-
-    res.json({
+    res.status(201).json({
       ok: true,
-      message: 'Usuario actualizado correctamente',
+      message: 'Usuario creado correctamente',
       user: result.rows[0]
     });
-
   } catch (error) {
-    console.error('❌ Error en PUT /users/:id:', error.message);
-    res.status(500).json({
-      error: 'Error al actualizar usuario',
-      details: error.message
-    });
+    console.error('❌ Error en POST /users:', error.message);
+    res.status(500).json({ error: 'Error al crear usuario', details: error.message });
   }
 });
 
 // ========================================================
-// DELETE /users/:id - Eliminar usuario (soft delete)
+// PUT /users/:id - Editar usuario (super_admin)
+// ========================================================
+router.put('/:id', authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user.rol !== 'super_admin') {
+      return res.status(403).json({ error: 'Solo super_admin puede editar usuarios' });
+    }
+
+    const {
+      nombre, email, rol, tipo_pase, sede,
+      empresa, telefono, ciudad, bio, linkedin_url, twitter_url
+    } = req.body;
+
+    const userExists = await pool.query('SELECT id FROM users WHERE id = $1', [id]);
+    if (userExists.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const updates = [];
+    const values = [];
+    let p = 1;
+
+    const fields = { nombre, email, rol, tipo_pase, sede, empresa, telefono, ciudad, bio, linkedin_url, twitter_url };
+    for (const [key, val] of Object.entries(fields)) {
+      if (val !== undefined) {
+        updates.push(`${key} = $${p}`);
+        values.push(val);
+        p++;
+      }
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No hay campos para actualizar' });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = $${p}
+       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, updated_at`,
+      values
+    );
+
+    res.json({ ok: true, message: 'Usuario actualizado', user: result.rows[0] });
+  } catch (error) {
+    console.error('❌ Error en PUT /users/:id:', error.message);
+    res.status(500).json({ error: 'Error al actualizar usuario', details: error.message });
+  }
+});
+
+// ========================================================
+// DELETE /users/:id - Soft delete (super_admin)
 // ========================================================
 router.delete('/:id', authRequired, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verificar permisos
-    if (req.user.rol !== 'super_admin' && req.user.rol !== 'admin') {
-      return res.status(403).json({
-        error: 'Solo administradores pueden eliminar usuarios'
-      });
+    if (req.user.rol !== 'super_admin') {
+      return res.status(403).json({ error: 'Solo super_admin puede eliminar usuarios' });
     }
 
-    // No permitir que un admin se elimine a sí mismo
     if (req.user.id === id) {
-      return res.status(400).json({
-        error: 'No puedes eliminar tu propia cuenta'
-      });
+      return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta' });
     }
 
-    console.log(`[Users] Eliminando usuario: ${id}`);
-
-    // Verificar que el usuario existe
-    const userExists = await pool.query(
-      'SELECT id, email FROM users WHERE id = $1',
-      [id]
-    );
-
+    const userExists = await pool.query('SELECT id, email FROM users WHERE id = $1', [id]);
     if (userExists.rows.length === 0) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    // Soft delete: cambiar activo = false
     const result = await pool.query(
-      `UPDATE users 
-       SET activo = false, updated_at = NOW()
-       WHERE id = $1
-       RETURNING id, email, nombre`,
+      `UPDATE users SET activo = false, updated_at = NOW() WHERE id = $1 RETURNING id, email, nombre`,
       [id]
     );
 
-    console.log(`[Users] ✅ Usuario eliminado: ${id}`);
-
-    res.json({
-      ok: true,
-      message: 'Usuario eliminado correctamente',
-      user: result.rows[0]
-    });
-
+    res.json({ ok: true, message: 'Usuario eliminado', user: result.rows[0] });
   } catch (error) {
     console.error('❌ Error en DELETE /users/:id:', error.message);
-    res.status(500).json({
-      error: 'Error al eliminar usuario',
-      details: error.message
-    });
+    res.status(500).json({ error: 'Error al eliminar usuario', details: error.message });
   }
 });
 
