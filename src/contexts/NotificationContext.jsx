@@ -95,6 +95,14 @@ export function NotificationProvider({ children }) {
   // SSE
   // =========================
   useEffect(() => {
+    // FIX: no conectar SSE sin usuario autenticado (evita errores en cold start de Render)
+    if (!userProfile?.id) {
+      if (esRef.current) { esRef.current.close(); esRef.current = null; }
+      clearTimeout(reconnectRef.current.timeoutId);
+      reconnectRef.current.tries = 0;
+      return;
+    }
+
     const URL =
       import.meta.env.VITE_NOTIF_URL ||
       "https://cmc-app.onrender.com/api/notificaciones/events";
@@ -153,7 +161,7 @@ export function NotificationProvider({ children }) {
       if (esRef.current) esRef.current.close();
       clearTimeout(reconnectRef.current.timeoutId);
     };
-  }, []);
+  }, [userProfile?.id]);
 
   // =========================
   // 🔥 AGRUPACIÓN (día + tipo)

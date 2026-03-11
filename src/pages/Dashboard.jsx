@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
+//----Sede activa--//
 import { useEvent } from "../contexts/EventContext";
 import API from "../services/api";
 
@@ -13,7 +14,9 @@ import Header from "../Components/layout/Header";
 
 export default function Dashboard() {
   const { user, userProfile, permisos } = useAuth();
+  // ✅ AQUÍ SÍ se puede usar el hook
   const { sedeActiva, edicionActiva, multiSede, ready } = useEvent();
+  
 
   const [stats, setStats] = useState({
     sessions: 0,
@@ -30,7 +33,67 @@ export default function Dashboard() {
   const [speakerSessions, setSpeakerSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // FIX 1: verificar permisos y evento antes de renderizar hooks
+  // ========================================================
+  // Cargar estadísticas
+  // ========================================================
+  useEffect(() => {
+    if (user && userProfile) loadDashboard();
+  }, [user, userProfile]);
+
+  const loadDashboard = async () => {
+    try {
+      setLoading(true);
+
+      // ✅ LLAMAR A /api/stats
+      console.log('📊 Cargando estadísticas...');
+      const statsRes = await API.get("/stats");
+      
+      console.log('✅ Stats recibidas:', statsRes.data);
+
+      setStats({
+        sessions: statsRes.data.sessions || 0,
+        speakers: statsRes.data.speakers || 0,
+        expositores: statsRes.data.expositores || 0,
+        users: statsRes.data.users || 0,
+        checkIns: statsRes.data.checkIns || 0,
+        byTipoPase: statsRes.data.byTipoPase || {},
+        byRol: statsRes.data.byRol || {},
+        bySede: statsRes.data.bySede || {},
+      });
+
+      // Opcional: Cargar próximas sesiones
+      try {
+        const sessionsRes = await API.get("/agenda/sessions");
+        const sessions = Array.isArray(sessionsRes.data.sessions) 
+          ? sessionsRes.data.sessions 
+          : [];
+        setNextSessions(sessions.slice(0, 5)); // Primeras 5
+      } catch (err) {
+        console.log('⚠️ No se pudieron cargar próximas sesiones:', err.message);
+        setNextSessions([]);
+      }
+
+    } catch (err) {
+      console.error("❌ Error cargando dashboard:", err);
+      setStats({
+        sessions: 0,
+        speakers: 0,
+        expositores: 0,
+        users: 0,
+        checkIns: 0,
+        byTipoPase: {},
+        byRol: {},
+        bySede: {},
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // LOG de evento activo
+  console.log("EVENTO ACTIVO:", { sedeActiva, edicionActiva, multiSede });
+
+  // ── Early returns DESPUÉS de todos los hooks ──────────────────────────
   if (!permisos) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -47,70 +110,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========================================================
-  // Cargar estadísticas
-  // ========================================================
-  useEffect(() => {
-    if (user && userProfile) loadDashboard();
-  }, [user, userProfile]);
-
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-
-      const statsRes = await API.get("/stats");
-
-      setStats({
-        sessions:    statsRes.data.sessions    || 0,
-        speakers:    statsRes.data.speakers    || 0,
-        expositores: statsRes.data.expositores || 0,
-        users:       statsRes.data.users       || 0,
-        checkIns:    statsRes.data.checkIns    || 0,
-        byTipoPase:  statsRes.data.byTipoPase  || {},
-        byRol:       statsRes.data.byRol       || {},
-        bySede:      statsRes.data.bySede      || {},
-      });
-
-      // Próximas sesiones (todos los roles)
-      try {
-        const sessionsRes = await API.get("/agenda/sessions");
-        const sessions = Array.isArray(sessionsRes.data.sessions)
-          ? sessionsRes.data.sessions
-          : [];
-        setNextSessions(sessions.slice(0, 5));
-      } catch (err) {
-        console.warn("No se pudieron cargar próximas sesiones:", err.message);
-        setNextSessions([]);
-      }
-
-      // FIX 2: cargar sesiones propias del speaker
-      if (userProfile.rol === "speaker" && userProfile.id) {
-        try {
-          const speakerRes = await API.get(
-            `/agenda/sessions?speaker_id=${userProfile.id}`
-          );
-          const sp = Array.isArray(speakerRes.data.sessions)
-            ? speakerRes.data.sessions
-            : [];
-          setSpeakerSessions(sp);
-        } catch (err) {
-          console.warn("No se pudieron cargar sesiones del speaker:", err.message);
-          setSpeakerSessions([]);
-        }
-      }
-
-    } catch (err) {
-      console.error("Error cargando dashboard:", err);
-      setStats({
-        sessions: 0, speakers: 0, expositores: 0,
-        users: 0, checkIns: 0,
-        byTipoPase: {}, byRol: {}, bySede: {},
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (loading || !userProfile) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -125,6 +124,7 @@ export default function Dashboard() {
   // ============================================================
   // RENDER SEGÚN ROL
   // ============================================================
+
   return (
     <div className="min-h-screen bg-gray-100">
       <Header />
@@ -132,29 +132,25 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold mb-2">¡Bienvenido, {userProfile.nombre}!</h1>
         <p className="text-gray-600 mb-6">
           Rol: <span className="font-semibold capitalize">{userProfile.rol}</span>
-          {sedeActiva  && ` | Sede: ${sedeActiva.toUpperCase()}`}
+          {sedeActiva && ` | Sede: ${sedeActiva.toUpperCase()}`}
           {edicionActiva && ` | Edición: ${edicionActiva}`}
         </p>
 
-        {/* FIX 3: solo super_admin y staff — eliminado 'admin' que no existe */}
-        {(userProfile.rol === "super_admin" || userProfile.rol === "staff") && (
+        {/* ADMIN / STAFF / SUPER_ADMIN */}
+        {(userProfile.rol === "super_admin" || userProfile.rol === "admin" || userProfile.rol === "staff") && (
           <AdminView stats={stats} />
         )}
 
-        {/* Speaker — ahora speakerSessions se carga correctamente */}
-        {userProfile.rol === "speaker" && (
-          <SpeakerView sessions={speakerSessions} />
-        )}
+        {/* SPEAKER */}
+        {userProfile.rol === "speaker" && <SpeakerView sessions={speakerSessions} />}
 
-        {/* Asistentes */}
-        {userProfile.rol === "asistente" && permisos.verAgenda && (
+        {/* ASISTENTES */}
+        {permisos.verAgenda && userProfile.rol === "asistente" && (
           <AsistenteView stats={stats} nextSessions={nextSessions} />
         )}
 
-        {/* Expositor */}
-        {userProfile.rol === "expositor" && (
-          <ExpositorView stats={stats} />
-        )}
+        {/* EXPOSITOR */}
+        {userProfile.rol === "expositor" && <ExpositorView stats={stats} />}
       </div>
     </div>
   );
@@ -163,16 +159,39 @@ export default function Dashboard() {
 // ============================================================
 // ADMIN / STAFF VIEW
 // ============================================================
+
 function AdminView({ stats }) {
   return (
     <div className="mt-8 space-y-6">
+      {/* Cards principales */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard icon={Calendar}   label="Sesiones Totales"      value={stats.sessions}    color="blue"   />
-        <StatCard icon={Users}      label="Speakers"              value={stats.speakers}    color="purple" />
-        <StatCard icon={Building2}  label="Expositores"           value={stats.expositores} color="orange" />
-        <StatCard icon={Users}      label="Usuarios Registrados"  value={stats.users}       color="green"  />
+        <StatCard 
+          icon={Calendar} 
+          label="Sesiones Totales" 
+          value={stats.sessions} 
+          color="blue" 
+        />
+        <StatCard 
+          icon={Users} 
+          label="Speakers" 
+          value={stats.speakers} 
+          color="purple" 
+        />
+        <StatCard 
+          icon={Building2} 
+          label="Expositores" 
+          value={stats.expositores} 
+          color="orange" 
+        />
+        <StatCard 
+          icon={Users} 
+          label="Usuarios Registrados" 
+          value={stats.users} 
+          color="green" 
+        />
       </div>
 
+      {/* Distribucion por rol */}
       {Object.keys(stats.byRol).length > 0 && (
         <div className="bg-white rounded-xl shadow-md p-6">
           <h2 className="text-xl font-bold mb-4">Usuarios por Rol</h2>
@@ -187,6 +206,7 @@ function AdminView({ stats }) {
         </div>
       )}
 
+      {/* Distribucion por sede */}
       {Object.keys(stats.bySede).length > 0 && (
         <div className="bg-white rounded-xl shadow-md p-6">
           <h2 className="text-xl font-bold mb-4">Usuarios por Sede</h2>
@@ -201,6 +221,7 @@ function AdminView({ stats }) {
         </div>
       )}
 
+      {/* Distribucion por tipo de pase */}
       {Object.keys(stats.byTipoPase).length > 0 && (
         <div className="bg-white rounded-xl shadow-md p-6">
           <h2 className="text-xl font-bold mb-4">Usuarios por Tipo de Pase</h2>
@@ -215,9 +236,9 @@ function AdminView({ stats }) {
         </div>
       )}
 
-      {/* FIX 4: link corregido /admin → /configuracion */}
-      <Link
-        to="/configuracion"
+      {/* Link a panel admin */}
+      <Link 
+        to="/admin" 
         className="inline-block bg-blue-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition"
       >
         Ir al Panel de Administración →
@@ -229,6 +250,7 @@ function AdminView({ stats }) {
 // ============================================================
 // SPEAKER VIEW
 // ============================================================
+
 function SpeakerView({ sessions }) {
   return (
     <div className="mt-8 space-y-6">
@@ -239,14 +261,10 @@ function SpeakerView({ sessions }) {
         <div className="space-y-3">
           {sessions.map((s) => (
             <div key={s.id} className="border-l-4 border-blue-600 pl-4 py-2 bg-white p-4 rounded-lg">
-              <h3 className="font-semibold">{s.titulo || s.title}</h3>
+              <h3 className="font-semibold">{s.title}</h3>
               <p className="text-sm text-gray-600">
-                {s.horaInicio
-                  ? new Date(s.horaInicio).toLocaleString("es-MX")
-                  : "Sin horario asignado"}
-                {s.horaFin && ` — ${new Date(s.horaFin).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}`}
+                {new Date(s.start_at).toLocaleString()} – {new Date(s.end_at).toLocaleTimeString()}
               </p>
-              {s.sala && <p className="text-xs text-gray-500 mt-1">Sala: {s.sala}</p>}
             </div>
           ))}
         </div>
@@ -258,15 +276,37 @@ function SpeakerView({ sessions }) {
 // ============================================================
 // ASISTENTE VIEW
 // ============================================================
+
 function AsistenteView({ stats, nextSessions }) {
   return (
     <div className="mt-8 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard icon={Calendar}     label="Sesiones Totales" value={stats.sessions}    color="blue"   />
-        <StatCard icon={CheckCircle}  label="Check-ins"        value={stats.checkIns}    color="green"  />
-        <StatCard icon={Building2}    label="Expositores"      value={stats.expositores} color="purple" />
-        <StatCard icon={Award}        label="Speakers"         value={stats.speakers}    color="orange" />
+        <StatCard 
+          icon={Calendar} 
+          label="Sesiones Totales" 
+          value={stats.sessions} 
+          color="blue" 
+        />
+        <StatCard 
+          icon={CheckCircle} 
+          label="Check-ins" 
+          value={stats.checkIns} 
+          color="green" 
+        />
+        <StatCard 
+          icon={Building2} 
+          label="Expositores" 
+          value={stats.expositores} 
+          color="purple" 
+        />
+        <StatCard 
+          icon={Award} 
+          label="Speakers" 
+          value={stats.speakers} 
+          color="orange" 
+        />
       </div>
+
       <NextSessionsCard sessions={nextSessions} />
     </div>
   );
@@ -275,13 +315,29 @@ function AsistenteView({ stats, nextSessions }) {
 // ============================================================
 // EXPOSITOR VIEW
 // ============================================================
+
 function ExpositorView({ stats }) {
   return (
     <div className="mt-8 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon={Users}      label="Visitantes Registrados" value={stats.checkIns}    color="blue"   />
-        <StatCard icon={TrendingUp} label="Total de Usuarios"      value={stats.users}        color="green"  />
-        <StatCard icon={Award}      label="Sesiones Disponibles"   value={stats.sessions}     color="purple" />
+        <StatCard 
+          icon={Users} 
+          label="Visitantes Registrados" 
+          value={stats.checkIns} 
+          color="blue" 
+        />
+        <StatCard 
+          icon={TrendingUp} 
+          label="Total de Usuarios" 
+          value={stats.users} 
+          color="green" 
+        />
+        <StatCard 
+          icon={Award} 
+          label="Sesiones Disponibles" 
+          value={stats.sessions} 
+          color="purple" 
+        />
       </div>
     </div>
   );
@@ -290,10 +346,11 @@ function ExpositorView({ stats }) {
 // ============================================================
 // COMPONENTES AUXILIARES
 // ============================================================
+
 function StatCard({ icon: Icon, label, value, color }) {
   const colors = {
-    blue:   "bg-blue-100 text-blue-600",
-    green:  "bg-green-100 text-green-600",
+    blue: "bg-blue-100 text-blue-600",
+    green: "bg-green-100 text-green-600",
     purple: "bg-purple-100 text-purple-600",
     orange: "bg-orange-100 text-orange-600",
   };
@@ -325,14 +382,14 @@ function NextSessionsCard({ sessions }) {
       ) : (
         <div className="space-y-3">
           {sessions.map((s, idx) => (
-            <div key={s.id} className="border-l-4 border-blue-600 pl-4 py-2 bg-gray-50 rounded-lg p-4">
+            <div key={s.id} className="border-l-4 border-blue-600 pl-4 py-2 bg-gray-50 p-4 rounded-lg">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="font-semibold">{idx + 1}. {s.titulo || "Sin título"}</h3>
+                  <h3 className="font-semibold">{idx + 1}. {s.titulo || 'Sin título'}</h3>
                   {s.horaInicio && (
                     <p className="text-sm text-gray-600">
-                      {new Date(s.horaInicio).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
-                      {s.horaFin && ` - ${new Date(s.horaFin).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}`}
+                      {new Date(s.horaInicio).toLocaleTimeString()} 
+                      {s.horaFin && ` - ${new Date(s.horaFin).toLocaleTimeString()}`}
                     </p>
                   )}
                 </div>
