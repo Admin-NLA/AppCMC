@@ -64,9 +64,10 @@ export default function Notificaciones() {
     try {
       console.log("✅ Marcando notificación como leída:", notifId);
 
-      await API.put(`/notificaciones/${notifId}`, {
-        leida: true
-      });
+      // FIX: endpoint correcto para marcar leída por cualquier usuario
+      // PUT /:id solo es para staff/admin (edita la notificación)
+      // PUT /:id/leida registra en notificaciones_vistas
+      await API.put(`/notificaciones/${notifId}/leida`);
 
       // Actualizar estado local
       setNotificaciones(

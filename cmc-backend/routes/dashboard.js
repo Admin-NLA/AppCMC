@@ -171,10 +171,11 @@ router.get("/", authRequired, async (req, res) => {
 
     // ---------------- EXPOSITOR ----------------
     else if (user.rol === "expositor") {
+      // FIX: columna real es 'usuario_id' (antes 'owner_id' — no existe en DB)
       const expoData = await pool.query(
         `SELECT id, nombre, logo_url, stand, contact
          FROM expositores
-         WHERE owner_id = $1 OR id = $1`,
+         WHERE usuario_id = $1`,
         [userId]
       );
 

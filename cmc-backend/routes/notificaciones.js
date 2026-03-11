@@ -261,6 +261,40 @@ router.post("/broadcast", authRequired, async (req, res) => {
 ============================================ */
 
 /**
+ * PUT /notificaciones/:id/leida
+ * Marca una notificación como leída por el usuario actual.
+ * El frontend (Notificaciones.jsx) llama: PUT /notificaciones/:id { leida: true }
+ * Este endpoint es el alias correcto — registra en notificaciones_vistas.
+ *
+ * FIX: el frontend usaba PUT /:id con { leida: true }, pero ese endpoint
+ *      solo permite staff/admin y actualiza la notificación en sí (no la vista).
+ *      Se agrega este endpoint dedicado accesible por cualquier usuario autenticado.
+ */
+router.put("/:id/leida", authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    console.log(`👁️ [LEIDA] Usuario ${userId} marca notificación ${id} como leída`);
+
+    await pool.query(
+      `INSERT INTO notificaciones_vistas
+       (id, user_id, notificacion_id, vista_at)
+       VALUES (gen_random_uuid(), $1, $2, NOW())
+       ON CONFLICT (user_id, notificacion_id) DO NOTHING`,
+      [userId, id]
+    );
+
+    console.log(`✅ [LEIDA] Registrada vista`);
+    res.json({ ok: true });
+
+  } catch (err) {
+    console.error("❌ [LEIDA] Error:", err.message);
+    res.status(500).json({ error: "Error marcando como leída", details: err.message });
+  }
+});
+
+/**
  * PUT /notificaciones/:id
  * Actualiza una notificación existente
  * Solo: super_admin, staff
