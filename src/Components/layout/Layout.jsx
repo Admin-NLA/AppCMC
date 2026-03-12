@@ -7,7 +7,8 @@ import NotificationsPanel from "../../Components/NotificationsPanel.jsx";
 
 import {
   Menu, X, Moon, Sun, Calendar, Users, LayoutDashboard, Layers,
-  Bell, User, Scan, Settings, LogOut, Map, Network, FileText, Award, QrCode
+  Bell, User, Scan, Settings, LogOut, Map, Network, FileText, Award, QrCode,
+  ClipboardList, Palette, Images
 } from "lucide-react";
 
 // ============================================================
@@ -32,6 +33,8 @@ const MENU_MAP = {
   "Mi Perfil":         { to: "/perfil",         icon: <User size={18} /> },
   "Mi Sesión":         { to: "/mi-sesion",      icon: <Award size={18} /> },
   "Mi Marca":          { to: "/mi-marca",       icon: <Layers size={18} /> },
+  "Galería":          { to: "/galeria",        icon: <Images size={18} /> },
+  "Encuestas":         { to: "/encuestas",      icon: <ClipboardList size={18} /> },
   "Mi QR":             { to: "/qr",             icon: <QrCode size={18} /> },
   "QR":                { to: "/qr",             icon: <QrCode size={18} /> },
   "Mis Registros":     { to: "/mis-registros",  icon: <FileText size={18} /> },
@@ -41,6 +44,7 @@ const MENU_MAP = {
   "Usuarios":          { to: "/usuarios",       icon: <Users size={18} /> },
   "Usuarios (ver)":    { to: "/usuarios",       icon: <Users size={18} /> },
   "Admin Panel":       { to: "/admin",          icon: <Settings size={18} /> },
+  "Branding":          { to: "/branding",       icon: <Palette size={18} /> },
   "Configuración":     { to: "/configuracion",  icon: <Settings size={18} /> },
   "Excel Import":      { to: "/admin/import",   icon: <FileText size={18} /> },
 };

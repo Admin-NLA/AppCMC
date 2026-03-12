@@ -25,6 +25,9 @@ import QR from "./pages/QR.jsx";
 // Páginas de rol especial
 import MiMarca from "./pages/MiMarca.jsx";
 import MiSesion from "./pages/MiSesion.jsx";
+import Encuestas      from "./pages/Encuestas.jsx";
+import BrandingPanel  from "./pages/BrandingPanel.jsx";
+import Galeria        from "./pages/Galeria.jsx";
 
 // Páginas de staff / admin
 import StaffPanel from "./pages/StaffPanel.jsx";
@@ -229,6 +232,26 @@ function AppWithEvent() {
               }
             />
 
+            {/* Galería — todos los roles autenticados */}
+            <Route
+              path="galeria"
+              element={
+                <PermRoute permiso="verGaleria">
+                  <Galeria />
+                </PermRoute>
+              }
+            />
+
+            {/* Encuestas — todos los roles autenticados */}
+            <Route
+              path="encuestas"
+              element={
+                <PermRoute permiso="verEncuestas">
+                  <Encuestas />
+                </PermRoute>
+              }
+            />
+
             {/* Staff Panel — staff + super_admin */}
             <Route
               path="staff"
@@ -256,6 +279,16 @@ function AppWithEvent() {
               element={
                 <PrivateRoute roles={['super_admin']}>
                   <AdminPanel />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Branding — super_admin únicamente */}
+            <Route
+              path="branding"
+              element={
+                <PrivateRoute roles={['super_admin']}>
+                  <BrandingPanel />
                 </PrivateRoute>
               }
             />
