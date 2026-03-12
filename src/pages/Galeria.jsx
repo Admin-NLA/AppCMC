@@ -16,7 +16,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import API from "../services/api";
 import {
-  Images, Upload, X, Star, StarOff, Edit2, Trash2,
+  Image, Upload, X, Star, StarOff, Edit2, Trash2,
   ChevronLeft, ChevronRight, Search, Filter, Plus,
   CheckCircle, AlertCircle, Loader2, Download, Eye,
   ZoomIn
@@ -392,7 +392,7 @@ export default function Galeria() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <Images className="text-pink-600" size={26} />
+            <Image className="text-pink-600" size={26} />
             Galería
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
@@ -494,7 +494,7 @@ export default function Galeria() {
         <>
           {fotosFiltradas.length === 0 ? (
             <div className="text-center py-20 text-gray-400">
-              <Images size={56} className="mx-auto mb-3 opacity-20" />
+              <Image size={56} className="mx-auto mb-3 opacity-20" />
               <p className="font-semibold text-lg">Sin fotos</p>
               <p className="text-sm mt-1">
                 {esAdmin
