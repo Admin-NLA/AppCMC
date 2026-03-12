@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useEvent } from "../contexts/EventContext.jsx";
 import API from "../services/api";
 import {
   Settings,
@@ -41,6 +42,7 @@ const SEDES_DISPONIBLES = [
 
 export default function ConfiguracionPanel() {
   const { userProfile, permisos } = useAuth();
+  const { refreshConfig } = useEvent();
 
   // ── Estado general ──
   const [loading, setLoading]       = useState(true);
@@ -120,6 +122,7 @@ export default function ConfiguracionPanel() {
         tipos_activos:  config.tipos_activos,
       });
 
+      await refreshConfig(); // Propagar la nueva sede/edición a toda la app
       setSuccess("Configuración guardada correctamente.");
       setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
