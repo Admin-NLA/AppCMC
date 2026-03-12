@@ -145,6 +145,12 @@ export function AuthProvider({ children }) {
       });
   }, []); // Solo una vez al montar
 
+  // ========== updateProfile — actualiza el perfil en memoria ==========
+  // FIX: Perfil.jsx necesita actualizar el avatar en el header sin re-login
+  const updateProfile = (newData) => {
+    setUserProfile((prev) => ({ ...prev, ...newData }));
+  };
+
   // ========== VALORES EXPORTADOS ==========
   const value = {
     // Estados
@@ -157,6 +163,7 @@ export function AuthProvider({ children }) {
     // Métodos
     login,
     logout,
+    updateProfile, // ← FIX: permite actualizar avatar/nombre sin re-login
   };
 
   return (

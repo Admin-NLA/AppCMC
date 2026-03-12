@@ -40,7 +40,7 @@ const MENU_MAP = {
   "Staff Panel":       { to: "/staff",          icon: <Scan size={18} /> },
   "Usuarios":          { to: "/usuarios",       icon: <Users size={18} /> },
   "Usuarios (ver)":    { to: "/usuarios",       icon: <Users size={18} /> },
-  "Admin Panel":       { to: "/configuracion",  icon: <Settings size={18} /> },
+  "Admin Panel":       { to: "/admin",          icon: <Settings size={18} /> },
   "Configuración":     { to: "/configuracion",  icon: <Settings size={18} /> },
   "Excel Import":      { to: "/admin/import",   icon: <FileText size={18} /> },
 };

@@ -156,13 +156,19 @@ router.put('/:id', authRequired, async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (req.user.rol !== 'super_admin') {
-      return res.status(403).json({ error: 'Solo super_admin puede editar usuarios' });
+    // FIX: permitir que el usuario edite su PROPIO perfil (antes solo super_admin)
+    const esSuPerfil  = req.user.id === id;
+    const esAdmin     = req.user.rol === 'super_admin';
+
+    if (!esSuPerfil && !esAdmin) {
+      return res.status(403).json({ error: 'No autorizado para editar este perfil' });
     }
 
     const {
       nombre, email, rol, tipo_pase, sede,
       empresa, telefono, ciudad, bio, linkedin_url, twitter_url,
+      // FIX: Perfil.jsx envía foto_url y avatar_url — aceptamos ambos
+      foto_url, avatar_url,
     } = req.body;
 
     const userExists = await pool.query('SELECT id FROM users WHERE id = $1', [id]);
@@ -181,19 +187,19 @@ router.put('/:id', authRequired, async (req, res) => {
     const values  = [];
     let p = 1;
 
-    // FIX: telefono del body se guarda en columna 'movil'
+    // FIX: telefono → movil, foto_url/avatar_url → avatar_url (columna real)
+    // Si el usuario no es admin, no puede cambiar su rol, tipo_pase ni sede
     const fields = {
       nombre,
       email,
-      rol,
-      tipo_pase,
-      sede,
+      ...(esAdmin ? { rol, tipo_pase, sede } : {}),  // solo admin cambia estos
       empresa,
-      movil: telefono,   // ← mapeo correcto
+      movil:       telefono,
       ciudad,
       bio,
       linkedin_url,
       twitter_url,
+      avatar_url:  avatar_url || foto_url,  // FIX: acepta ambos nombres del frontend
     };
 
     for (const [key, val] of Object.entries(fields)) {

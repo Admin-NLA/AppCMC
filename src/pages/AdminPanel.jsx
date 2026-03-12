@@ -59,7 +59,7 @@ export default function AdminPanel() {
   // ── Notificaciones ────────────────────────────────────────
   const [showNotificationForm, setShowNotificationForm] = useState(false);
   const [notificationFormData, setNotificationFormData] = useState({
-    titulo: "", mensaje: "", tipo: "info", usuarios: [],
+    titulo: "", mensaje: "", tipo: "info", tipo_usuario: ["todos"], sede: "todos", usuarios: [],
   });
   const [users, setUsers] = useState([]);
   const [notificationLoading, setNotificationLoading] = useState(false);
@@ -72,10 +72,26 @@ export default function AdminPanel() {
 
   // ── Carga inicial por tab ─────────────────────────────────
   useEffect(() => {
-    if (activeTab === "sesiones") loadSessions();
-    else if (activeTab === "expositores") loadExpositores();
+    if (activeTab === "sesiones")       loadSessions();
+    else if (activeTab === "expositores")  loadExpositores();
     else if (activeTab === "notificaciones") loadUsers();
+    // FIX: faltaba llamar loadSpeakers al cambiar al tab de speakers
+    else if (activeTab === "speakers")    loadSpeakers();
   }, [activeTab]);
+
+  // ── SPEAKERS ──────────────────────────────────────────────
+  // FIX: no existía esta función — el tab mostraba siempre "No hay speakers"
+  const loadSpeakers = async () => {
+    try {
+      // Solo speakers locales (editables). Los de WordPress no son editables.
+      const res = await API.get("/speakers");
+      // La API devuelve un array directo. Filtrar solo los editables (source=local).
+      const allSpeakers = Array.isArray(res.data) ? res.data : [];
+      setSpeakers(allSpeakers.filter(s => s.canEdit !== false));
+    } catch (err) {
+      console.error("Error al cargar speakers:", err);
+    }
+  };
 
   // ── SESIONES ──────────────────────────────────────────────
   const loadSessions = async () => {
@@ -220,15 +236,18 @@ export default function AdminPanel() {
         setNotificationError("Título y mensaje son requeridos");
         return;
       }
-      if (notificationFormData.usuarios.length === 0) {
-        setNotificationError("Selecciona al menos un usuario");
-        return;
-      }
-      await API.post("/notificaciones/broadcast", {
-        usuarios: notificationFormData.usuarios,
+      // FIX: broadcast requería array de usuarios → causaba error si no había seleccionados.
+      // Ahora usa POST /notificaciones con tipo_usuario=['todos'] por defecto,
+      // o los roles/usuarios seleccionados si los hay.
+      const tipo_usuario = notificationFormData.tipo_usuario?.length > 0
+        ? notificationFormData.tipo_usuario
+        : ['todos'];
+      await API.post("/notificaciones", {
         titulo: notificationFormData.titulo,
         mensaje: notificationFormData.mensaje,
         tipo: notificationFormData.tipo,
+        tipo_usuario,
+        sede: notificationFormData.sede || 'todos',
       });
       setSuccess(true);
       setShowNotificationForm(false);

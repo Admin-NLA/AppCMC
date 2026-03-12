@@ -52,7 +52,7 @@ export default function Perfil() {
         empresa: userProfile.empresa || "",
         cargo: userProfile.cargo || "",
         ciudad: userProfile.ciudad || "",
-        foto_url: userProfile.foto_url || "",
+        foto_url: userProfile.foto_url || userProfile.avatar_url || "",
       });
     }
   }, [userProfile]);
@@ -129,22 +129,25 @@ END:VCARD`;
       setUploadingPhoto(true);
       console.log("📸 Subiendo foto...", file.name);
 
-      // Crear FormData para enviar archivo
-      const formDataFile = new FormData();
-      formDataFile.append("file", file);
-
-      // Subir a API (endpoint debe estar en backend)
-      const res = await API.post("/upload/photo", formDataFile, {
-        headers: { "Content-Type": "multipart/form-data" },
+      // FIX: usar base64 en vez de FormData multipart (no requiere multer)
+      const reader = new FileReader();
+      const base64 = await new Promise((resolve, reject) => {
+        reader.onload  = (e) => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
+
+      const res = await API.post("/upload/photo", { data: base64 });
 
       console.log("✅ Foto subida:", res.data);
 
       // Actualizar formulario con URL de foto
-      setFormData((prev) => ({
-        ...prev,
-        foto_url: res.data.url,
-      }));
+      const newUrl = res.data.url;
+      setFormData((prev) => ({ ...prev, foto_url: newUrl }));
+      // FIX: actualizar avatar en contexto para que el header lo refleje inmediatamente
+      if (updateProfile) {
+        updateProfile({ ...userProfile, avatar_url: newUrl, foto_url: newUrl });
+      }
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -204,7 +207,7 @@ END:VCARD`;
         empresa: userProfile.empresa || "",
         cargo: userProfile.cargo || "",
         ciudad: userProfile.ciudad || "",
-        foto_url: userProfile.foto_url || "",
+        foto_url: userProfile.foto_url || userProfile.avatar_url || "",
       });
     }
     setIsEditing(false);
