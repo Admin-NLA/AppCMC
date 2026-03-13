@@ -103,9 +103,7 @@ app.use("/api/mi-marca",       miMarcaRoutes);
 app.use("/api/mi-sesion",      miSesionRoutes);
 app.use("/api/branding",       brandingRoutes);
 app.use("/api/galeria",        galeriaRoutes);
-// Encuestas:
-app.use("/api/encuestas", encuestasRoutes);
-// Verificar que config esté registrado:
+app.use("/api/encuestas",      encuestasRoutes);
 app.use("/api/config",         configRoutes);
 
 // ============================================================
