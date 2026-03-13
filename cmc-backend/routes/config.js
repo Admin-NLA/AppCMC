@@ -3,9 +3,9 @@
 // FIX: Ahora SÍ persiste la configuración de sede en DB
 // ============================================================
 
-const express = require('express');
+import express from "express";
 const router = express.Router();
-const pool = require('../db');
+import pool from "./db.js";
 const { verifyToken } = require('../utils/authMiddleware');
 
 // ============================================================

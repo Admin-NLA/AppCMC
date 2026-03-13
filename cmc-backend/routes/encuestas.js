@@ -3,11 +3,11 @@
 // Sistema híbrido de encuestas con Zoho Forms
 // ============================================================
 
-const express = require('express');
+import express from "express";
 const router = express.Router();
-const pool = require('../db');
+import pool from "./db.js";
 const { verifyToken } = require('../utils/authMiddleware');
-const axios = require('axios');
+import axios from "axios";
 
 // ============================================================
 // CONFIGURACIÓN ZOHO FORMS
