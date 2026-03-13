@@ -452,4 +452,4 @@ router.get('/:id/estadisticas', verifyToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
