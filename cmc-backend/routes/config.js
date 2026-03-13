@@ -1,134 +1,142 @@
-import express from 'express';
-import pool from '../db.js';
-import { authRequired, requireRole } from '../utils/authMiddleware.js';
+// ============================================================
+// BACKEND: routes/config.js (CORREGIDO)
+// FIX: Ahora SÍ persiste la configuración de sede en DB
+// ============================================================
 
+const express = require('express');
 const router = express.Router();
+const pool = require('../db');
+const { verifyToken } = require('../utils/authMiddleware');
 
-// GET /api/config/evento-activo
-// Obtener la configuración del evento activo
-router.get('/evento-activo', async (req, res) => {
+// ============================================================
+// GET /config - Obtener configuración actual
+// ============================================================
+router.get('/', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT 
-        sede_activa, 
-        edicion_activa, 
-        fecha_inicio, 
-        fecha_fin,
-        tipos_activos
-       FROM configuracion_evento 
-       ORDER BY id DESC 
-       LIMIT 1`
-    );
-
+    console.log('📖 [Config] Obteniendo configuración...');
+    
+    const result = await pool.query('SELECT * FROM config WHERE id = 1');
+    
     if (result.rows.length === 0) {
-      // Si no hay configuración, retornar default
-      return res.json({
-        success: true,
-        data: {
-          sede_activa: 'MX',
-          edicion_activa: 2025,
-          fecha_inicio: '2025-09-01',
-          fecha_fin: '2025-09-04',
-          tipos_activos: ['brujula', 'toolbox', 'spark', 'orion', 'tracker', 'curso']
-        }
+      // Si no existe, crear configuración por defecto
+      console.log('⚠️ [Config] No existe config, creando por defecto...');
+      const defaultConfig = await pool.query(`
+        INSERT INTO config (id, sede_activa, edicion_activa)
+        VALUES (1, 'mexico', 2025)
+        RETURNING *
+      `);
+      
+      return res.json(defaultConfig.rows[0]);
+    }
+    
+    console.log('✅ [Config] Configuración obtenida:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ [Config] Error obteniendo config:', error);
+    res.status(500).json({ error: 'Error al obtener configuración' });
+  }
+});
+
+// ============================================================
+// PUT /config - Actualizar configuración (SUPER ADMIN ONLY)
+// ============================================================
+router.put('/', verifyToken, async (req, res) => {
+  try {
+    console.log('📝 [Config] Actualizando configuración...');
+    console.log('📦 [Config] Body recibido:', req.body);
+    console.log('👤 [Config] Usuario:', req.user.rol);
+    
+    // Solo super_admin puede modificar la config global
+    if (req.user.rol !== 'super_admin') {
+      console.log('⛔ [Config] Acceso denegado - rol:', req.user.rol);
+      return res.status(403).json({ 
+        error: 'Solo super_admin puede modificar la configuración global' 
       });
     }
-
-    res.json({
-      success: true,
-      data: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error('❌ Error obteniendo config:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error al obtener configuración'
-    });
-  }
-});
-
-// PUT /api/config/evento-activo
-// Actualizar configuración (Solo super_admin)
-// FIX: Si la tabla está vacía, hace INSERT en lugar de UPDATE silencioso
-router.put('/evento-activo', authRequired, requireRole('super_admin'), async (req, res) => {
-  try {
-    const { sede_activa, edicion_activa, fecha_inicio, fecha_fin, tipos_activos } = req.body;
-
-    // Verificar si existe alguna fila
-    const existing = await pool.query(
-      'SELECT id FROM configuracion_evento ORDER BY id DESC LIMIT 1'
-    );
-
-    let result;
-    if (existing.rows.length === 0) {
-      // No hay filas → INSERT
-      result = await pool.query(
-        `INSERT INTO configuracion_evento
-           (sede_activa, edicion_activa, fecha_inicio, fecha_fin, tipos_activos, updated_at, updated_by)
-         VALUES ($1, $2, $3, $4, $5, NOW(), $6)
-         RETURNING *`,
-        [sede_activa, edicion_activa, fecha_inicio || null, fecha_fin || null,
-         JSON.stringify(tipos_activos), req.user.id]
-      );
-      console.log(`✅ Config creada (primera vez): ${sede_activa} ${edicion_activa}`);
-    } else {
-      // Ya existe → UPDATE
-      result = await pool.query(
-        `UPDATE configuracion_evento 
-         SET sede_activa    = $1,
-             edicion_activa = $2,
-             fecha_inicio   = $3,
-             fecha_fin      = $4,
-             tipos_activos  = $5,
-             updated_at     = NOW(),
-             updated_by     = $6
-         WHERE id = $7
-         RETURNING *`,
-        [sede_activa, edicion_activa, fecha_inicio || null, fecha_fin || null,
-         JSON.stringify(tipos_activos), req.user.id, existing.rows[0].id]
-      );
-      console.log(`✅ Config actualizada: ${sede_activa} ${edicion_activa}`);
+    
+    const { sede_activa, edicion_activa } = req.body;
+    
+    // Validaciones
+    if (!sede_activa || !edicion_activa) {
+      return res.status(400).json({ 
+        error: 'sede_activa y edicion_activa son requeridos' 
+      });
     }
-
-    res.json({
-      success: true,
-      message: existing.rows.length === 0 ? 'Configuración creada' : 'Configuración actualizada',
-      data: result.rows[0]
-    });
-
+    
+    console.log('🔄 [Config] Actualizando:', { sede_activa, edicion_activa });
+    
+    // Actualizar en la base de datos
+    const result = await pool.query(`
+      UPDATE config 
+      SET 
+        sede_activa = $1, 
+        edicion_activa = $2,
+        updated_at = NOW()
+      WHERE id = 1
+      RETURNING *
+    `, [sede_activa, edicion_activa]);
+    
+    if (result.rows.length === 0) {
+      // Si no existe, crearla
+      console.log('⚠️ [Config] No existe config, creando...');
+      const createResult = await pool.query(`
+        INSERT INTO config (id, sede_activa, edicion_activa)
+        VALUES (1, $1, $2)
+        RETURNING *
+      `, [sede_activa, edicion_activa]);
+      
+      console.log('✅ [Config] Configuración creada:', createResult.rows[0]);
+      return res.json(createResult.rows[0]);
+    }
+    
+    console.log('✅ [Config] Configuración actualizada:', result.rows[0]);
+    res.json(result.rows[0]);
   } catch (error) {
-    console.error('❌ Error actualizando config:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error al actualizar configuración'
-    });
+    console.error('❌ [Config] Error actualizando config:', error);
+    res.status(500).json({ error: 'Error al actualizar configuración' });
   }
 });
 
-// GET /api/config/calendario
-// Obtener calendario de todas las sedes
-router.get('/calendario', async (req, res) => {
+// ============================================================
+// GET /config/sedes - Listar sedes disponibles
+// ============================================================
+router.get('/sedes', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT * FROM calendario_sedes 
-       WHERE activo = true 
-       ORDER BY fecha_inicio ASC`
-    );
-
-    res.json({
-      success: true,
-      count: result.rows.length,
-      data: result.rows
-    });
-
+    // Obtener sedes únicas de la tabla users o una tabla de sedes
+    const result = await pool.query(`
+      SELECT DISTINCT sede 
+      FROM users 
+      WHERE sede IS NOT NULL 
+      ORDER BY sede
+    `);
+    
+    const sedes = result.rows.map(row => row.sede);
+    res.json({ sedes });
   } catch (error) {
-    console.error('❌ Error obteniendo calendario:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error al obtener calendario'
-    });
+    console.error('Error obteniendo sedes:', error);
+    res.status(500).json({ error: 'Error al obtener sedes' });
   }
 });
 
-export default router;
+// ============================================================
+// GET /config/ediciones - Listar ediciones disponibles
+// ============================================================
+router.get('/ediciones', verifyToken, async (req, res) => {
+  try {
+    // Obtener ediciones únicas
+    const result = await pool.query(`
+      SELECT DISTINCT edicion 
+      FROM users 
+      WHERE edicion IS NOT NULL 
+      ORDER BY edicion DESC
+    `);
+    
+    const ediciones = result.rows.map(row => row.edicion);
+    res.json({ ediciones });
+  } catch (error) {
+    console.error('Error obteniendo ediciones:', error);
+    res.status(500).json({ error: 'Error al obtener ediciones' });
+  }
+});
+
+module.exports = router;
