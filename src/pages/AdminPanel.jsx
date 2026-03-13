@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import API from '../utils/api';
+import API from '../services/api';
 import {
   Users, Calendar, Bell, Send, CheckCircle, AlertCircle,
   Loader, X, UserPlus, Edit, Trash2, Eye

@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import API from '../utils/api';
+import API from '../services/api';
 import { Save, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 export default function ConfiguracionPanel() {
