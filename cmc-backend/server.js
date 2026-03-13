@@ -105,11 +105,9 @@ app.use("/api/branding",       brandingRoutes);
 app.use("/api/galeria",        galeriaRoutes);
 
 // Encuestas:
-const encuestasRoutes = require('./routes/encuestas');
 app.use("/api/encuestas", encuestasRoutes);
 
 // Verificar que config esté registrado:
-const configRoutes = require('./routes/config');
 app.use("/api/config",         configRoutes);
 
 // ============================================================
