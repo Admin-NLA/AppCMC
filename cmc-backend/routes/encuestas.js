@@ -6,30 +6,32 @@
 import express from "express";
 const router = express.Router();
 import pool from "../db.js";
-import { verifyToken } from "../utils/authMiddleware.js";
-import axios from "axios";
+import { authRequired } from '../utils/authMiddleware.js';
 
 // ============================================================
-// CONFIGURACIÓN ZOHO FORMS
+// CONFIGURACIÓN ZOHO FORMS (OPCIONAL)
 // ============================================================
-// Agregar estas variables a tu .env:
+// Si quieres usar la API de Zoho Forms, agrega estas variables a tu .env:
 // ZOHO_CLIENT_ID=tu_client_id
 // ZOHO_CLIENT_SECRET=tu_client_secret
 // ZOHO_REFRESH_TOKEN=tu_refresh_token
 // ZOHO_API_DOMAIN=https://forms.zoho.com
 
-// Función para obtener access token de Zoho
+// Función para obtener access token de Zoho (OPCIONAL - solo si usas API)
 async function getZohoAccessToken() {
   try {
-    const response = await axios.post('https://accounts.zoho.com/oauth/v2/token', null, {
-      params: {
+    const response = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
         refresh_token: process.env.ZOHO_REFRESH_TOKEN,
         client_id: process.env.ZOHO_CLIENT_ID,
         client_secret: process.env.ZOHO_CLIENT_SECRET,
         grant_type: 'refresh_token'
-      }
+      })
     });
-    return response.data.access_token;
+    const data = await response.json();
+    return data.access_token;
   } catch (error) {
     console.error('Error obteniendo Zoho access token:', error);
     throw error;
@@ -37,50 +39,9 @@ async function getZohoAccessToken() {
 }
 
 // ============================================================
-// TABLA: encuestas_config
-// Guarda la configuración de encuestas de Zoho Forms
-// ============================================================
-/*
-CREATE TABLE encuestas_config (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nombre VARCHAR(255) NOT NULL,
-  descripcion TEXT,
-  zoho_form_link_name VARCHAR(255) NOT NULL, -- El link_name de Zoho Forms
-  zoho_form_id VARCHAR(255), -- ID del formulario en Zoho
-  tipo VARCHAR(50) NOT NULL, -- 'sesion', 'curso', 'expositor', 'general'
-  entidad_id UUID, -- ID de la sesión, curso, expositor relacionado (NULL si es general)
-  rol_permitido VARCHAR(50), -- 'asistente', 'speaker', 'expositor', 'todos'
-  sede VARCHAR(50),
-  edicion INTEGER,
-  activa BOOLEAN DEFAULT true,
-  obligatoria BOOLEAN DEFAULT false,
-  fecha_inicio TIMESTAMP,
-  fecha_fin TIMESTAMP,
-  created_by UUID REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE respuestas_encuesta (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  encuesta_id UUID REFERENCES encuestas_config(id) ON DELETE CASCADE,
-  usuario_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  zoho_response_id VARCHAR(255), -- ID de respuesta en Zoho
-  completada BOOLEAN DEFAULT false,
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(encuesta_id, usuario_id)
-);
-
-CREATE INDEX idx_encuestas_tipo ON encuestas_config(tipo);
-CREATE INDEX idx_encuestas_sede_edicion ON encuestas_config(sede, edicion);
-CREATE INDEX idx_encuestas_rol ON encuestas_config(rol_permitido);
-CREATE INDEX idx_respuestas_usuario ON respuestas_encuesta(usuario_id);
-*/
-
-// ============================================================
 // GET /encuestas - Listar configuraciones de encuestas (Admin)
 // ============================================================
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', authRequired, async (req, res) => {
   try {
     // Solo admin y staff pueden ver todas
     if (!['super_admin', 'staff'].includes(req.user.rol)) {
@@ -135,7 +96,7 @@ router.get('/', verifyToken, async (req, res) => {
 // - Que no haya completado
 // - Que estén activas y en fechas válidas
 // ============================================================
-router.get('/disponibles', verifyToken, async (req, res) => {
+router.get('/disponibles', authRequired, async (req, res) => {
   try {
     const userId = req.user.id;
     const userRol = req.user.rol;
@@ -187,7 +148,7 @@ router.get('/disponibles', verifyToken, async (req, res) => {
 // ============================================================
 // GET /encuestas/:id - Obtener configuración de encuesta específica
 // ============================================================
-router.get('/:id', verifyToken, async (req, res) => {
+router.get('/:id', authRequired, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
@@ -209,7 +170,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 // ============================================================
 // POST /encuestas - Crear nueva configuración de encuesta (Admin)
 // ============================================================
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', authRequired, async (req, res) => {
   try {
     // Verificar permisos
     if (req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
@@ -263,7 +224,7 @@ router.post('/', verifyToken, async (req, res) => {
 // ============================================================
 // PUT /encuestas/:id - Actualizar configuración de encuesta
 // ============================================================
-router.put('/:id', verifyToken, async (req, res) => {
+router.put('/:id', authRequired, async (req, res) => {
   try {
     // Verificar permisos
     if (req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
@@ -324,7 +285,7 @@ router.put('/:id', verifyToken, async (req, res) => {
 // ============================================================
 // DELETE /encuestas/:id - Eliminar configuración de encuesta
 // ============================================================
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', authRequired, async (req, res) => {
   try {
     // Verificar permisos
     if (req.user.rol !== 'super_admin') {
@@ -352,7 +313,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
 // POST /encuestas/:id/marcar-completada
 // Marca que el usuario completó la encuesta en Zoho
 // ============================================================
-router.post('/:id/marcar-completada', verifyToken, async (req, res) => {
+router.post('/:id/marcar-completada', authRequired, async (req, res) => {
   try {
     const { id } = req.params;
     const { zoho_response_id } = req.body;
@@ -389,9 +350,9 @@ router.post('/:id/marcar-completada', verifyToken, async (req, res) => {
 });
 
 // ============================================================
-// GET /encuestas/:id/estadisticas - Ver estadísticas desde Zoho
+// GET /encuestas/:id/estadisticas - Ver estadísticas
 // ============================================================
-router.get('/:id/estadisticas', verifyToken, async (req, res) => {
+router.get('/:id/estadisticas', authRequired, async (req, res) => {
   try {
     // Verificar permisos
     if (!['super_admin', 'staff', 'speaker'].includes(req.user.rol)) {
@@ -420,31 +381,10 @@ router.get('/:id/estadisticas', verifyToken, async (req, res) => {
     `;
     const totalResult = await pool.query(totalQuery, [id]);
     
-    // Opcional: Obtener respuestas desde Zoho Forms API
-    let zohoData = null;
-    if (encuesta.zoho_form_id) {
-      try {
-        const accessToken = await getZohoAccessToken();
-        const zohoResponse = await axios.get(
-          `${process.env.ZOHO_API_DOMAIN}/api/v2/forms/${encuesta.zoho_form_id}/responses`,
-          {
-            headers: {
-              'Authorization': `Zoho-oauthtoken ${accessToken}`
-            }
-          }
-        );
-        zohoData = zohoResponse.data;
-      } catch (zohoError) {
-        console.error('Error obteniendo datos de Zoho:', zohoError);
-        // No fallar si Zoho no responde, solo log
-      }
-    }
-    
     res.json({
       encuesta: encuesta.nombre,
       total_respuestas: parseInt(totalResult.rows[0].total_respuestas),
-      zoho_form_link: `https://forms.zoho.com/form/${encuesta.zoho_form_link_name}`,
-      zoho_data: zohoData
+      zoho_form_link: `https://forms.zoho.com/form/${encuesta.zoho_form_link_name}`
     });
   } catch (error) {
     console.error('Error fetching estadisticas:', error);

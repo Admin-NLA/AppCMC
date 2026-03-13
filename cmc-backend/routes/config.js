@@ -6,12 +6,12 @@
 import express from "express";
 const router = express.Router();
 import pool from "../db.js";
-import { verifyToken } from "../utils/authMiddleware.js";
+import { authRequired } from '../utils/authMiddleware.js';
 
 // ============================================================
 // GET /config - Obtener configuración actual
 // ============================================================
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', authRequired, async (req, res) => {
   try {
     console.log('📖 [Config] Obteniendo configuración...');
     
@@ -40,7 +40,7 @@ router.get('/', verifyToken, async (req, res) => {
 // ============================================================
 // PUT /config - Actualizar configuración (SUPER ADMIN ONLY)
 // ============================================================
-router.put('/', verifyToken, async (req, res) => {
+router.put('/', authRequired, async (req, res) => {
   try {
     console.log('📝 [Config] Actualizando configuración...');
     console.log('📦 [Config] Body recibido:', req.body);
@@ -100,7 +100,7 @@ router.put('/', verifyToken, async (req, res) => {
 // ============================================================
 // GET /config/sedes - Listar sedes disponibles
 // ============================================================
-router.get('/sedes', verifyToken, async (req, res) => {
+router.get('/sedes', authRequired, async (req, res) => {
   try {
     // Obtener sedes únicas de la tabla users o una tabla de sedes
     const result = await pool.query(`
@@ -121,7 +121,7 @@ router.get('/sedes', verifyToken, async (req, res) => {
 // ============================================================
 // GET /config/ediciones - Listar ediciones disponibles
 // ============================================================
-router.get('/ediciones', verifyToken, async (req, res) => {
+router.get('/ediciones', authRequired, async (req, res) => {
   try {
     // Obtener ediciones únicas
     const result = await pool.query(`
