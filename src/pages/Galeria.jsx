@@ -16,7 +16,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import API from "../services/api";
 import {
-  Image, Upload, X, Star, StarOff, Edit2, Trash2,
+  Image as ImageIcon, Upload, X, Star, StarOff, Edit2, Trash2,
   ChevronLeft, ChevronRight, Search, Filter, Plus,
   CheckCircle, AlertCircle, Loader2, Download, Eye,
   ZoomIn
