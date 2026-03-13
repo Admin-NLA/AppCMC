@@ -5,8 +5,8 @@
 
 import express from "express";
 const router = express.Router();
-import pool from "./db.js";
-const { verifyToken } = require('../utils/authMiddleware');
+import pool from "../db.js";
+import { verifyToken } from "../utils/authMiddleware.js";
 
 // ============================================================
 // GET /config - Obtener configuración actual
