@@ -11,8 +11,8 @@ import { Save, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react'
 export default function ConfiguracionPanel() {
   const { userProfile } = useAuth();
   const [config, setConfig] = useState({
-    sede_activa: 'mexico',
-    edicion_activa: 2025
+    sede_activa: 'colombia',
+    edicion_activa: 2026
   });
   const [sedesDisponibles, setSedesDisponibles] = useState([]);
   const [edicionesDisponibles, setEdicionesDisponibles] = useState([]);

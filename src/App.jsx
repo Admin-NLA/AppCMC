@@ -29,7 +29,7 @@ import Encuestas      from "./pages/Encuestas.jsx";
 import BrandingPanel  from "./pages/BrandingPanel.jsx";
 import Galeria        from "./pages/Galeria.jsx";
 import MapaExpo       from "./pages/MapaExpo.jsx";
-import Scanner        from "./pages/Scanner.jsx";
+//import Scanner        from "./pages/Scanner.jsx";
 
 // Páginas de staff / admin
 import StaffPanel from "./pages/StaffPanel.jsx";
