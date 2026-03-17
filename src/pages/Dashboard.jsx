@@ -1,407 +1,404 @@
+// src/pages/Dashboard.jsx
+// Dashboard principal CMC — vista adaptada por rol
+//
+// FIXES:
+//   • Eliminado <Header /> y wrapper min-h-screen (Layout ya los provee)
+//   • useState llamados DENTRO del componente (antes estaban fuera del if guard)
+//   • AsistenteView: muestra mis check-ins, próximas sesiones del día, encuestas pendientes
+//   • SpeakerView: carga las sesiones reales del speaker desde /mi-sesion
+//   • ExpositorView: muestra visitantes reales desde /mi-marca
+//   • Roles compuestos correctos: asistente_general, asistente_combo, etc.
+
 import { useEffect, useState } from "react";
-import { useAuth } from "../contexts/AuthContext.jsx";
-//----Sede activa--//
-import { useEvent } from "../contexts/EventContext";
+import { useAuth }  from "../contexts/AuthContext.jsx";
+import { useEvent } from "../contexts/EventContext.jsx";
+import { Link }     from "react-router-dom";
 import API from "../services/api";
+import {
+  Calendar, Users, Building2, CheckCircle, Clock,
+  TrendingUp, Award, Bell, Mic, QrCode, ClipboardList,
+  Map, Loader2, ChevronRight, Star, RefreshCw
+} from "lucide-react";
 
-import { Link } from "react-router-dom";
-import { Calendar, Users, Building2, CheckCircle, Clock, TrendingUp, Award, Bell } from "lucide-react";
-import Header from "../Components/layout/Header";
+// ── helpers ──────────────────────────────────────────────────
+const fmtHora = v => {
+  if (!v) return null;
+  try { return new Date(v).toLocaleTimeString("es", { hour:"2-digit", minute:"2-digit" }); }
+  catch { return v; }
+};
 
-// ============================================================
-// DASHBOARD
-// ============================================================
+const ROL_LABEL = {
+  super_admin:          "Super Admin",
+  staff:                "Staff",
+  speaker:              "Speaker",
+  expositor:            "Expositor",
+  asistente_general:    "Asistente General",
+  asistente_curso:      "Asistente Curso",
+  asistente_sesiones:   "Asistente Sesiones",
+  asistente_combo:      "Asistente Combo",
+};
 
+// ── StatCard ────────────────────────────────────────────────
+function StatCard({ icon: Icon, label, value, color = "blue", to }) {
+  const palette = {
+    blue:   "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400",
+    green:  "bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400",
+    purple: "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400",
+    orange: "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400",
+    pink:   "bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400",
+  };
+  const card = (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 flex items-center justify-between hover:shadow-sm transition">
+      <div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide">{label}</p>
+        <p className="text-3xl font-black text-gray-900 dark:text-white mt-0.5">{value ?? "—"}</p>
+      </div>
+      <div className={`p-3 rounded-xl ${palette[color]}`}>
+        <Icon size={22} />
+      </div>
+    </div>
+  );
+  return to ? <Link to={to}>{card}</Link> : card;
+}
+
+// ── Acceso rápido ────────────────────────────────────────────
+function QuickLink({ to, icon: Icon, label, color = "blue" }) {
+  const palette = {
+    blue:   "border-blue-200 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600",
+    green:  "border-green-200 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600",
+    purple: "border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-600",
+    orange: "border-orange-200 dark:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20 text-orange-600",
+  };
+  return (
+    <Link to={to}
+      className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition group ${palette[color]}`}>
+      <Icon size={20} />
+      <span className="font-semibold text-sm text-gray-700 dark:text-gray-200">{label}</span>
+      <ChevronRight size={16} className="ml-auto text-gray-400 group-hover:translate-x-0.5 transition-transform" />
+    </Link>
+  );
+}
+
+// ── DASHBOARD PRINCIPAL ──────────────────────────────────────
 export default function Dashboard() {
-  const { user, userProfile, permisos } = useAuth();
-  // ✅ AQUÍ SÍ se puede usar el hook
-  const { sedeActiva, edicionActiva, multiSede, ready } = useEvent();
-  
+  const { userProfile, permisos } = useAuth();
+  const { sedeActiva, edicionActiva, ready } = useEvent();
 
-  const [stats, setStats] = useState({
-    sessions: 0,
-    speakers: 0,
-    expositores: 0,
-    users: 0,
-    checkIns: 0,
-    byTipoPase: {},
-    byRol: {},
-    bySede: {},
-  });
+  const [stats,          setStats]          = useState(null);
+  const [sesionesHoy,    setSesionesHoy]    = useState([]);
+  const [misRegistros,   setMisRegistros]   = useState([]);
+  const [encuestasPend,  setEncuestasPend]  = useState(0);
+  const [visitantes,     setVisitantes]     = useState(0);
+  const [misSesiones,    setMisSesiones]    = useState([]);
+  const [loading,        setLoading]        = useState(true);
 
-  const [nextSessions, setNextSessions] = useState([]);
-  const [speakerSessions, setSpeakerSessions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const rol = userProfile?.rol;
+  const esAdmin   = rol === "super_admin" || rol === "staff";
+  const esSpeaker = rol === "speaker";
+  const esExpositor = rol === "expositor";
+  const esAsistente = !esAdmin && !esSpeaker && !esExpositor;
 
-  // ========================================================
-  // Cargar estadísticas
-  // ========================================================
   useEffect(() => {
-    if (user && userProfile) loadDashboard();
-  }, [user, userProfile]);
+    if (userProfile && ready) loadDashboard();
+  }, [userProfile, ready]);
 
   const loadDashboard = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
+      // Stats globales (todos los roles)
+      const statsRes = await API.get("/stats").catch(() => null);
+      if (statsRes) setStats(statsRes.data);
 
-      // ✅ LLAMAR A /api/stats
-      console.log('📊 Cargando estadísticas...');
-      const statsRes = await API.get("/stats");
-      
-      console.log('✅ Stats recibidas:', statsRes.data);
+      // Próximas sesiones del día
+      const params = new URLSearchParams({ limit: "8" });
+      if (sedeActiva)    params.append("sede", sedeActiva);
+      if (edicionActiva) params.append("edicion", String(edicionActiva));
+      const sesRes = await API.get(`/agenda/sessions?${params}`).catch(() => null);
+      const todasSesiones = sesRes?.data?.sessions || sesRes?.data || [];
+      setSesionesHoy(Array.isArray(todasSesiones) ? todasSesiones.slice(0, 6) : []);
 
-      setStats({
-        sessions: statsRes.data.sessions || 0,
-        speakers: statsRes.data.speakers || 0,
-        expositores: statsRes.data.expositores || 0,
-        users: statsRes.data.users || 0,
-        checkIns: statsRes.data.checkIns || 0,
-        byTipoPase: statsRes.data.byTipoPase || {},
-        byRol: statsRes.data.byRol || {},
-        bySede: statsRes.data.bySede || {},
-      });
-
-      // Opcional: Cargar próximas sesiones
-      try {
-        const sessionsRes = await API.get("/agenda/sessions");
-        const sessions = Array.isArray(sessionsRes.data.sessions) 
-          ? sessionsRes.data.sessions 
-          : [];
-        setNextSessions(sessions.slice(0, 5)); // Primeras 5
-      } catch (err) {
-        console.log('⚠️ No se pudieron cargar próximas sesiones:', err.message);
-        setNextSessions([]);
+      // Datos específicos por rol
+      if (esAsistente) {
+        const [regRes, encRes] = await Promise.all([
+          API.get("/mis-registros?limit=3").catch(() => null),
+          API.get("/encuestas").catch(() => null),
+        ]);
+        setMisRegistros(regRes?.data?.registros?.slice(0,3) || []);
+        const pendientes = (encRes?.data?.encuestas || []).filter(e => !e.ya_respondio);
+        setEncuestasPend(pendientes.length);
       }
 
-    } catch (err) {
-      console.error("❌ Error cargando dashboard:", err);
-      setStats({
-        sessions: 0,
-        speakers: 0,
-        expositores: 0,
-        users: 0,
-        checkIns: 0,
-        byTipoPase: {},
-        byRol: {},
-        bySede: {},
-      });
+      if (esSpeaker) {
+        const spRes = await API.get(
+          `/mi-sesion?speaker_id=${userProfile.id}${sedeActiva ? `&sede=${sedeActiva}` : ""}`
+        ).catch(() => null);
+        setMisSesiones(spRes?.data?.sesiones || []);
+      }
+
+      if (esExpositor) {
+        const visRes = await API.get("/mi-marca").catch(() => null);
+        setVisitantes(visRes?.data?.visitantes?.length || 0);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // LOG de evento activo
-  console.log("EVENTO ACTIVO:", { sedeActiva, edicionActiva, multiSede });
-
-  // ── Early returns DESPUÉS de todos los hooks ──────────────────────────
-  if (!permisos) {
+  // ── Guards ───────────────────────────────────────────────
+  if (!permisos || !ready || !userProfile) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-600">Cargando permisos...</p>
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-blue-600" size={32} />
       </div>
     );
   }
 
-  if (!ready) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-600">Cargando evento...</p>
-      </div>
-    );
-  }
-
-  if (loading || !userProfile) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin h-12 w-12 border-b-2 border-blue-600 rounded-full mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ============================================================
-  // RENDER SEGÚN ROL
-  // ============================================================
-
+  // ─────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Header />
-      <div className="p-6">
-        <h1 className="text-3xl font-bold mb-2">¡Bienvenido, {userProfile.nombre}!</h1>
-        <p className="text-gray-600 mb-6">
-          Rol: <span className="font-semibold capitalize">{userProfile.rol}</span>
-          {sedeActiva && ` | Sede: ${sedeActiva.toUpperCase()}`}
-          {edicionActiva && ` | Edición: ${edicionActiva}`}
-        </p>
+    <div className="max-w-6xl mx-auto space-y-6">
 
-        {/* ADMIN / STAFF / SUPER_ADMIN */}
-        {(userProfile.rol === "super_admin" || userProfile.rol === "admin" || userProfile.rol === "staff") && (
-          <AdminView stats={stats} />
-        )}
-
-        {/* SPEAKER */}
-        {userProfile.rol === "speaker" && <SpeakerView sessions={speakerSessions} />}
-
-        {/* ASISTENTES */}
-        {permisos.verAgenda && userProfile.rol === "asistente" && (
-          <AsistenteView stats={stats} nextSessions={nextSessions} />
-        )}
-
-        {/* EXPOSITOR */}
-        {userProfile.rol === "expositor" && <ExpositorView stats={stats} />}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// ADMIN / STAFF VIEW
-// ============================================================
-
-function AdminView({ stats }) {
-  return (
-    <div className="mt-8 space-y-6">
-      {/* Cards principales */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard 
-          icon={Calendar} 
-          label="Sesiones Totales" 
-          value={stats.sessions} 
-          color="blue" 
-        />
-        <StatCard 
-          icon={Users} 
-          label="Speakers" 
-          value={stats.speakers} 
-          color="purple" 
-        />
-        <StatCard 
-          icon={Building2} 
-          label="Expositores" 
-          value={stats.expositores} 
-          color="orange" 
-        />
-        <StatCard 
-          icon={Users} 
-          label="Usuarios Registrados" 
-          value={stats.users} 
-          color="green" 
-        />
-      </div>
-
-      {/* Distribucion por rol */}
-      {Object.keys(stats.byRol).length > 0 && (
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-xl font-bold mb-4">Usuarios por Rol</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(stats.byRol).map(([rol, count]) => (
-              <div key={rol} className="bg-gray-50 p-4 rounded-lg text-center border-l-4 border-blue-600">
-                <p className="text-2xl font-bold text-gray-800">{count}</p>
-                <p className="text-sm text-gray-600 capitalize">{rol}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Distribucion por sede */}
-      {Object.keys(stats.bySede).length > 0 && (
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-xl font-bold mb-4">Usuarios por Sede</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(stats.bySede).map(([sede, count]) => (
-              <div key={sede} className="bg-gray-50 p-4 rounded-lg text-center border-l-4 border-orange-600">
-                <p className="text-2xl font-bold text-gray-800">{count}</p>
-                <p className="text-sm text-gray-600 capitalize">{sede}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Distribucion por tipo de pase */}
-      {Object.keys(stats.byTipoPase).length > 0 && (
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-xl font-bold mb-4">Usuarios por Tipo de Pase</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(stats.byTipoPase).map(([pase, count]) => (
-              <div key={pase} className="bg-gray-50 p-4 rounded-lg text-center border-l-4 border-purple-600">
-                <p className="text-2xl font-bold text-gray-800">{count}</p>
-                <p className="text-sm text-gray-600 capitalize">{pase}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Link a panel admin */}
-      <Link 
-        to="/admin" 
-        className="inline-block bg-blue-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition"
-      >
-        Ir al Panel de Administración →
-      </Link>
-    </div>
-  );
-}
-
-// ============================================================
-// SPEAKER VIEW
-// ============================================================
-
-function SpeakerView({ sessions }) {
-  return (
-    <div className="mt-8 space-y-6">
-      <h2 className="text-xl font-bold">Mis Sesiones</h2>
-      {sessions.length === 0 ? (
-        <p className="text-gray-600">Aún no tienes sesiones asignadas.</p>
-      ) : (
-        <div className="space-y-3">
-          {sessions.map((s) => (
-            <div key={s.id} className="border-l-4 border-blue-600 pl-4 py-2 bg-white p-4 rounded-lg">
-              <h3 className="font-semibold">{s.title}</h3>
-              <p className="text-sm text-gray-600">
-                {new Date(s.start_at).toLocaleString()} – {new Date(s.end_at).toLocaleTimeString()}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================
-// ASISTENTE VIEW
-// ============================================================
-
-function AsistenteView({ stats, nextSessions }) {
-  return (
-    <div className="mt-8 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard 
-          icon={Calendar} 
-          label="Sesiones Totales" 
-          value={stats.sessions} 
-          color="blue" 
-        />
-        <StatCard 
-          icon={CheckCircle} 
-          label="Check-ins" 
-          value={stats.checkIns} 
-          color="green" 
-        />
-        <StatCard 
-          icon={Building2} 
-          label="Expositores" 
-          value={stats.expositores} 
-          color="purple" 
-        />
-        <StatCard 
-          icon={Award} 
-          label="Speakers" 
-          value={stats.speakers} 
-          color="orange" 
-        />
-      </div>
-
-      <NextSessionsCard sessions={nextSessions} />
-    </div>
-  );
-}
-
-// ============================================================
-// EXPOSITOR VIEW
-// ============================================================
-
-function ExpositorView({ stats }) {
-  return (
-    <div className="mt-8 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard 
-          icon={Users} 
-          label="Visitantes Registrados" 
-          value={stats.checkIns} 
-          color="blue" 
-        />
-        <StatCard 
-          icon={TrendingUp} 
-          label="Total de Usuarios" 
-          value={stats.users} 
-          color="green" 
-        />
-        <StatCard 
-          icon={Award} 
-          label="Sesiones Disponibles" 
-          value={stats.sessions} 
-          color="purple" 
-        />
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// COMPONENTES AUXILIARES
-// ============================================================
-
-function StatCard({ icon: Icon, label, value, color }) {
-  const colors = {
-    blue: "bg-blue-100 text-blue-600",
-    green: "bg-green-100 text-green-600",
-    purple: "bg-purple-100 text-purple-600",
-    orange: "bg-orange-100 text-orange-600",
-  };
-
-  return (
-    <div className="bg-white rounded-xl shadow-md p-6">
-      <div className="flex items-center justify-between">
+      {/* Saludo */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-gray-600 text-sm">{label}</p>
-          <p className="text-3xl font-bold text-gray-800">{value}</p>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-white">
+            ¡Bienvenido, {userProfile.nombre?.split(" ")[0]}! 👋
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            {ROL_LABEL[rol] || rol}
+            {sedeActiva    && <> · <span className="capitalize font-medium">{sedeActiva}</span></>}
+            {edicionActiva && <> · Edición {edicionActiva}</>}
+          </p>
         </div>
-        <div className={`p-3 rounded-full ${colors[color]}`}>
-          <Icon size={24} />
-        </div>
+        <button onClick={loadDashboard} disabled={loading}
+          className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition disabled:opacity-50">
+          <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+        </button>
       </div>
-    </div>
-  );
-}
 
-function NextSessionsCard({ sessions }) {
-  return (
-    <div className="bg-white rounded-xl shadow-md p-6">
-      <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-        <Clock size={24} className="text-blue-600" /> Próximas Sesiones
-      </h2>
-
-      {sessions.length === 0 ? (
-        <p className="text-gray-600">No hay próximas sesiones.</p>
-      ) : (
-        <div className="space-y-3">
-          {sessions.map((s, idx) => (
-            <div key={s.id} className="border-l-4 border-blue-600 pl-4 py-2 bg-gray-50 p-4 rounded-lg">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-semibold">{idx + 1}. {s.titulo || 'Sin título'}</h3>
-                  {s.horaInicio && (
-                    <p className="text-sm text-gray-600">
-                      {new Date(s.horaInicio).toLocaleTimeString()} 
-                      {s.horaFin && ` - ${new Date(s.horaFin).toLocaleTimeString()}`}
-                    </p>
-                  )}
-                </div>
-                {s.sede && (
-                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
-                    {s.sede.toUpperCase()}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="animate-spin text-blue-600" size={32} />
         </div>
+      ) : (
+        <>
+          {/* ══════════════════════════════════════════════
+              ADMIN / STAFF
+          ══════════════════════════════════════════════ */}
+          {esAdmin && stats && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard icon={Calendar}  label="Sesiones"    value={stats.sessions}    color="blue"   to="/agenda" />
+                <StatCard icon={Mic}       label="Speakers"    value={stats.speakers}    color="purple" to="/speakers" />
+                <StatCard icon={Building2} label="Expositores" value={stats.expositores} color="orange" to="/expositores" />
+                <StatCard icon={Users}     label="Usuarios"    value={stats.users}       color="green"  to="/usuarios" />
+              </div>
+
+              {/* Por sede */}
+              {Object.keys(stats.bySede || {}).length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+                  <h2 className="font-bold text-gray-900 dark:text-white mb-4">Usuarios por sede</h2>
+                  <div className="flex flex-wrap gap-3">
+                    {Object.entries(stats.bySede).map(([sede, count]) => (
+                      <div key={sede} className="flex-1 min-w-24 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-black text-orange-600">{count}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize mt-0.5">{sede}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Por tipo de pase */}
+              {Object.keys(stats.byTipoPase || {}).length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+                  <h2 className="font-bold text-gray-900 dark:text-white mb-4">Por tipo de pase</h2>
+                  <div className="flex flex-wrap gap-3">
+                    {Object.entries(stats.byTipoPase).map(([pase, count]) => (
+                      <div key={pase} className="flex-1 min-w-24 bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-black text-purple-600">{count}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize mt-0.5">{pase.replace(/_/g," ")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Accesos rápidos admin */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <QuickLink to="/admin"         icon={Users}    label="Panel de Admin"    color="blue" />
+                <QuickLink to="/staff"         icon={TrendingUp} label="Staff Panel"     color="green" />
+                <QuickLink to="/agenda"        icon={Calendar} label="Agenda"            color="purple" />
+                <QuickLink to="/usuarios"      icon={Users}    label="Usuarios"          color="orange" />
+                <QuickLink to="/notificaciones" icon={Bell}    label="Notificaciones"    color="blue" />
+                {rol === "super_admin" && <QuickLink to="/branding" icon={Star} label="Branding" color="pink" />}
+              </div>
+            </>
+          )}
+
+          {/* ══════════════════════════════════════════════
+              SPEAKER
+          ══════════════════════════════════════════════ */}
+          {esSpeaker && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <StatCard icon={Mic}   label="Mis sesiones" value={misSesiones.length} color="blue" />
+                <StatCard icon={Users} label="Check-ins totales"
+                  value={misSesiones.reduce((a, s) => a, 0)} color="green" />
+              </div>
+
+              {misSesiones.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="px-5 py-4 border-b dark:border-gray-700">
+                    <h2 className="font-bold text-gray-900 dark:text-white">Mis sesiones</h2>
+                  </div>
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {misSesiones.map(s => (
+                      <div key={s.id} className="px-5 py-4 flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
+                            {s.titulo || s.title}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                            {s.dia && <span>Día {s.dia}</span>}
+                            {(s.horaInicio || s.start_at) &&
+                              <span>{fmtHora(s.horaInicio || s.start_at)}</span>}
+                            {(s.sala || s.room) && <span>· {s.sala || s.room}</span>}
+                          </p>
+                        </div>
+                        {s.sede && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-semibold uppercase shrink-0">
+                            {s.sede}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <QuickLink to="/mi-sesion"     icon={Mic}          label="Mi Sesión (detalle)" color="blue" />
+                <QuickLink to="/encuestas"     icon={ClipboardList} label="Mis Encuestas"       color="purple" />
+                <QuickLink to="/notificaciones" icon={Bell}         label="Notificaciones"       color="orange" />
+                <QuickLink to="/perfil"        icon={Users}        label="Mi Perfil"            color="green" />
+              </div>
+            </>
+          )}
+
+          {/* ══════════════════════════════════════════════
+              EXPOSITOR
+          ══════════════════════════════════════════════ */}
+          {esExpositor && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <StatCard icon={Users}     label="Visitantes hoy" value={visitantes} color="blue"   to="/mi-marca" />
+                <StatCard icon={Calendar}  label="Sesiones"        value={stats?.sessions}  color="purple" to="/agenda" />
+                <StatCard icon={Building2} label="Expositores"     value={stats?.expositores} color="orange" to="/expositores" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <QuickLink to="/mi-marca"      icon={Building2}    label="Mi Marca / Visitantes" color="blue" />
+                <QuickLink to="/mapa-expo"     icon={Map}          label="Mapa de Exposición"    color="orange" />
+                <QuickLink to="/encuestas"     icon={ClipboardList} label="Encuestas"            color="purple" />
+                <QuickLink to="/notificaciones" icon={Bell}         label="Notificaciones"        color="green" />
+              </div>
+            </>
+          )}
+
+          {/* ══════════════════════════════════════════════
+              ASISTENTE (todos los subtipos)
+          ══════════════════════════════════════════════ */}
+          {esAsistente && (
+            <>
+              {/* Mis stats personales */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard icon={CheckCircle}  label="Mis check-ins"    value={misRegistros.length} color="green"  to="/mis-registros" />
+                <StatCard icon={ClipboardList} label="Encuestas pend."  value={encuestasPend}       color="orange" to="/encuestas" />
+                <StatCard icon={Calendar}     label="Sesiones totales"  value={stats?.sessions}     color="blue"   to="/agenda" />
+                <StatCard icon={Building2}    label="Expositores"       value={stats?.expositores}  color="purple" to="/expositores" />
+              </div>
+
+              {/* Mis últimos registros */}
+              {misRegistros.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="px-5 py-4 border-b dark:border-gray-700 flex items-center justify-between">
+                    <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <CheckCircle size={17} className="text-green-500" /> Mis últimas asistencias
+                    </h2>
+                    <Link to="/mis-registros" className="text-xs text-blue-600 hover:underline">Ver todo</Link>
+                  </div>
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {misRegistros.map((r, i) => (
+                      <div key={r.id || i} className="px-5 py-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {r.titulo || r.sesion || r.tipo || "Entrada"}
+                          </p>
+                          {r.fecha && (
+                            <p className="text-xs text-gray-400">
+                              {new Date(r.fecha).toLocaleDateString("es", {day:"numeric",month:"short"})}
+                            </p>
+                          )}
+                        </div>
+                        <CheckCircle size={16} className="text-green-500 shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Próximas sesiones del evento */}
+              {sesionesHoy.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="px-5 py-4 border-b dark:border-gray-700 flex items-center justify-between">
+                    <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Clock size={17} className="text-blue-500" /> Sesiones del evento
+                    </h2>
+                    <Link to="/agenda" className="text-xs text-blue-600 hover:underline">Ver agenda</Link>
+                  </div>
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {sesionesHoy.map((s, i) => (
+                      <div key={s.id || i} className="px-5 py-3 flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {s.title || s.titulo}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                            {s.dia && <span>Día {s.dia}</span>}
+                            {(s.start_at || s.horaInicio) &&
+                              <span>{fmtHora(s.start_at || s.horaInicio)}</span>}
+                            {(s.sala || s.room) && <span>· {s.sala || s.room}</span>}
+                          </p>
+                        </div>
+                        {s.tipo && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 capitalize shrink-0">
+                            {s.tipo}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Accesos rápidos asistente */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {permisos?.verAgenda && (
+                  <QuickLink to="/agenda"       icon={Calendar}     label="Agenda"           color="blue" />
+                )}
+                <QuickLink to="/qr"             icon={QrCode}       label="Mi QR"            color="green" />
+                <QuickLink to="/mis-registros"  icon={CheckCircle}  label="Mis Registros"    color="purple" />
+                {permisos?.verEncuestas && (
+                  <QuickLink to="/encuestas"    icon={ClipboardList} label="Encuestas"       color="orange" />
+                )}
+                {permisos?.verMapa && (
+                  <QuickLink to="/mapa-expo"    icon={Map}          label="Mapa Expo"        color="orange" />
+                )}
+                <QuickLink to="/notificaciones" icon={Bell}         label="Notificaciones"   color="blue" />
+              </div>
+            </>
+          )}
+        </>
       )}
     </div>
   );

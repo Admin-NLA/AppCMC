@@ -200,7 +200,7 @@ router.get('/sessions', authRequired, async (req, res) => {
   try {
     const wpResponse = await wordpressAPI.get('/session', {
       params: { per_page: 100, _fields: 'id,title,content,slug,class_list,acf' },
-      timeout: 8000, // 8 s máximo — si WP tarda más, usamos fallback
+      timeout: 5000, // 5 s máximo — si WP tarda más, usamos fallback local
     });
 
     wpTotal = wpResponse.data.length;

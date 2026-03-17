@@ -40,6 +40,7 @@ export default function Agenda() {
   const [favorites, setFavorites] = useState(new Set());
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [wpWarning,       setWpWarning]       = useState(null);  // Bug C: aviso WP caído
 
   const days = [
     { id: "todos",     label: "Todos",      numero: 0 },
@@ -75,6 +76,7 @@ export default function Agenda() {
 
     try {
       setLoading(true);
+      setWpWarning(null);
 
       const params = new URLSearchParams();
 
@@ -112,6 +114,8 @@ export default function Agenda() {
       setAvailableEdiciones(ediciones.sort());
 
       setSessions(sessionData);
+      // Bug C: el backend incluye 'warning' cuando WP no está disponible
+      setWpWarning(res.data.warning || null);
     } catch (error) {
       console.error("[Agenda] Error al cargar sesiones:", error);
       setSessions([]);
@@ -187,7 +191,7 @@ export default function Agenda() {
     // en el selector — ya se aplican en el backend, pero si el backend
     // retornó datos mixtos por algún motivo, esto actúa como segunda barrera)
     if (selectedSede) {
-      filtered = filtered.filter((s) => s.sede === selectedSede);
+      filtered = filtered.filter((s) => s.sede === selectedSede || s.sede === selectedSede.toLowerCase());
     }
     if (selectedEdicion) {
       filtered = filtered.filter(
@@ -313,6 +317,17 @@ export default function Agenda() {
 
   return (
     <div>
+      {/* Bug C — Banner WordPress caído */}
+      {wpWarning && (
+        <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-xl text-sm mb-4">
+          <span className="shrink-0">⚠️</span>
+          <div className="flex-1">
+            <span className="font-semibold">WordPress no disponible — </span>
+            mostrando sesiones guardadas localmente. La agenda puede estar incompleta.
+          </div>
+          <button onClick={() => setWpWarning(null)} className="shrink-0 opacity-60 hover:opacity-100 ml-2">✕</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
