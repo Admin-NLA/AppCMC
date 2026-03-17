@@ -12,7 +12,6 @@ import {
   Briefcase,
   X
 } from "lucide-react";
-import Header from "../Components/layout/Header";
 
 export default function Networking() {
   const { userProfile, permisos } = useAuth();
@@ -143,13 +142,10 @@ export default function Networking() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100">
-        <Header />
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <div className="animate-spin h-12 w-12 border-b-2 border-blue-600 rounded-full mx-auto mb-4"></div>
-            <p className="text-gray-600">Cargando asistentes...</p>
-          </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin h-10 w-10 border-b-2 border-blue-600 rounded-full mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">Cargando asistentes...</p>
         </div>
       </div>
     );
@@ -157,39 +153,30 @@ export default function Networking() {
 
   if (accessDenied) {
     return (
-      <div className="min-h-screen bg-gray-100">
-        <Header />
-        <div className="p-6">
-          <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="text-red-600 mt-1" size={24} />
-              <div>
-                <p className="text-red-800 font-semibold text-lg">{accessMessage}</p>
-                <p className="text-red-700 text-sm mt-2">
-                  Solo Asistentes de Sesiones, Combo y algunos otros roles pueden acceder.
-                </p>
-              </div>
-            </div>
-          </div>
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-6 rounded-2xl flex items-start gap-3 max-w-lg">
+        <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={22} />
+        <div>
+          <p className="font-bold text-red-800 dark:text-red-300">{accessMessage}</p>
+          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+            Solo Asistentes de Sesiones, Combo y algunos otros roles pueden acceder al networking.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Header />
-      <div className="p-6 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold flex items-center gap-2 mb-2">
-            <Users size={32} className="text-blue-600" />
-            Networking
-          </h1>
-          <p className="text-gray-600">
-            Red de contactos del evento - Conéctate con otros asistentes
-          </p>
-        </div>
+    <div className="max-w-7xl mx-auto space-y-5">
+      {/* Título */}
+      <div>
+        <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+          <Users className="text-blue-600" size={26} />
+          Networking
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+          Red de contactos del evento — Conéctate con otros asistentes
+        </p>
+      </div>
 
         {/* Error */}
         {error && (
@@ -309,7 +296,6 @@ export default function Networking() {
             ))}
           </div>
         )}
-      </div>
 
       {/* Modal de detalles */}
       {selectedAsistente && (

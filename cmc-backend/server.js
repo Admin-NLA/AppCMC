@@ -23,6 +23,8 @@ import miSesionRoutes      from "./routes/mi-sesion.js";
 import encuestasRoutes     from "./routes/encuestas.js";
 import brandingRoutes      from "./routes/branding.js";
 import galeriaRoutes       from "./routes/galeria.js";
+import scanRoutes          from "./routes/scan.js";
+import mapaRoutes          from "./routes/mapa.js";
 
 import { sendSSE }                          from "./routes/notificaciones.js";
 import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js";
@@ -92,6 +94,7 @@ app.use("/api/speakers",       speakersRoutes);
 app.use("/api/expositores",    expositoresRoutes);
 app.use("/api/dashboard",      dashboardRoutes);
 app.use("/api/notificaciones", notificacionesRoutes);
+app.use("/api/config",         configRoutes);
 app.use("/api/users",          usersRoutes);
 app.use("/api/stats",          statsRoutes);
 app.use("/api/upload",         uploadRoutes);
@@ -101,10 +104,11 @@ app.use("/api/mis-registros",  misRegistrosRoutes);
 app.use("/api/networking",     networkingRoutes);
 app.use("/api/mi-marca",       miMarcaRoutes);
 app.use("/api/mi-sesion",      miSesionRoutes);
+app.use("/api/encuestas",      encuestasRoutes);
 app.use("/api/branding",       brandingRoutes);
 app.use("/api/galeria",        galeriaRoutes);
-app.use("/api/encuestas",      encuestasRoutes);
-app.use("/api/config",         configRoutes);
+app.use("/api/scan",           scanRoutes);
+app.use("/api/mapa",           mapaRoutes);
 
 // ============================================================
 // CRON — Notificaciones programadas (cada 30 segundos)

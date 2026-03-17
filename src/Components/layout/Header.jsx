@@ -8,7 +8,7 @@ import {
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 
-// Mapeo corregido de menú
+// Mismo mapeo que Layout.jsx — fuente única de verdad
 const MENU_MAP = {
   "Dashboard":          { to: "/dashboard",     icon: <LayoutDashboard size={16} /> },
   "Agenda":             { to: "/agenda",         icon: <Calendar size={16} /> },
@@ -32,11 +32,14 @@ const MENU_MAP = {
   "Mis Registros":     { to: "/mis-registros",  icon: <FileText size={16} /> },
   "Mis Cursos":        { to: "/mis-cursos",     icon: <Calendar size={16} /> },
   "Notificaciones":    { to: "/notificaciones", icon: <Bell size={16} /> },
+  "Galería":           { to: "/galeria",        icon: <FileText size={16} /> },
+  "Encuestas":         { to: "/encuestas",      icon: <FileText size={16} /> },
+  "Branding":          { to: "/branding",       icon: <Settings size={16} /> },
+  "Scanner":           { to: "/scanner",        icon: <QrCode size={16} /> },
   "Staff Panel":       { to: "/staff",          icon: <Scan size={16} /> },
   "Usuarios":          { to: "/usuarios",       icon: <Users size={16} /> },
   "Usuarios (ver)":    { to: "/usuarios",       icon: <Users size={16} /> },
-  // FIX: Admin Panel ahora apunta a /admin-panel en lugar de /configuracion
-  "Admin Panel":       { to: "/admin-panel",    icon: <Settings size={16} /> },
+  "Admin Panel":       { to: "/admin",          icon: <Settings size={16} /> },
   "Configuración":     { to: "/configuracion",  icon: <Settings size={16} /> },
   "Excel Import":      { to: "/admin/import",   icon: <FileText size={16} /> },
 };
@@ -49,113 +52,157 @@ export default function Header() {
   const handleLogout = async () => {
     const result = await Swal.fire({
       title: "¿Cerrar sesión?",
-      text: "Tu sesión actual finalizará",
-      icon: "question",
+      text: "Tu sesión se cerrará y deberás iniciar nuevamente.",
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Sí, cerrar sesión",
+      confirmButtonColor: "#2563eb",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Sí, salir",
       cancelButtonText: "Cancelar",
+      background: "#ffffff",
+      customClass: { title: "text-gray-800", popup: "rounded-2xl shadow-lg" },
     });
 
-    if (result.isConfirmed) {
-      logout();
-      navigate("/login");
-      Swal.fire({
-        title: "¡Sesión cerrada!",
-        text: "Has cerrado sesión exitosamente",
+    if (!result.isConfirmed) return;
+
+    try {
+      await logout();
+      localStorage.clear();
+      sessionStorage.clear();
+
+      await Swal.fire({
         icon: "success",
-        timer: 1500,
+        title: "Sesión cerrada correctamente 👋",
         showConfirmButton: false,
+        timer: 1500,
+        background: "#ffffff",
+      });
+
+      navigate("/");
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Error al cerrar sesión",
+        text: "Intenta nuevamente.",
+        confirmButtonColor: "#2563eb",
       });
     }
   };
 
-  const menuItems = permisos?.menuItems || ["Perfil"];
+  // Construir menú móvil desde permisos.menuItems
+  const mobileMenu = permisos
+    ? permisos.menuItems
+        .map((label) => ({ label, ...MENU_MAP[label] }))
+        .filter((item) => item.to)
+    : [];
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm">
-      {/* Logo */}
-      <div className="flex items-center gap-3">
-        <img
-          src="https://cmc-latam.com/wp-content/uploads/2024/10/cmc-logo-azul.svg"
-          alt="CMC Logo"
-          className="h-8"
-        />
-        <h1 className="text-xl font-bold text-gray-800 hidden sm:block">
-          CMC {new Date().getFullYear()}
-        </h1>
-      </div>
+    <header className="bg-blue-600 text-white shadow-md sticky top-0 z-50">
+      <div className="px-4 md:px-6 py-3">
+        <div className="flex justify-between items-center">
 
-      {/* Desktop Menu */}
-      <nav className="hidden lg:flex items-center gap-6">
-        {menuItems.map((itemKey) => {
-          const menuItem = MENU_MAP[itemKey];
-          if (!menuItem) return null;
+          {/* Logo */}
+          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+            <img
+              src="/icon-192.png"
+              alt="CMC Logo"
+              className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-white p-0.5"
+              onError={(e) => (e.target.style.display = "none")}
+            />
+            <div className="hidden sm:block">
+              <h1 className="text-sm md:text-lg font-bold leading-tight">CMC LATAM APP</h1>
+              <p className="text-xs text-blue-100">Gestión del Evento</p>
+            </div>
+          </div>
 
-          return (
-            <button
-              key={itemKey}
-              onClick={() => navigate(menuItem.to)}
-              className="flex items-center gap-2 text-gray-700 hover:text-blue-600 transition font-medium"
-            >
-              {menuItem.icon}
-              <span>{itemKey}</span>
-            </button>
-          );
-        })}
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 text-red-600 hover:text-red-700 transition font-medium"
-        >
-          <LogOut size={16} />
-          <span>Salir</span>
-        </button>
-      </nav>
-
-      {/* Mobile Menu Toggle */}
-      <button
-        onClick={() => setMenuOpen(!menuOpen)}
-        className="lg:hidden text-gray-700 hover:text-blue-600"
-      >
-        {menuOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
-
-      {/* Mobile Menu */}
-      {menuOpen && (
-        <div className="absolute top-16 left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-50 lg:hidden">
-          <nav className="flex flex-col p-4 gap-3">
-            {menuItems.map((itemKey) => {
-              const menuItem = MENU_MAP[itemKey];
-              if (!menuItem) return null;
-
-              return (
+          {/* Desktop — perfil + logout */}
+          <div className="hidden md:flex items-center gap-4">
+            {userProfile ? (
+              <>
+                <div className="flex items-center gap-2 bg-blue-700 rounded-lg px-3 py-1.5">
+                  <User size={16} />
+                  <div className="text-sm">
+                    <p className="font-semibold">{userProfile.nombre || "Usuario"}</p>
+                    <p className="text-xs text-blue-200 capitalize">{userProfile.rol || "Sin rol"}</p>
+                  </div>
+                </div>
                 <button
-                  key={itemKey}
-                  onClick={() => {
-                    navigate(menuItem.to);
-                    setMenuOpen(false);
-                  }}
-                  className="flex items-center gap-3 text-gray-700 hover:bg-gray-100 p-3 rounded-lg transition"
+                  onClick={handleLogout}
+                  className="flex items-center gap-1 bg-blue-800 hover:bg-blue-700 transition px-3 py-1.5 rounded-lg text-sm font-medium"
                 >
-                  {menuItem.icon}
-                  <span>{itemKey}</span>
+                  <LogOut size={16} />
+                  Salir
                 </button>
-              );
-            })}
+              </>
+            ) : (
+              <button
+                onClick={() => navigate("/")}
+                className="bg-blue-800 hover:bg-blue-700 transition px-3 py-1.5 rounded-lg text-sm font-medium"
+              >
+                Iniciar sesión
+              </button>
+            )}
+          </div>
+
+          {/* Mobile — hamburger */}
+          <div className="md:hidden">
             <button
-              onClick={() => {
-                handleLogout();
-                setMenuOpen(false);
-              }}
-              className="flex items-center gap-3 text-red-600 hover:bg-red-50 p-3 rounded-lg transition"
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="p-2 hover:bg-blue-700 rounded-lg transition"
             >
-              <LogOut size={16} />
-              <span>Salir</span>
+              {menuOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
-          </nav>
+          </div>
         </div>
-      )}
+
+        {/* Mobile dropdown */}
+        {menuOpen && (
+          <div className="md:hidden mt-4 pb-4 space-y-2 border-t border-blue-500 pt-4">
+            {userProfile ? (
+              <>
+                <div className="bg-blue-700 rounded-lg px-3 py-2 mb-3">
+                  <p className="font-semibold text-sm">{userProfile.nombre || "Usuario"}</p>
+                  <p className="text-xs text-blue-200 capitalize">{userProfile.rol || "Sin rol"}</p>
+                </div>
+
+                {mobileMenu.length > 0 ? (
+                  mobileMenu.map((item, index) => (
+                    <button
+                      key={`mobile-${item.to}-${index}`}
+                      onClick={() => { navigate(item.to); setMenuOpen(false); }}
+                      className="w-full text-left flex items-center gap-2 hover:bg-blue-700 transition px-3 py-2 rounded-lg text-sm font-medium"
+                    >
+                      {item.icon}
+                      {/* FIX: mostrar label legible, no la ruta */}
+                      {item.label}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-xs text-blue-100">
+                    ⚠️ No hay menú disponible
+                  </div>
+                )}
+
+                <button
+                  onClick={() => { handleLogout(); setMenuOpen(false); }}
+                  className="w-full text-left flex items-center gap-2 bg-blue-800 hover:bg-blue-700 transition px-3 py-2 rounded-lg text-sm font-medium mt-2"
+                >
+                  <LogOut size={16} />
+                  Salir
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => { navigate("/"); setMenuOpen(false); }}
+                className="w-full text-left bg-blue-800 hover:bg-blue-700 transition px-3 py-2 rounded-lg text-sm font-medium"
+              >
+                Iniciar sesión
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </header>
   );
 }

@@ -28,6 +28,8 @@ import MiSesion from "./pages/MiSesion.jsx";
 import Encuestas      from "./pages/Encuestas.jsx";
 import BrandingPanel  from "./pages/BrandingPanel.jsx";
 import Galeria        from "./pages/Galeria.jsx";
+import MapaExpo       from "./pages/MapaExpo.jsx";
+import Scanner        from "./pages/Scanner.jsx";
 
 // Páginas de staff / admin
 import StaffPanel from "./pages/StaffPanel.jsx";
@@ -171,13 +173,12 @@ function AppWithEvent() {
               }
             />
 
-            {/* Mapa Expo — solo quienes tienen verMapa=true */}
-            {/* FIX: ruta faltante — el menú apuntaba aquí pero no existía */}
+            {/* Mapa Expo — plano del salón de exposición */}
             <Route
               path="mapa-expo"
               element={
                 <PermRoute permiso="verMapa">
-                  <Expositores modoMapa />
+                  <MapaExpo />
                 </PermRoute>
               }
             />
@@ -229,6 +230,16 @@ function AppWithEvent() {
                 <PermRoute permiso="verMiSesion">
                   <MiSesion />
                 </PermRoute>
+              }
+            />
+
+            {/* Scanner QR — staff y super_admin */}
+            <Route
+              path="scanner"
+              element={
+                <PrivateRoute roles={['staff', 'super_admin']}>
+                  <Scanner />
+                </PrivateRoute>
               }
             />
 
