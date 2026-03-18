@@ -77,65 +77,56 @@ export default function Layout() {
   };
 
   // Construir menú desde permisos.menuItems usando MENU_MAP
-  const groupedMenuFiltered = Object.entries(groupedMenu).map(([group, items]) => {
-    const filteredItems = items
-      .filter(label => permisos?.menuItems.includes(label))
-      .map(label => ({ label, ...MENU_MAP[label] }));
-
-    return {
-      group,
-      items: filteredItems
-    };
-  }).filter(group => group.items.length > 0);
+  const menu = permisos
+    ? permisos.menuItems
+        .map((label) => ({ label, ...MENU_MAP[label] }))
+        .filter((item) => item.to) // descartar labels no mapeados
+    : [];
 
   // ============================================================
-    // Agrupación visual del menú (UX)
-    // ============================================================
-    const groupedMenu = {
-      "Principal": ["Dashboard"],
+  // Agrupador dinámico (NO rompe permisos)
+  // ============================================================
+  const getGroup = (label) => {
+    if (label.includes("Dashboard")) return "Principal";
 
-      "Agenda": [
-        "Agenda",
-        "Agenda (D1-D2)",
-        "Agenda (D3-D4)",
-        "Agenda (lectura)",
-        "Agenda (ver)"
-      ],
+    if (label.includes("Agenda")) return "Agenda";
 
-      "Expo": [
-        "Mapa Expo",
-        "Expositores",
-        "Expositores (ver)"
-      ],
+    if (label.includes("Expositores") || label.includes("Mapa")) return "Expo";
 
-      "Speakers": [
-        "Speakers",
-        "Speakers (ver)"
-      ],
+    if (label.includes("Speakers")) return "Speakers";
 
-      "Usuario": [
-        "Perfil",
-        "Mi Perfil",
-        "Mi QR",
-        "Mis Registros",
-        "Mis Cursos"
-      ],
+    if (
+      label.includes("Usuarios") ||
+      label.includes("Admin") ||
+      label.includes("Configuración") ||
+      label.includes("Branding") ||
+      label.includes("Staff")
+    ) return "Admin";
 
-      "Networking": [
-        "Networking"
-      ],
+    if (
+      label.includes("Perfil") ||
+      label.includes("QR") ||
+      label.includes("Registros") ||
+      label.includes("Cursos") ||
+      label.includes("Sesión") ||
+      label.includes("Marca")
+    ) return "Usuario";
 
-      "Admin": [
-        "Usuarios",
-        "Usuarios (ver)",
-        "Admin Panel",
-        "Configuración",
-        "Branding",
-        "Excel Import"
-      ]
-    };
+    if (label.includes("Networking")) return "Networking";
 
-    return (
+    return "Otros"; // 🔥 clave para no perder nada
+  };
+
+  const groupedMenu = menu.reduce((acc, item) => {
+    const group = getGroup(item.label);
+
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(item);
+
+    return acc;
+  }, {});
+
+  return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
 
       {/* Sidebar */}
@@ -152,17 +143,17 @@ export default function Layout() {
             Navegación
           </div>
 
-          {groupedMenuFiltered.length > 0 ? (
-            groupedMenuFiltered.map((group) => (
-              <div key={group.group}>
+          {Object.keys(groupedMenu).length > 0 ? (
+            Object.entries(groupedMenu).map(([group, items]) => (
+              <div key={group}>
 
                 {/* Título del grupo */}
                 <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mt-4 mb-1 px-2">
-                  {group.group}
+                  {group}
                 </div>
 
                 {/* Items */}
-                {group.items.map((item, index) => (
+                {items.map((item, index) => (
                   <Link
                     key={`${item.to}-${index}`}
                     to={item.to}
