@@ -77,13 +77,65 @@ export default function Layout() {
   };
 
   // Construir menú desde permisos.menuItems usando MENU_MAP
-  const menu = permisos
-    ? permisos.menuItems
-        .map((label) => ({ label, ...MENU_MAP[label] }))
-        .filter((item) => item.to) // descartar labels no mapeados
-    : [];
+  const groupedMenuFiltered = Object.entries(groupedMenu).map(([group, items]) => {
+    const filteredItems = items
+      .filter(label => permisos?.menuItems.includes(label))
+      .map(label => ({ label, ...MENU_MAP[label] }));
 
-  return (
+    return {
+      group,
+      items: filteredItems
+    };
+  }).filter(group => group.items.length > 0);
+
+  // ============================================================
+    // Agrupación visual del menú (UX)
+    // ============================================================
+    const groupedMenu = {
+      "Principal": ["Dashboard"],
+
+      "Agenda": [
+        "Agenda",
+        "Agenda (D1-D2)",
+        "Agenda (D3-D4)",
+        "Agenda (lectura)",
+        "Agenda (ver)"
+      ],
+
+      "Expo": [
+        "Mapa Expo",
+        "Expositores",
+        "Expositores (ver)"
+      ],
+
+      "Speakers": [
+        "Speakers",
+        "Speakers (ver)"
+      ],
+
+      "Usuario": [
+        "Perfil",
+        "Mi Perfil",
+        "Mi QR",
+        "Mis Registros",
+        "Mis Cursos"
+      ],
+
+      "Networking": [
+        "Networking"
+      ],
+
+      "Admin": [
+        "Usuarios",
+        "Usuarios (ver)",
+        "Admin Panel",
+        "Configuración",
+        "Branding",
+        "Excel Import"
+      ]
+    };
+
+    return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
 
       {/* Sidebar */}
@@ -100,23 +152,33 @@ export default function Layout() {
             Navegación
           </div>
 
-          {menu.length > 0 ? (
-            menu.map((item, index) => (
-              <Link
-                key={`${item.to}-${index}`}
-                to={item.to}
-                onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 p-2 rounded-lg text-sm font-medium transition-colors
-                  ${
-                    location.pathname === item.to
-                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
-              >
-                {item.icon}
-                {/* FIX: usar el label original, no derivar de la ruta */}
-                {item.label}
-              </Link>
+          {groupedMenuFiltered.length > 0 ? (
+            groupedMenuFiltered.map((group) => (
+              <div key={group.group}>
+
+                {/* Título del grupo */}
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mt-4 mb-1 px-2">
+                  {group.group}
+                </div>
+
+                {/* Items */}
+                {group.items.map((item, index) => (
+                  <Link
+                    key={`${item.to}-${index}`}
+                    to={item.to}
+                    onClick={() => setOpen(false)}
+                    className={`flex items-center gap-3 p-2 rounded-lg text-sm font-medium transition-colors
+                      ${
+                        location.pathname === item.to
+                          ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
+                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      }`}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
             ))
           ) : (
             <div className="p-2 text-xs text-gray-500">
