@@ -8,7 +8,7 @@ import NotificationsPanel from "../../Components/NotificationsPanel.jsx";
 import {
   Menu, X, Moon, Sun, Calendar, Users, LayoutDashboard, Layers,
   Bell, User, Scan, Settings, LogOut, Map, Network, FileText, Award, QrCode,
-  ClipboardList, Palette, Image as ImageIcon
+  ClipboardList, Palette, Image as ImageIcon, ChevronDown, ChevronRight
 } from "lucide-react";
 
 // ============================================================
@@ -56,6 +56,13 @@ export default function Layout() {
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState({});
+  const toggleGroup = (group) => {
+    setOpenGroups(prev => ({
+      ...prev,
+      [group]: !prev[group]
+    }));
+  };
 
   const { unreadCount } = useNotificaciones();
 
@@ -82,6 +89,16 @@ export default function Layout() {
         .map((label) => ({ label, ...MENU_MAP[label] }))
         .filter((item) => item.to) // descartar labels no mapeados
     : [];
+
+   useEffect(() => {
+      if (menu.length > 0) {
+        const activeItem = menu.find(item => item.to === location.pathname);
+        if (activeItem) {
+          const group = getGroup(activeItem.label);
+          setOpenGroups(prev => ({ ...prev, [group]: true }));
+        }
+      }
+    }, [location.pathname, menu]);
 
   // ============================================================
   // Agrupador dinámico (NO rompe permisos)
@@ -144,33 +161,46 @@ export default function Layout() {
           </div>
 
           {Object.keys(groupedMenu).length > 0 ? (
-            Object.entries(groupedMenu).map(([group, items]) => (
-              <div key={group}>
+            Object.entries(groupedMenu).map(([group, items]) => {
+              const isOpen = openGroups[group];
 
-                {/* Título del grupo */}
-                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mt-4 mb-1 px-2">
-                  {group}
-                </div>
+              return (
+                <div key={group}>
 
-                {/* Items */}
-                {items.map((item, index) => (
-                  <Link
-                    key={`${item.to}-${index}`}
-                    to={item.to}
-                    onClick={() => setOpen(false)}
-                    className={`flex items-center gap-3 p-2 rounded-lg text-sm font-medium transition-colors
-                      ${
-                        location.pathname === item.to
-                          ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
-                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      }`}
+                  {/* HEADER DEL GRUPO (CLICKABLE) */}
+                  <button
+                    onClick={() => toggleGroup(group)}
+                    className="flex items-center justify-between w-full px-2 py-2 mt-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600">
+                    <span>{group}</span>
+                    {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </button>
+
+                  {/* CONTENIDO ANIMADO */}
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                      isOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                    }`}
                   >
-                    {item.icon}
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            ))
+                    {items.map((item, index) => (
+                      <Link
+                        key={`${item.to}-${index}`}
+                        to={item.to}
+                        onClick={() => setOpen(false)}
+                        className={`flex items-center gap-3 p-2 pl-4 rounded-lg text-sm font-medium transition-all
+                          ${
+                            location.pathname === item.to
+                              ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
+                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          }`}
+                      >
+                        {item.icon}
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
           ) : (
             <div className="p-2 text-xs text-gray-500">
               ⚠️ No hay permisos disponibles
