@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 // ============================================================
-// Mapeo centralizado: label → ruta + ícono
+// Mapeo centralizado: label → ruta  ícono
 // Agrega aquí cualquier nuevo item de sedeHelper.menuItems
 // ============================================================
 const MENU_MAP = {
@@ -104,11 +104,9 @@ export default function Layout() {
   // Agrupador dinámico (NO rompe permisos)
   // ============================================================
   const getGroup = (label) => {
-    if (label.includes("Dashboard")) return "Principal";
-
-    if (label.includes("Agenda")) return "Agenda";
-
-    if (label.includes("Expositores") || label.includes("Mapa")) return "Expo";
+    if (
+      label.includes("Expositores") || 
+      label.includes("Mapa")) return "Expo";
 
     if (label.includes("Speakers")) return "Speakers";
 
@@ -117,7 +115,8 @@ export default function Layout() {
       label.includes("Admin") ||
       label.includes("Configuración") ||
       label.includes("Branding") ||
-      label.includes("Staff")
+      label.includes("Staff") ||
+      label.includes("Excel Import")
     ) return "Admin";
 
     if (
@@ -131,17 +130,29 @@ export default function Layout() {
 
     if (label.includes("Networking")) return "Networking";
 
-    return "Otros"; // 🔥 clave para no perder nada
+    return "Informativos"; // 🔥 clave para no perder nada
   };
 
-  const groupedMenu = menu.reduce((acc, item) => {
-    const group = getGroup(item.label);
+  const NO_GROUP = ["Dashboard", "Agenda"];
+  const directItems = menu.filter(item =>
+    NO_GROUP.some(label => item.label.includes(label))
+  );
 
-    if (!acc[group]) acc[group] = [];
-    acc[group].push(item);
+  const groupedMenu = menu
+    .filter(item => !NO_GROUP.some(label => item.label.includes(label)))
+    .reduce((acc, item) => {
+      const group = getGroup(item.label);
 
-    return acc;
-  }, {});
+      if (!acc[group]) acc[group] = [];
+      acc[group].push(item);
+
+      return acc;
+    }, {});
+
+  const formatTitle = (path) => {
+    const clean = path.replace("/", "");
+    return clean.charAt(0).toUpperCase() + clean.slice(1);
+  };  
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
@@ -152,12 +163,30 @@ export default function Layout() {
           ${open ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
       >
         <div className="p-5 border-b dark:border-gray-700 text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-          <Layers size={22} /> CMC App
+          <img public="/public/icons/CMC.svg" className="w-6 h-6" />
+          <span> CMC - App</span>
         </div>
 
         <nav className="px-4 py-4 space-y-2">
           <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-2 px-2">
-            Navegación
+            Menú
+            {/* ITEMS DIRECTOS (sin dropdown) */}
+            {directItems.map((item, index) => (
+              <Link
+                key={`direct-${item.to}-${index}`}
+                to={item.to}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-3 p-2 pl-2 rounded-lg text-sm font-medium transition-all
+                  ${
+                    location.pathname === item.to
+                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            ))}
           </div>
 
           {Object.keys(groupedMenu).length > 0 ? (
@@ -237,7 +266,7 @@ export default function Layout() {
           </button>
 
           <h1 className="font-semibold text-lg text-gray-800 dark:text-gray-100">
-            {location.pathname.replace("/", "").toUpperCase() || "DASHBOARD"}
+            {formatTitle(location.pathname) || "Dashboard"}
           </h1>
 
           <div className="flex items-center gap-4">
