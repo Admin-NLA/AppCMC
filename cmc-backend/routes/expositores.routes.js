@@ -146,7 +146,10 @@ router.post('/', authRequired, async (req, res) => {
       categoria,
       stand,
       descripcion,
-      sede
+      sede,
+      contact,
+      usuario_id,
+      edicion
     } = req.body;
 
     console.log('📝 Creando expositor:', nombre);
@@ -168,19 +171,15 @@ router.post('/', authRequired, async (req, res) => {
         descripcion,
         sede,
         edicion,
+        contact,
+        usuario_id,
         activo,
         created_at
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, 2025, true, NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, NOW()
       )
-      RETURNING 
-        id,
-        nombre,
-        categoria,
-        stand,
-        descripcion
-      `,
+      RETURNING *`,
       [
         nombre,
         logo_url || null,
@@ -188,7 +187,10 @@ router.post('/', authRequired, async (req, res) => {
         categoria,
         stand || '',
         descripcion || '',
-        sede || 'chile'
+        sede || null,
+        edicion ? parseInt(edicion) : 2026,
+        contact ? JSON.stringify(contact) : null,
+        usuario_id || null
       ]
     );
 
@@ -223,7 +225,10 @@ router.put('/:id', authRequired, async (req, res) => {
       categoria,
       stand,
       descripcion,
-      sede
+      sede,
+      contact,
+      usuario_id,
+      edicion
     } = req.body;
 
     console.log('✏️ Actualizando expositor:', id);
@@ -240,21 +245,18 @@ router.put('/:id', authRequired, async (req, res) => {
 
     const result = await pool.query(
       `UPDATE expositores SET
-        nombre = COALESCE($1, nombre),
-        logo_url = COALESCE($2, logo_url),
-        website_url = COALESCE($3, website_url),
-        categoria = COALESCE($4, categoria),
-        stand = COALESCE($5, stand),
-        descripcion = COALESCE($6, descripcion),
-        sede = COALESCE($7, sede)
-      WHERE id = $8
-      RETURNING 
-        id,
-        nombre,
-        categoria,
-        stand,
-        descripcion
-      `,
+        nombre      = COALESCE($1,  nombre),
+        logo_url    = COALESCE($2,  logo_url),
+        website_url = COALESCE($3,  website_url),
+        categoria   = COALESCE($4,  categoria),
+        stand       = COALESCE($5,  stand),
+        descripcion = COALESCE($6,  descripcion),
+        sede        = COALESCE($7,  sede),
+        contact     = COALESCE($8,  contact),
+        usuario_id  = COALESCE($9,  usuario_id),
+        edicion     = COALESCE($10, edicion)
+      WHERE id = $11
+      RETURNING *`,
       [
         nombre,
         logo_url,
@@ -263,6 +265,9 @@ router.put('/:id', authRequired, async (req, res) => {
         stand,
         descripcion,
         sede,
+        contact ? JSON.stringify(contact) : null,
+        usuario_id || null,
+        edicion ? parseInt(edicion) : null,
         id
       ]
     );

@@ -6,15 +6,16 @@ import bcrypt from 'bcryptjs';
 const router = express.Router();
 
 // Roles válidos del sistema (8 perfiles)
+// 8 roles oficiales CMC
 const ROLES_VALIDOS = [
+  'super_admin',
+  'staff',
+  'expositor',
+  'speaker',
   'asistente_general',
   'asistente_curso',
   'asistente_sesiones',
   'asistente_combo',
-  'expositor',
-  'speaker',
-  'staff',
-  'super_admin',
 ];
 
 // ========================================================
@@ -77,11 +78,6 @@ router.get('/:id', authRequired, async (req, res) => {
 
 // ========================================================
 // POST /users — crear usuario (solo super_admin)
-//
-// FIX: columnas corregidas
-//   password   → password_hash   (nombre real en la tabla)
-//   telefono   → movil           (nombre real en la tabla)
-//   foto_url   → avatar_url      (nombre real en la tabla)
 // ========================================================
 router.post('/', authRequired, async (req, res) => {
   try {
@@ -95,7 +91,7 @@ router.post('/', authRequired, async (req, res) => {
       nombre,
       rol       = 'asistente_general',
       tipo_pase = 'general',
-      sede      = 'chile',
+      sede      = 'colombia',
       empresa   = '',
       telefono  = '',   // se guarda en columna 'movil'
     } = req.body;
@@ -149,14 +145,11 @@ router.post('/', authRequired, async (req, res) => {
 
 // ========================================================
 // PUT /users/:id — editar usuario (super_admin)
-//
-// FIX: mapeo telefono → movil en los campos actualizables
 // ========================================================
 router.put('/:id', authRequired, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // FIX: permitir que el usuario edite su PROPIO perfil (antes solo super_admin)
     const esSuPerfil  = req.user.id === id;
     const esAdmin     = req.user.rol === 'super_admin';
 
@@ -186,7 +179,6 @@ router.put('/:id', authRequired, async (req, res) => {
     const values  = [];
     let p = 1;
 
-    // FIX: telefono → movil, foto_url/avatar_url → avatar_url (columna real)
     // Si el usuario no es admin, no puede cambiar su rol, tipo_pase ni sede
     const fields = {
       nombre,
@@ -194,7 +186,6 @@ router.put('/:id', authRequired, async (req, res) => {
       ...(esAdmin ? { rol, tipo_pase, sede } : {}),  // solo admin cambia estos
       empresa,
       movil:      telefono,
-      // NOTA: ciudad, bio, linkedin_url, twitter_url NO existen en la tabla users actual
       avatar_url: avatar_url || foto_url,
     };
 

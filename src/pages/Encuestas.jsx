@@ -19,7 +19,8 @@ import {
   RefreshCw, Globe, FileText, BarChart2, Send, ChevronDown
 } from 'lucide-react';
 
-const ROLES_ADMIN = ['super_admin', 'staff'];
+// Para encuestas: solo super_admin ve la vista de gestión. Staff solo ve stats.
+const ROLES_ADMIN = ['super_admin'];
 
 // ── Plataformas externas soportadas ─────────────────────────
 const PLATAFORMAS = [
@@ -708,7 +709,7 @@ export default function Encuestas() {
           <button onClick={load} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition">
             <RefreshCw size={18} />
           </button>
-          {esAdmin && (
+          {userProfile?.rol === 'super_admin' && (
             <button onClick={() => setEditando(true)}
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 font-semibold text-sm transition">
               <Plus size={16} /> Nueva encuesta

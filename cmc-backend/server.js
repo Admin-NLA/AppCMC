@@ -22,7 +22,6 @@ import miMarcaRoutes       from "./routes/mi-marca.js";
 import miSesionRoutes      from "./routes/mi-sesion.js";
 import encuestasRoutes     from "./routes/encuestas.js";
 import brandingRoutes      from "./routes/branding.js";
-import galeriaRoutes       from "./routes/galeria.js";
 import scanRoutes          from "./routes/scan.js";
 import mapaRoutes          from "./routes/mapa.js";
 
@@ -62,8 +61,8 @@ app.use(
 );
 
 app.options("*", cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // ============================================================
 // Health checks
@@ -106,7 +105,6 @@ app.use("/api/mi-marca",       miMarcaRoutes);
 app.use("/api/mi-sesion",      miSesionRoutes);
 app.use("/api/encuestas",      encuestasRoutes);
 app.use("/api/branding",       brandingRoutes);
-app.use("/api/galeria",        galeriaRoutes);
 app.use("/api/scan",           scanRoutes);
 app.use("/api/mapa",           mapaRoutes);
 

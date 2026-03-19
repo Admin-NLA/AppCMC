@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import API from "../../services/api";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 
@@ -74,6 +75,26 @@ export default function Layout() {
       setDark(true);
     }
   }, []);
+
+  // Aplicar branding (colores CSS) según sede activa
+  useEffect(() => {
+    const applyBranding = async () => {
+      try {
+        const sede = userProfile?.sede || 'mexico';
+        const r = await API.get(`/branding/${sede}`).catch(() => null);
+        if (!r?.data?.branding) return;
+        const b = r.data.branding;
+        const root = document.documentElement;
+        if (b.colorPrimario)   root.style.setProperty('--color-primary',    b.colorPrimario);
+        if (b.colorSecundario) root.style.setProperty('--color-secondary',   b.colorSecundario);
+        if (b.colorFondo)      root.style.setProperty('--color-bg',          b.colorFondo);
+        if (b.colorMenu)       root.style.setProperty('--color-menu',        b.colorMenu);
+        if (b.colorTexto)      root.style.setProperty('--color-text',        b.colorTexto);
+        if (b.logoUrl)         root.style.setProperty('--logo-url', `url(${b.logoUrl})`);
+      } catch { /* silencioso */ }
+    };
+    if (userProfile) applyBranding();
+  }, [userProfile?.sede]);
 
   const toggleDark = () => {
     const newMode = !dark;

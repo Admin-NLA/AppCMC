@@ -355,19 +355,20 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
         // Actualizar override existente
         const result = await pool.query(
           `UPDATE agenda SET
-            title         = COALESCE($1,  title),
-            description   = COALESCE($2,  description),
+            title         = CASE WHEN $1::text IS NOT NULL AND $1::text != '' THEN $1 ELSE title END,
+            description   = CASE WHEN $2::text IS NOT NULL THEN $2 ELSE description END,
             dia           = COALESCE($3,  dia),
             start_at      = COALESCE($4,  start_at),
             end_at        = COALESCE($5,  end_at),
             sala          = COALESCE($6,  sala),
-            tipo          = COALESCE($7,  tipo),
-            sede_override = COALESCE($8,  sede_override),
+            tipo          = CASE WHEN $7::text IS NOT NULL AND $7::text != '' THEN $7 ELSE tipo END,
+            sede_override = CASE WHEN $8::text IS NOT NULL AND $8::text != '' THEN $8 ELSE sede_override END,
             year_override = COALESCE($9,  year_override),
-            speakers      = COALESCE($10, speakers)
+            speakers      = COALESCE($10, speakers),
+            override      = true
            WHERE wp_id = $11 AND override = true
            RETURNING wp_id AS id, title AS titulo, description AS descripcion,
-                     dia, start_at AS "horaInicio", end_at AS "horaFin", sala, tipo`,
+                     dia, start_at AS "horaInicio", end_at AS "horaFin", sala, tipo, sede, edicion`,
           [titulo, descripcion, diaFinal, startTs, endTs, sala, tipo, sede, edicion, speakersArray, wpId]
         );
         return res.json({ ok: true, session: result.rows[0], message: 'Sesión actualizada (override)' });
@@ -398,14 +399,14 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
 
     const result = await pool.query(
       `UPDATE agenda SET
-        title       = COALESCE($1,  title),
-        description = COALESCE($2,  description),
+        title       = CASE WHEN $1::text IS NOT NULL AND $1::text != '' THEN $1 ELSE title END,
+        description = CASE WHEN $2::text IS NOT NULL THEN $2 ELSE description END,
         dia         = COALESCE($3,  dia),
         start_at    = COALESCE($4,  start_at),
         end_at      = COALESCE($5,  end_at),
-        sala        = COALESCE($6,  sala),
-        tipo        = COALESCE($7,  tipo),
-        sede        = COALESCE($8,  sede),
+        sala        = CASE WHEN $6::text IS NOT NULL AND $6::text != '' THEN $6 ELSE sala END,
+        tipo        = CASE WHEN $7::text IS NOT NULL AND $7::text != '' THEN $7 ELSE tipo END,
+        sede        = CASE WHEN $8::text IS NOT NULL AND $8::text != '' THEN $8 ELSE sede END,
         edicion     = COALESCE($9,  edicion),
         year        = COALESCE($9,  year),
         speakers    = COALESCE($10, speakers)

@@ -276,9 +276,9 @@ router.put('/:id', authRequired, async (req, res) => {
 
     const r = await pool.query(`
       UPDATE networking SET
-        status     = COALESCE($1, status),
-        ubicacion  = COALESCE($2, ubicacion),
-        notas      = COALESCE($3, notas),
+        status     = CASE WHEN $1::text IS NOT NULL THEN $1 ELSE status END,
+        ubicacion  = CASE WHEN $2::text IS NOT NULL THEN $2 ELSE ubicacion END,
+        notas      = CASE WHEN $3::text IS NOT NULL THEN $3 ELSE notas END,
         hora_fin   = COALESCE($4, hora_fin),
         updated_at = NOW()
       WHERE id = $5

@@ -243,7 +243,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <StatCard icon={Mic}   label="Mis sesiones" value={misSesiones.length} color="blue" />
                 <StatCard icon={Users} label="Check-ins totales"
-                  value={misSesiones.reduce((a, s) => a, 0)} color="green" />
+                  value={misSesiones.length} color="green" />
               </div>
 
               {misSesiones.length > 0 && (

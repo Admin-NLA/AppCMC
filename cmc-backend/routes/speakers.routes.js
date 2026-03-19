@@ -230,8 +230,20 @@ router.get('/:id', async (req, res) => {
     );
 
     if (local.rows.length > 0) {
-      console.log(`[Speakers] Encontrado en BD local: ${id}`);
-      return res.json(local.rows[0]);
+      const speaker = local.rows[0];
+      // Obtener sesiones donde este speaker participa
+      const sesionesRes = await pool.query(
+        `SELECT id, title AS titulo, description AS descripcion,
+                dia, start_at AS "horaInicio", end_at AS "horaFin",
+                sala, tipo, sede, edicion, activo
+         FROM agenda
+         WHERE $1::uuid = ANY(speakers) AND activo = true
+         ORDER BY dia ASC, start_at ASC`,
+        [id]
+      );
+      speaker.sesiones = sesionesRes.rows;
+      console.log(`[Speakers] Encontrado en BD local: ${id}, sesiones: ${sesionesRes.rows.length}`);
+      return res.json(speaker);
     }
 
     // Si no está en local, buscar en WordPress por wp_id

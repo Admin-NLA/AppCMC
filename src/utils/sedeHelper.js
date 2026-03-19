@@ -1,99 +1,137 @@
 // src/utils/sedeHelper.js
+// Permisos por rol — CMC Latam
 //
-// ============================================================
-// CORRECCIÓN APLICADA:
-//   Los roles en la DB son:
-//     'asistente_general' | 'asistente_curso' |
-//     'asistente_sesiones' | 'asistente_combo'
-//   El código anterior esperaba rol='asistente' + tipo_pase,
-//   lo que dejaba todos los asistentes sin permisos (caían
-//   en el default). Ahora cada rol compuesto se resuelve
-//   directamente sin depender de tipo_pase para ramificar.
-// ============================================================
+// ROLES DEL SISTEMA (8):
+//   asistente_general | asistente_curso | asistente_sesiones | asistente_combo
+//   expositor | speaker | staff | super_admin
+//
+// Fuente de verdad: Roles.xlsx (Mapeo por rol)
+// Última revisión: 2026-03-19
 
 export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
 
-  // ========== PERMISOS POR DEFECTO (TODO BLOQUEADO) ==========
-  const permisosPorDefecto = {
-    // Vistas principales
-    verAgenda: false,
-    verExpositores: false,
-    verSpeakers: false,
-    verRegistros: false,
-    verMapa: false,
-    verNetworking: false,
-    verPerfil: true,
-
-    // Permisos de sección especial
-    verMisRegistros: false,
-    verQR: false,
-    verMiMarca: false,
-    verMiSesion: false,
-    verStaffPanel: false,
-
-    // Funcionalidades
-    puedeFavoritos: false,
-    esLectura: false,
-    puedeEditar: false,
-    puedeCrear: false,
-    puedeEliminar: false,
-
-    // Filtros
-    diasPermitidos: [],
-    filtraSede: true,
-    filtraEdicion: true,
-    filterByUser: false,
-
-    // Registros
+  // ── DEFAULTS — todo bloqueado ────────────────────────────
+  const D = {
+    verAgenda:           false,
+    verExpositores:      false,
+    verSpeakers:         false,
+    verRegistros:        false,
+    verMapa:             false,
+    verNetworking:       false,
+    verPerfil:           true,
+    verMisRegistros:     false,
+    verQR:               false,
+    verMiMarca:          false,
+    verMiSesion:         false,
+    verStaffPanel:       false,
+    verEncuestas:        false,
+    verGaleria:          false,   // eliminada — siempre false
+    puedeFavoritos:      false,
+    esLectura:           false,
+    puedeEditar:         false,
+    puedeCrear:          false,
+    puedeEliminar:       false,
+    diasPermitidos:      [],
+    filtraSede:          true,
+    filtraEdicion:       true,
+    filterByUser:        false,
     verRegistroEntradas: false,
-    verRegistroSesion: false,
-    verRegistroCurso: false,
-
-    // Encuestas
-    verEncuestas: false,
-    verGaleria:   false,
-
-    // Menú dinámico
-    menuItems: ['Perfil'],
-
-    // Categoría de contenido
-    categoria: null,
+    verRegistroSesion:   false,
+    verRegistroCurso:    false,
+    menuItems:           ['Perfil'],
+    categoria:           null,
   };
 
-  // ========== SUPER ADMIN — acceso total ==========
+  // ══════════════════════════════════════════════════════════
+  // SUPER ADMIN — acceso total
+  // Excel: Dashboard, Admin Panel, Staff Panel, Usuarios,
+  //        Agenda, Speakers, Expositores, Notificaciones,
+  //        Configuración, Perfil, Excel Import + todo lo demás
+  // ══════════════════════════════════════════════════════════
   if (rol === 'super_admin') {
     return {
-      ...permisosPorDefecto,
-      verAgenda: true,
-      verExpositores: true,
-      verSpeakers: true,
-      verRegistros: true,
-      verMapa: true,
-      verNetworking: true,
-      verPerfil: true,
-      verMisRegistros: true,
-      verQR: true,
-      verMiMarca: true,
-      verMiSesion: true,
-      verStaffPanel: true,
-      puedeFavoritos: false,
-      esLectura: false,
-      puedeEditar: true,
-      puedeCrear: true,
-      puedeEliminar: true,
-      filtraSede: false,
-      filtraEdicion: false,
-      filterByUser: false,
-      diasPermitidos: [1, 2, 3, 4],
+      ...D,
+      verAgenda:           true,
+      verExpositores:      true,
+      verSpeakers:         true,
+      verRegistros:        true,
+      verMapa:             true,
+      verNetworking:       true,
+      verPerfil:           true,
+      verMisRegistros:     true,
+      verQR:               true,
+      verMiMarca:          true,
+      verMiSesion:         true,
+      verStaffPanel:       true,
+      verEncuestas:        true,
+      puedeFavoritos:      false,
+      esLectura:           false,
+      puedeEditar:         true,
+      puedeCrear:          true,
+      puedeEliminar:       true,
+      filtraSede:          false,
+      filtraEdicion:       false,
+      diasPermitidos:      [1,2,3,4],
       verRegistroEntradas: true,
-      verRegistroSesion: true,
-      verRegistroCurso: true,
-      verEncuestas: true,
-      verGaleria:   true,
+      verRegistroSesion:   true,
+      verRegistroCurso:    true,
       menuItems: [
         'Dashboard',
         'Admin Panel',
         'Branding',
+        'Configuración',
+        'Staff Panel',
+        'Scanner',
+        'Usuarios',
+        'Excel Import',
+        'Agenda',
+        'Mapa Expo',
+        'Speakers',
+        'Expositores',
+        'Encuestas',
+        'Notificaciones',
+        'Networking',
+        'Perfil',
+      ],
+      categoria: 'todos',
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // STAFF — admin operativo del evento
+  // Excel: Staff Panel ✅, Scanner ✅, Estadísticas ✅
+  //        Agenda VER ✅, Speakers VER ✅, Expositores VER ✅
+  //        Usuarios VER ✅, Notificaciones ✅, Mapa Expo ✅
+  //        Perfil propio ✅
+  //        NO: editar usuarios, crear eventos, Admin Panel
+  // ══════════════════════════════════════════════════════════
+  if (rol === 'staff') {
+    return {
+      ...D,
+      verAgenda:           true,
+      verExpositores:      true,
+      verSpeakers:         true,
+      verRegistros:        true,
+      verMapa:             true,
+      verNetworking:       false,
+      verPerfil:           true,
+      verMisRegistros:     false,
+      verQR:               false,
+      verMiMarca:          false,
+      verMiSesion:         false,
+      verStaffPanel:       true,
+      verEncuestas:        true,
+      esLectura:           true,
+      puedeEditar:         false,
+      puedeCrear:          false,
+      puedeEliminar:       false,
+      filtraSede:          false,
+      filtraEdicion:       false,
+      diasPermitidos:      [1,2,3,4],
+      verRegistroEntradas: true,
+      verRegistroSesion:   true,
+      verRegistroCurso:    true,
+      menuItems: [
         'Staff Panel',
         'Scanner',
         'Usuarios',
@@ -101,55 +139,6 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
         'Mapa Expo',
         'Speakers',
         'Expositores',
-        'Networking',
-        'Encuestas',
-        'Notificaciones',
-        'Configuración',
-        'Perfil',
-        'Excel Import',
-      ],
-      categoria: 'todos',
-    };
-  }
-
-  // ========== STAFF — admin del evento ==========
-  if (rol === 'staff') {
-    return {
-      ...permisosPorDefecto,
-      verAgenda: true,
-      verExpositores: true,
-      verSpeakers: true,
-      verRegistros: true,
-      verMapa: true,
-      verNetworking: false,
-      verPerfil: true,
-      verMisRegistros: false,
-      verQR: false,
-      verMiMarca: true,
-      verMiSesion: true,
-      verStaffPanel: true,
-      puedeFavoritos: false,
-      esLectura: true,
-      puedeEditar: false,
-      puedeCrear: false,
-      puedeEliminar: false,
-      filtraSede: false,
-      filtraEdicion: false,
-      filterByUser: false,
-      diasPermitidos: [1, 2, 3, 4],
-      verRegistroEntradas: true,
-      verRegistroSesion: true,
-      verRegistroCurso: true,
-      verEncuestas: true,
-      verGaleria:   true,
-      menuItems: [
-        'Staff Panel',
-        'Scanner',
-        'Usuarios',
-        'Agenda',
-        'Speakers',
-        'Expositores',
-        'Galería',
         'Encuestas',
         'Notificaciones',
         'Perfil',
@@ -158,45 +147,45 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
     };
   }
 
-  // ========== EXPOSITOR ==========
+  // ══════════════════════════════════════════════════════════
+  // EXPOSITOR
+  // Excel: Agenda SOLO LECTURA ✅, Mapa Expo ✅, Expositores ✅
+  //        Networking ✅ (editar disponibilidad), Mi Marca ✅
+  //        QR (vCard) ✅, Registro entradas D3-D4 ✅
+  //        NO: favoritos, crear/editar agenda, ver otros usuarios
+  // ══════════════════════════════════════════════════════════
   if (rol === 'expositor') {
     return {
-      ...permisosPorDefecto,
-      verAgenda: true,
-      verExpositores: true,
-      verSpeakers: false,
-      verRegistros: true,
-      verMapa: true,
-      verNetworking: true,
-      verPerfil: true,
-      verMisRegistros: true,
-      verQR: false,
-      verMiMarca: true,
-      verMiSesion: false,
-      verStaffPanel: false,
-      puedeFavoritos: false,
-      esLectura: true,
-      puedeEditar: true,
-      puedeCrear: false,
-      puedeEliminar: false,
-      filtraSede: true,
-      filtraEdicion: true,
-      filterByUser: true,
-      diasPermitidos: [3, 4],
+      ...D,
+      verAgenda:           true,
+      verExpositores:      true,
+      verSpeakers:         false,
+      verRegistros:        true,
+      verMapa:             true,
+      verNetworking:       true,
+      verPerfil:           true,
+      verMisRegistros:     true,
+      verQR:               true,    // ✅ QR vCard según Excel
+      verMiMarca:          true,
+      verMiSesion:         false,
+      verStaffPanel:       false,
+      verEncuestas:        true,
+      esLectura:           true,    // agenda solo lectura
+      puedeEditar:         true,    // su propio perfil de marca
+      filtraSede:          true,
+      filtraEdicion:       true,
+      filterByUser:        true,
+      diasPermitidos:      [3,4],
       verRegistroEntradas: true,
-      verRegistroSesion: false,
-      verRegistroCurso: false,
-      verEncuestas: true,
-      verGaleria:   true,
       menuItems: [
         'Agenda (lectura)',
         'Mapa Expo',
         'Expositores',
-        'Networking',
         'Mi Marca',
-        'Galería',
+        'Networking',
         'Encuestas',
         'Mis Registros',
+        'Mi QR',
         'Notificaciones',
         'Perfil',
       ],
@@ -204,94 +193,84 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
     };
   }
 
-  // ========== SPEAKER ==========
+  // ══════════════════════════════════════════════════════════
+  // SPEAKER
+  // Excel: Agenda completa D1-4 ✅, Mi Sesión ⭐ ✅
+  //        Mapa Expo ✅, Expositores ✅, QR (vCard) ✅
+  //        Registro número de asistentes a su sesión ⚠️
+  //        NO: Networking ❌, favoritos ❌, crear/editar agenda ❌
+  // ══════════════════════════════════════════════════════════
   if (rol === 'speaker') {
     return {
-      ...permisosPorDefecto,
-      verAgenda: true,
-      verExpositores: true,
-      verSpeakers: true,
-      verRegistros: true,
-      verMapa: true,
-      verNetworking: false,
-      verPerfil: true,
-      verMisRegistros: true,
-      verQR: true,
-      verMiMarca: false,
-      verMiSesion: true,
-      verStaffPanel: false,
-      puedeFavoritos: false,
-      esLectura: false,
-      puedeEditar: true,
-      puedeCrear: false,
-      puedeEliminar: false,
-      filtraSede: true,
-      filtraEdicion: true,
-      filterByUser: true,
-      diasPermitidos: [1, 2, 3, 4],
+      ...D,
+      verAgenda:           true,
+      verExpositores:      true,
+      verSpeakers:         true,
+      verRegistros:        true,
+      verMapa:             true,
+      verNetworking:       false,   // ❌ Excel explícito
+      verPerfil:           true,
+      verMisRegistros:     true,
+      verQR:               true,
+      verMiMarca:          false,
+      verMiSesion:         true,
+      verStaffPanel:       false,
+      verEncuestas:        true,
+      puedeFavoritos:      false,
+      esLectura:           false,
+      puedeEditar:         true,    // su propia bio/foto
+      filtraSede:          true,
+      filtraEdicion:       true,
+      filterByUser:        true,
+      diasPermitidos:      [1,2,3,4],
       verRegistroEntradas: true,
-      verRegistroSesion: true,
-      verRegistroCurso: false,
-      verEncuestas: true,
-      verGaleria:   true,
+      verRegistroSesion:   true,
       menuItems: [
         'Agenda',
         'Mi Sesión',
-        'Mi QR',
-        'Mis Registros',
-        'Galería',
-        'Encuestas',
-        'Notificaciones',
         'Mapa Expo',
         'Expositores',
+        'Encuestas',
+        'Notificaciones',
+        'Mis Registros',
+        'Mi QR',
         'Perfil',
       ],
       categoria: null,
     };
   }
 
-  // ========== ASISTENTES — resueltos por rol compuesto ==========
-  // FIX: La DB guarda 'asistente_general', 'asistente_curso', etc.
-  // El código anterior esperaba rol='asistente' y chequeaba tipo_pase,
-  // lo que nunca coincidía y dejaba permisos vacíos.
-  // Ahora cada variante tiene su propio bloque directo.
-
-  // ---- ASISTENTE GENERAL ----
+  // ══════════════════════════════════════════════════════════
+  // ASISTENTE GENERAL
+  // Excel: Mapa Expo ✅, Expositores ✅, Networking ✅
+  //        QR (vCard) ✅, Perfil ✅
+  //        NO: Agenda ❌, Speakers ❌, Favoritos ❌, Cursos ❌
+  // Menú: [ Mapa Expo ] [ Expositores ] [ Networking ] [ Perfil ]
+  // ══════════════════════════════════════════════════════════
   if (rol === 'asistente_general' || (rol === 'asistente' && tipo_pase === 'general')) {
     return {
-      ...permisosPorDefecto,
-      verAgenda: false,
-      verExpositores: true,
-      verSpeakers: false,
-      verRegistros: true,
-      verMapa: true,
-      verNetworking: true,
-      verPerfil: true,
-      verMisRegistros: true,
-      verQR: true,
-      verMiMarca: false,
-      verMiSesion: false,
-      verStaffPanel: false,
-      puedeFavoritos: false,
-      esLectura: false,
-      puedeEditar: false,
-      filtraSede: true,
-      filtraEdicion: true,
-      filterByUser: true,
-      diasPermitidos: [3, 4],
+      ...D,
+      verAgenda:           false,
+      verExpositores:      true,
+      verSpeakers:         false,
+      verRegistros:        true,
+      verMapa:             true,
+      verNetworking:       true,
+      verPerfil:           true,
+      verMisRegistros:     true,
+      verQR:               true,
+      verEncuestas:        true,
+      filtraSede:          true,
+      filtraEdicion:       true,
+      filterByUser:        true,
       verRegistroEntradas: true,
-      verRegistroSesion: false,
-      verRegistroCurso: false,
-      verEncuestas: true,
-      verGaleria:   true,
       menuItems: [
         'Mapa Expo',
         'Expositores',
         'Networking',
-        'Galería',
         'Encuestas',
         'Mis Registros',
-        'QR',
+        'Mi QR',
         'Notificaciones',
         'Perfil',
       ],
@@ -299,140 +278,139 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
     };
   }
 
-  // ---- ASISTENTE CURSO ----
+  // ══════════════════════════════════════════════════════════
+  // ASISTENTE CURSO
+  // Excel: Agenda D1-D2 SOLO CURSOS ✅, QR ✅, Mis Registros ✅
+  //        Inscripción cursos ✅, Registro cursos asistidos ✅
+  //        NO: Expositores ❌, Speakers ❌, Networking ❌
+  //            Mapa Expo ❌, Favoritos ❌, Agenda D3-D4 ❌
+  // Menú: [ Agenda (D1-D2) ] [ Perfil ] [ QR / Registros ]
+  // ══════════════════════════════════════════════════════════
   if (rol === 'asistente_curso' || (rol === 'asistente' && tipo_pase === 'curso')) {
     return {
-      ...permisosPorDefecto,
-      verAgenda: true,
-      verExpositores: false,
-      verSpeakers: false,
-      verRegistros: true,
-      verMapa: false,
-      verNetworking: false,
-      verPerfil: true,
-      verMisRegistros: true,
-      verQR: true,
-      verMiMarca: false,
-      verMiSesion: false,
-      verStaffPanel: false,
-      puedeFavoritos: false,
-      esLectura: false,
-      puedeEditar: false,
-      filtraSede: true,
-      filtraEdicion: true,
-      filterByUser: true,
-      diasPermitidos: [1, 2],
+      ...D,
+      verAgenda:           true,
+      verExpositores:      false,
+      verSpeakers:         false,
+      verRegistros:        true,
+      verMapa:             false,
+      verNetworking:       false,
+      verPerfil:           true,
+      verMisRegistros:     true,
+      verQR:               true,
+      verEncuestas:        true,
+      filtraSede:          true,
+      filtraEdicion:       true,
+      filterByUser:        true,
+      diasPermitidos:      [1,2],
       verRegistroEntradas: true,
-      verRegistroSesion: false,
-      verRegistroCurso: true,
-      verEncuestas: true,
-      verGaleria:   true,
+      verRegistroCurso:    true,
       menuItems: [
         'Agenda (D1-D2)',
-        'Galería',
         'Encuestas',
         'Notificaciones',
         'Mis Registros',
-        'QR',
+        'Mi QR',
         'Perfil',
       ],
       categoria: 'curso',
     };
   }
 
-  // ---- ASISTENTE SESIONES ----
+  // ══════════════════════════════════════════════════════════
+  // ASISTENTE SESIONES
+  // Excel: Agenda D3-D4 SOLO SESIONES ✅, Expositores ✅
+  //        Speakers D3-D4 ✅, Mapa Expo ✅, Networking ✅
+  //        Favoritos ✅, Registro sesiones asistidas ✅
+  //        NO: Cursos ❌, Inscripción cursos ❌, Agenda D1-D2 ❌
+  // Menú: [ Agenda(D3-D4) ] [ Expositores ] [ Speakers ]
+  //        [ Networking ] [ Perfil ] [ QR / Registros ]
+  // ══════════════════════════════════════════════════════════
   if (rol === 'asistente_sesiones' || (rol === 'asistente' && tipo_pase === 'sesiones')) {
     return {
-      ...permisosPorDefecto,
-      verAgenda: true,
-      verExpositores: true,
-      verSpeakers: true,
-      verRegistros: true,
-      verMapa: true,
-      verNetworking: true,
-      verPerfil: true,
-      verMisRegistros: true,
-      verQR: true,
-      verMiMarca: false,
-      verMiSesion: false,
-      verStaffPanel: false,
-      puedeFavoritos: true,
-      esLectura: false,
-      puedeEditar: false,
-      filtraSede: true,
-      filtraEdicion: true,
-      filterByUser: true,
-      diasPermitidos: [3, 4],
+      ...D,
+      verAgenda:           true,
+      verExpositores:      true,
+      verSpeakers:         true,
+      verRegistros:        true,
+      verMapa:             true,
+      verNetworking:       true,
+      verPerfil:           true,
+      verMisRegistros:     true,
+      verQR:               true,
+      verEncuestas:        true,
+      puedeFavoritos:      true,
+      filtraSede:          true,
+      filtraEdicion:       true,
+      filterByUser:        true,
+      diasPermitidos:      [3,4],
       verRegistroEntradas: true,
-      verRegistroSesion: true,
-      verRegistroCurso: false,
-      verEncuestas: true,
-      verGaleria:   true,
+      verRegistroSesion:   true,
       menuItems: [
         'Agenda (D3-D4)',
         'Expositores',
         'Mapa Expo',
         'Speakers',
         'Networking',
-        'Galería',
         'Encuestas',
         'Notificaciones',
         'Mis Registros',
-        'QR',
+        'Mi QR',
         'Perfil',
       ],
       categoria: 'sesion',
     };
   }
 
-  // ---- ASISTENTE COMBO ----
+  // ══════════════════════════════════════════════════════════
+  // ASISTENTE COMBO — acceso total (Curso + Sesiones)
+  // Excel: TODO ✅ — es el combo de curso + sesiones
+  //        Agenda D1-4 ✅, Expositores ✅, Speakers ✅
+  //        Networking ✅, Mapa Expo ✅, Favoritos ✅
+  //        Cursos + Sesiones ✅, Inscripción ✅
+  // Menú: [ Agenda(D1-4) ] [ Expositores ] [ Speakers ]
+  //        [ Networking ] [ Perfil ] [ QR / Registros ]
+  // ══════════════════════════════════════════════════════════
   if (rol === 'asistente_combo' || (rol === 'asistente' && tipo_pase === 'combo')) {
     return {
-      ...permisosPorDefecto,
-      verAgenda: true,
-      verExpositores: true,
-      verSpeakers: true,
-      verRegistros: true,
-      verMapa: true,
-      verNetworking: true,
-      verPerfil: true,
-      verMisRegistros: true,
-      verQR: true,
-      verMiMarca: false,
-      verMiSesion: false,
-      verStaffPanel: false,
-      puedeFavoritos: true,
-      esLectura: false,
-      puedeEditar: false,
-      filtraSede: true,
-      filtraEdicion: true,
-      filterByUser: true,
-      diasPermitidos: [1, 2, 3, 4],
+      ...D,
+      verAgenda:           true,
+      verExpositores:      true,
+      verSpeakers:         true,
+      verRegistros:        true,
+      verMapa:             true,
+      verNetworking:       true,
+      verPerfil:           true,
+      verMisRegistros:     true,
+      verQR:               true,
+      verEncuestas:        true,
+      puedeFavoritos:      true,
+      filtraSede:          true,
+      filtraEdicion:       true,
+      filterByUser:        true,
+      diasPermitidos:      [1,2,3,4],
       verRegistroEntradas: true,
-      verRegistroSesion: true,
-      verRegistroCurso: true,
-      verEncuestas: true,
-      verGaleria:   true,
+      verRegistroSesion:   true,
+      verRegistroCurso:    true,
       menuItems: [
         'Agenda (D1-4)',
         'Expositores',
         'Mapa Expo',
         'Speakers',
         'Networking',
-        'Galería',
         'Encuestas',
         'Notificaciones',
         'Mis Registros',
-        'QR',
+        'Mi QR',
         'Perfil',
       ],
       categoria: 'todos',
     };
   }
 
-  // ========== FALLBACK — rol no reconocido ==========
-  console.warn(`⚠️ sedeHelper: rol no reconocido → "${rol}" (tipo_pase: "${tipo_pase}"). Retornando permisos vacíos.`);
-  return permisosPorDefecto;
+  // ── FALLBACK ─────────────────────────────────────────────
+  console.warn(`⚠️ sedeHelper: rol no reconocido → "${rol}". Retornando permisos vacíos.`);
+  return D;
 };
 
 export default { getPermisosPorRolYPase };

@@ -1,15 +1,14 @@
-// cmc-backend/routes/config.js
+// IMPORTANTE -------------------------------------------------------------------------------
 // Configuración global del evento (sede activa, edición activa)
-//
-// TABLA USADA: `config` (id, sede_activa, edicion_activa, created_at, updated_at)
-//
+// TABLAS USADAS: `config` (id, sede_activa, edicion_activa, created_at, updated_at)
 // ENDPOINTS:
-//   GET  /api/config              → config actual (todos los autenticados)
-//   PUT  /api/config              → actualizar (solo super_admin)
+//   GET  /api/config              
+//   PUT  /api/config               → Solo super_admin
 //   GET  /api/config/evento-activo → alias para EventContext y ConfiguracionPanel
-//   PUT  /api/config/evento-activo → alias PUT para ConfiguracionPanel nuevo
-//   GET  /api/config/sedes        → sedes únicas de users
-//   GET  /api/config/ediciones    → ediciones únicas de users
+//   PUT  /api/config/evento-activo → alias PUT para ConfiguracionPanel
+//   GET  /api/config/sedes         → sedes únicas de users
+//   GET  /api/config/ediciones     → ediciones únicas de users
+// ------------------------------------------------------------------------------------------
 
 import express from 'express';
 import pool    from '../db.js';
@@ -23,7 +22,7 @@ async function getOrCreateConfig() {
   if (r.rows.length === 0) {
     r = await pool.query(`
       INSERT INTO config (id, sede_activa, edicion_activa)
-      VALUES (1, 'mexico', 2026)
+      VALUES (1, 'colombia', 2026)
       ON CONFLICT (id) DO UPDATE SET id = 1
       RETURNING *
     `);

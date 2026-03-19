@@ -37,8 +37,15 @@ const inputCls = "w-full px-3 py-2 text-sm border border-gray-300 dark:border-gr
 
 const fmtFecha = (d) => {
   if (!d) return '';
-  try { return new Date(d + 'T00:00:00').toLocaleDateString('es', { weekday:'long', day:'numeric', month:'long' }); }
-  catch { return d; }
+  try {
+    // Normalizar: si ya tiene hora/timezone, extraer solo la fecha
+    const fechaStr = typeof d === 'string'
+      ? d.includes('T') ? d.split('T')[0] : d
+      : new Date(d).toISOString().split('T')[0];
+    return new Date(fechaStr + 'T12:00:00').toLocaleDateString('es', {
+      weekday:'long', day:'numeric', month:'long'
+    });
+  } catch { return String(d); }
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -197,7 +204,7 @@ function ModalGestionarCita({ cita, onSave, onClose }) {
   const handleAction = async (status) => {
     setSaving(true); setError(null);
     try {
-      await API.put(`/networking/${cita.id}`, { status, ubicacion, notas });
+      await API.put(`/networking/${cita.id}`, { status, ubicacion: ubicacion || null, notas: notas || null });
       onSave(status);
     } catch (err) {
       setError(err.response?.data?.error || err.message);

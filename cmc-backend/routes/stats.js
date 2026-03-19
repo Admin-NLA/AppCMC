@@ -20,12 +20,19 @@ router.get('/', authRequired, async (req, res) => {
     const totalSessions = parseInt(sessionsResult.rows[0]?.total || 0);
 
     // 2. CONTAR SPEAKERS ACTIVOS
+    // Contar speakers en tabla local + los referenciados en agenda (vía WP)
     const speakersResult = await pool.query(`
-      SELECT COUNT(DISTINCT id) as total
-      FROM speakers
-      WHERE activo = true
+      SELECT COUNT(DISTINCT id) as total FROM speakers WHERE activo = true
     `);
-    const totalSpeakers = parseInt(speakersResult.rows[0]?.total || 0);
+    const speakersAgendaResult = await pool.query(`
+      SELECT COUNT(DISTINCT unnested) as total
+      FROM agenda, unnest(speakers) AS unnested
+      WHERE activo = true AND speakers IS NOT NULL AND array_length(speakers, 1) > 0
+    `);
+    const totalSpeakers = Math.max(
+      parseInt(speakersResult.rows[0]?.total || 0),
+      parseInt(speakersAgendaResult.rows[0]?.total || 0)
+    );
 
     // 3. CONTAR EXPOSITORES ACTIVOS
     const expositoresResult = await pool.query(`

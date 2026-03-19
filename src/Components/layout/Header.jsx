@@ -32,7 +32,6 @@ const MENU_MAP = {
   "Mis Registros":     { to: "/mis-registros",  icon: <FileText size={16} /> },
   "Mis Cursos":        { to: "/mis-cursos",     icon: <Calendar size={16} /> },
   "Notificaciones":    { to: "/notificaciones", icon: <Bell size={16} /> },
-  "Galería":           { to: "/galeria",        icon: <FileText size={16} /> },
   "Encuestas":         { to: "/encuestas",      icon: <FileText size={16} /> },
   "Branding":          { to: "/branding",       icon: <Settings size={16} /> },
   "Scanner":           { to: "/scanner",        icon: <QrCode size={16} /> },

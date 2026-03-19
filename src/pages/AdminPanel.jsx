@@ -91,7 +91,7 @@ export default function AdminPanel() {
 
   function blankSession(sede, edicion) {
     return {
-      title: "", description: "", start_at: "", end_at: "",
+      title: "", description: "", start_at: "", end_at: "", speakerId: "",
       room: "", sala: "", dia: 1, tipo: "sesion", categoria: "brujula",
       sede: sede || "colombia", edicion: edicion || 2026,
       capacidad: "", activo: true,
@@ -179,13 +179,13 @@ export default function AdminPanel() {
     e.preventDefault();
     try {
       setLoading(true); setError(null);
+      // FIX: el backend PUT/POST espera titulo/horaInicio/horaFin (no title/start_at/end_at)
       const payload = {
-        title:       sessionForm.title,
-        description: sessionForm.description,
-        start_at:    sessionForm.start_at || null,
-        end_at:      sessionForm.end_at   || null,
-        room:        sessionForm.room,
-        sala:        sessionForm.sala,
+        titulo:      sessionForm.title,
+        descripcion: sessionForm.description,
+        horaInicio:  sessionForm.start_at || null,
+        horaFin:     sessionForm.end_at   || null,
+        sala:        sessionForm.sala || sessionForm.room,
         dia:         parseInt(sessionForm.dia) || 1,
         tipo:        sessionForm.tipo,
         categoria:   sessionForm.categoria,
@@ -193,6 +193,7 @@ export default function AdminPanel() {
         edicion:     parseInt(sessionForm.edicion) || edicionActiva || 2026,
         capacidad:   sessionForm.capacidad ? parseInt(sessionForm.capacidad) : null,
         activo:      sessionForm.activo !== false,
+        speakerId:   sessionForm.speakerId || null,
       };
       if (editingSessionId) {
         await API.put(`/agenda/sessions/${editingSessionId}`, payload);
@@ -234,6 +235,7 @@ export default function AdminPanel() {
       sede:        s.sede        || sedeForm,
       edicion:     s.edicion     || edicionActiva || 2026,
       capacidad:   s.capacidad   || "",
+      speakerId:   (s.speakers && s.speakers[0]) ? s.speakers[0] : "",
       activo:      s.activo !== false,
     });
     setShowSessionForm(true);
@@ -609,6 +611,17 @@ export default function AdminPanel() {
                     <input type="number" className={inputCls} value={sessionForm.edicion}
                       onChange={e => setSessionForm(p => ({...p, edicion: e.target.value}))} />
                   </Field>
+                  <Field label="Speaker / Instructor">
+                    <select className={inputCls} value={sessionForm.speakerId}
+                      onChange={e => setSessionForm(p => ({...p, speakerId: e.target.value}))}>
+                      <option value="">Sin speaker asignado</option>
+                      {speakers.map(sp => (
+                        <option key={sp.id} value={sp.id}>
+                          {sp.nombre}{sp.cargo ? ` — ${sp.cargo}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button type="submit" disabled={loading} className={btnPrimary}>
@@ -645,6 +658,11 @@ export default function AdminPanel() {
                       {s.dia && <span>Día {s.dia}</span>}
                       {s.start_at && <span>🕐 {new Date(s.start_at).toLocaleTimeString("es", {hour:"2-digit",minute:"2-digit"})}</span>}
                       <span className="capitalize">{s.sede}</span>
+                      {s.speakers && s.speakers.length > 0 && speakers.find(sp => sp.id === s.speakers[0]) && (
+                        <span className="text-blue-600 dark:text-blue-400">
+                          👤 {speakers.find(sp => sp.id === s.speakers[0])?.nombre}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {isAdmin && (

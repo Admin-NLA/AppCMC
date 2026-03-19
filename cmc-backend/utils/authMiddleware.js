@@ -37,14 +37,20 @@ export function authRequired(req, res, next) {
     }
 
     // Validar rol
+    // Los 8 roles oficiales del sistema CMC + 'asistente' legacy
     const ROLES_VALIDOS = [
-      "super_admin",  // ← Nuevo
-      "admin",
+      "super_admin",
       "staff",
-      "usuario",
-      "asistente",
+      "expositor",
       "speaker",
-      "expositor"
+      "asistente_general",
+      "asistente_curso",
+      "asistente_sesiones",
+      "asistente_combo",
+      // Legado — por si algún token antiguo tiene estos valores
+      "asistente",
+      "admin",
+      "usuario",
     ];
 
     if (!ROLES_VALIDOS.includes(user.rol)) {
