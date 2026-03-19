@@ -20,28 +20,31 @@ const EventContext = createContext();
 
 export function EventProvider({ user, children }) {
   const [sedeActiva,    setSedeActiva]    = useState(null);
-  const [edicionActiva, setEdicionActiva] = useState(2025);
+  const [edicionActiva, setEdicionActiva] = useState(2026);
   const [fechaInicio,   setFechaInicio]   = useState(null);
   const [fechaFin,      setFechaFin]      = useState(null);
   const [tiposActivos,  setTiposActivos]  = useState([]);
   const [ready,         setReady]         = useState(false);
   const [configBackend, setConfigBackend] = useState(null); // config raw del backend
 
-  // ── Cargar config desde el backend ──────────────────────
+// ── Cargar config desde el backend ──────────────────────
   const refreshConfig = useCallback(async () => {
     try {
       const res = await API.get("/config/evento-activo");
       const data = res.data?.data || res.data;
       if (data) {
         setConfigBackend(data);
-        setEdicionActiva(data.edicion_activa ?? 2025);
+        setEdicionActiva(data.edicion_activa ?? 2026);
         setFechaInicio(data.fecha_inicio ?? null);
         setFechaFin(data.fecha_fin ?? null);
-        setTiposActivos(
-          Array.isArray(data.tipos_activos)
-            ? data.tipos_activos
-            : ["brujula","toolbox","spark","orion","tracker","curso"]
-        );
+        // tipos_activos puede no existir en la tabla config simple
+        if (data.tipos_activos) {
+          setTiposActivos(
+            Array.isArray(data.tipos_activos)
+              ? data.tipos_activos
+              : ["brujula","toolbox","spark","orion","tracker","curso"]
+          );
+        }
         return data;
       }
     } catch (err) {
@@ -79,7 +82,7 @@ export function EventProvider({ user, children }) {
       const sede = resolverSede(user, backendConfig);
       setSedeActiva(sede);
       setReady(true);
-      console.log(`✅ EventContext listo: sede=${sede}, edicion=${backendConfig?.edicion_activa ?? 2025}`);
+      console.log(`✅ EventContext listo: sede=${sede}, edicion=${backendConfig?.edicion_activa ?? 2026}`);
     });
   }, [user?.id]); // Solo re-ejecutar si cambia el usuario (no en cada render)
 

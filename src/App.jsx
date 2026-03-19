@@ -27,7 +27,6 @@ import MiMarca from "./pages/MiMarca.jsx";
 import MiSesion from "./pages/MiSesion.jsx";
 import Encuestas      from "./pages/Encuestas.jsx";
 import BrandingPanel  from "./pages/BrandingPanel.jsx";
-import Galeria        from "./pages/Galeria.jsx";
 import MapaExpo       from "./pages/MapaExpo.jsx";
 import Scanner        from "./pages/Scanner.jsx";
 
@@ -243,17 +242,7 @@ function AppWithEvent() {
               }
             />
 
-            {/* Galería — todos los roles autenticados */}
-            <Route
-              path="galeria"
-              element={
-                <PermRoute permiso="verGaleria">
-                  <Galeria />
-                </PermRoute>
-              }
-            />
-
-            {/* Encuestas — todos los roles autenticados */}
+{/* Encuestas — todos los roles autenticados */}
             <Route
               path="encuestas"
               element={

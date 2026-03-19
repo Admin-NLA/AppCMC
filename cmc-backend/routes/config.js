@@ -1,141 +1,158 @@
-// ============================================================
-// BACKEND: routes/config.js (CORREGIDO)
-// FIX: Ahora SÍ persiste la configuración de sede en DB
-// ============================================================
+// cmc-backend/routes/config.js
+// Configuración global del evento (sede activa, edición activa)
+//
+// TABLA USADA: `config` (id, sede_activa, edicion_activa, created_at, updated_at)
+//
+// ENDPOINTS:
+//   GET  /api/config              → config actual (todos los autenticados)
+//   PUT  /api/config              → actualizar (solo super_admin)
+//   GET  /api/config/evento-activo → alias para EventContext y ConfiguracionPanel
+//   PUT  /api/config/evento-activo → alias PUT para ConfiguracionPanel nuevo
+//   GET  /api/config/sedes        → sedes únicas de users
+//   GET  /api/config/ediciones    → ediciones únicas de users
 
-import express from "express";
-const router = express.Router();
-import pool from "../db.js";
+import express from 'express';
+import pool    from '../db.js';
 import { authRequired } from '../utils/authMiddleware.js';
 
+const router = express.Router();
+
+// ── Helper: obtener o crear config ───────────────────────
+async function getOrCreateConfig() {
+  let r = await pool.query('SELECT * FROM config WHERE id = 1');
+  if (r.rows.length === 0) {
+    r = await pool.query(`
+      INSERT INTO config (id, sede_activa, edicion_activa)
+      VALUES (1, 'mexico', 2026)
+      ON CONFLICT (id) DO UPDATE SET id = 1
+      RETURNING *
+    `);
+  }
+  return r.rows[0];
+}
+
+// ── Helper: actualizar config ─────────────────────────────
+async function updateConfig(sede_activa, edicion_activa) {
+  // Intentar UPDATE primero
+  let r = await pool.query(`
+    UPDATE config SET sede_activa = $1, edicion_activa = $2, updated_at = NOW()
+    WHERE id = 1 RETURNING *
+  `, [sede_activa, parseInt(edicion_activa)]);
+
+  // Si no existe, INSERT
+  if (r.rows.length === 0) {
+    r = await pool.query(`
+      INSERT INTO config (id, sede_activa, edicion_activa)
+      VALUES (1, $1, $2)
+      ON CONFLICT (id) DO UPDATE
+        SET sede_activa = $1, edicion_activa = $2, updated_at = NOW()
+      RETURNING *
+    `, [sede_activa, parseInt(edicion_activa)]);
+  }
+  return r.rows[0];
+}
+
 // ============================================================
-// GET /config - Obtener configuración actual
+// GET /api/config  y  GET /api/config/evento-activo
 // ============================================================
-router.get('/', authRequired, async (req, res) => {
+const handleGet = async (req, res) => {
   try {
-    console.log('📖 [Config] Obteniendo configuración...');
-    
-    const result = await pool.query('SELECT * FROM config WHERE id = 1');
-    
-    if (result.rows.length === 0) {
-      // Si no existe, crear configuración por defecto
-      console.log('⚠️ [Config] No existe config, creando por defecto...');
-      const defaultConfig = await pool.query(`
-        INSERT INTO config (id, sede_activa, edicion_activa)
-        VALUES (1, 'mexico', 2025)
-        RETURNING *
-      `);
-      
-      return res.json(defaultConfig.rows[0]);
-    }
-    
-    console.log('✅ [Config] Configuración obtenida:', result.rows[0]);
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('❌ [Config] Error obteniendo config:', error);
+    const cfg = await getOrCreateConfig();
+    // Responder en formato compatible con EventContext y ConfiguracionPanel
+    res.json({
+      success: true,
+      ...cfg,
+      data: cfg, // EventContext espera res.data?.data || res.data
+    });
+  } catch (err) {
+    console.error('❌ GET /config:', err.message);
     res.status(500).json({ error: 'Error al obtener configuración' });
   }
-});
+};
+
+router.get('/',              authRequired, handleGet);
+router.get('/evento-activo', authRequired, handleGet);
 
 // ============================================================
-// PUT /config - Actualizar configuración (SUPER ADMIN ONLY)
+// PUT /api/config  y  PUT /api/config/evento-activo
 // ============================================================
-router.put('/', authRequired, async (req, res) => {
+const handlePut = async (req, res) => {
   try {
-    console.log('📝 [Config] Actualizando configuración...');
-    console.log('📦 [Config] Body recibido:', req.body);
-    console.log('👤 [Config] Usuario:', req.user.rol);
-    
-    // Solo super_admin puede modificar la config global
     if (req.user.rol !== 'super_admin') {
-      console.log('⛔ [Config] Acceso denegado - rol:', req.user.rol);
-      return res.status(403).json({ 
-        error: 'Solo super_admin puede modificar la configuración global' 
-      });
+      return res.status(403).json({ error: 'Solo super_admin puede modificar la configuración global' });
     }
-    
+
     const { sede_activa, edicion_activa } = req.body;
-    
-    // Validaciones
     if (!sede_activa || !edicion_activa) {
-      return res.status(400).json({ 
-        error: 'sede_activa y edicion_activa son requeridos' 
-      });
+      return res.status(400).json({ error: 'sede_activa y edicion_activa son requeridos' });
     }
-    
-    console.log('🔄 [Config] Actualizando:', { sede_activa, edicion_activa });
-    
-    // Actualizar en la base de datos
-    const result = await pool.query(`
-      UPDATE config 
-      SET 
-        sede_activa = $1, 
-        edicion_activa = $2,
-        updated_at = NOW()
-      WHERE id = 1
-      RETURNING *
-    `, [sede_activa, edicion_activa]);
-    
-    if (result.rows.length === 0) {
-      // Si no existe, crearla
-      console.log('⚠️ [Config] No existe config, creando...');
-      const createResult = await pool.query(`
-        INSERT INTO config (id, sede_activa, edicion_activa)
-        VALUES (1, $1, $2)
-        RETURNING *
-      `, [sede_activa, edicion_activa]);
-      
-      console.log('✅ [Config] Configuración creada:', createResult.rows[0]);
-      return res.json(createResult.rows[0]);
-    }
-    
-    console.log('✅ [Config] Configuración actualizada:', result.rows[0]);
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('❌ [Config] Error actualizando config:', error);
+
+    const cfg = await updateConfig(sede_activa, edicion_activa);
+    console.log(`✅ Config actualizada: sede=${sede_activa}, edicion=${edicion_activa}`);
+
+    res.json({ success: true, ...cfg, data: cfg });
+  } catch (err) {
+    console.error('❌ PUT /config:', err.message);
     res.status(500).json({ error: 'Error al actualizar configuración' });
   }
-});
+};
+
+router.put('/',              authRequired, handlePut);
+router.put('/evento-activo', authRequired, handlePut);
 
 // ============================================================
-// GET /config/sedes - Listar sedes disponibles
+// GET /api/config/sedes
 // ============================================================
 router.get('/sedes', authRequired, async (req, res) => {
   try {
-    // Obtener sedes únicas de la tabla users o una tabla de sedes
-    const result = await pool.query(`
-      SELECT DISTINCT sede 
-      FROM users 
-      WHERE sede IS NOT NULL 
+    const r = await pool.query(`
+      SELECT DISTINCT sede FROM users
+      WHERE sede IS NOT NULL AND sede != ''
       ORDER BY sede
     `);
-    
-    const sedes = result.rows.map(row => row.sede);
-    res.json({ sedes });
-  } catch (error) {
-    console.error('Error obteniendo sedes:', error);
-    res.status(500).json({ error: 'Error al obtener sedes' });
+    const sedes = r.rows.map(row => row.sede);
+    // Asegurar las sedes del CMC siempre disponibles
+    const base = ['mexico', 'colombia', 'chile', 'peru'];
+    const todas = [...new Set([...base, ...sedes])].sort();
+    res.json({ sedes: todas });
+  } catch (err) {
+    res.json({ sedes: ['mexico', 'colombia', 'chile', 'peru'] });
   }
 });
 
 // ============================================================
-// GET /config/ediciones - Listar ediciones disponibles
+// GET /api/config/ediciones
 // ============================================================
 router.get('/ediciones', authRequired, async (req, res) => {
   try {
-    // Obtener ediciones únicas
-    const result = await pool.query(`
-      SELECT DISTINCT edicion 
-      FROM users 
-      WHERE edicion IS NOT NULL 
+    const r = await pool.query(`
+      SELECT DISTINCT edicion FROM users
+      WHERE edicion IS NOT NULL
       ORDER BY edicion DESC
     `);
-    
-    const ediciones = result.rows.map(row => row.edicion);
+    let ediciones = r.rows.map(row => row.edicion);
+    if (ediciones.length === 0) {
+      const y = new Date().getFullYear();
+      ediciones = [y + 1, y, y - 1];
+    }
     res.json({ ediciones });
-  } catch (error) {
-    console.error('Error obteniendo ediciones:', error);
-    res.status(500).json({ error: 'Error al obtener ediciones' });
+  } catch (err) {
+    const y = new Date().getFullYear();
+    res.json({ ediciones: [y + 1, y, y - 1] });
+  }
+});
+
+// ============================================================
+// GET /api/config/calendario (compatibilidad con versión anterior)
+// ============================================================
+router.get('/calendario', authRequired, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT * FROM calendario_sedes WHERE activo = true ORDER BY fecha_inicio ASC`
+    ).catch(() => ({ rows: [] }));
+    res.json({ success: true, count: r.rows.length, data: r.rows });
+  } catch (err) {
+    res.json({ success: true, count: 0, data: [] });
   }
 });
 

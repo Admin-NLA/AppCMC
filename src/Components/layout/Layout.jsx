@@ -8,7 +8,7 @@ import NotificationsPanel from "../../Components/NotificationsPanel.jsx";
 import {
   Menu, X, Moon, Sun, Calendar, Users, LayoutDashboard, Layers,
   Bell, User, Scan, Settings, LogOut, Map, Network, FileText, Award, QrCode,
-  ClipboardList, Palette, Image as ImageIcon, ChevronDown, ChevronRight
+  ClipboardList, Palette, ChevronDown, ChevronRight, Eye, EyeOff
 } from "lucide-react";
 
 // ============================================================
@@ -33,7 +33,6 @@ const MENU_MAP = {
   "Mi Perfil":         { to: "/perfil",         icon: <User size={18} /> },
   "Mi Sesión":         { to: "/mi-sesion",      icon: <Award size={18} /> },
   "Mi Marca":          { to: "/mi-marca",       icon: <Layers size={18} /> },
-  "Galería":           { to: "/galeria",        icon: <ImageIcon size={18} /> },
   "Encuestas":         { to: "/encuestas",      icon: <ClipboardList size={18} /> },
   "Mi QR":             { to: "/qr",             icon: <QrCode size={18} /> },
   "QR":                { to: "/qr",             icon: <QrCode size={18} /> },
@@ -50,7 +49,7 @@ const MENU_MAP = {
 };
 
 export default function Layout() {
-  const { logout, userProfile, permisos } = useAuth();
+  const { logout, userProfile, permisos, previewRol, isPreviewMode, setPreviewRol, clearPreview } = useAuth();
   const location = useLocation();
 
   const [open, setOpen] = useState(false);
@@ -106,18 +105,11 @@ export default function Layout() {
   const getGroup = (label) => {
     if (
       label.includes("Expositores") || 
-      label.includes("Mapa")) return "Expo";
+      label.includes("Mapa") ||
+      label.includes("Networking") 
+    ) return "Expo";
 
     if (label.includes("Speakers")) return "Speakers";
-
-    if (
-      label.includes("Usuarios") ||
-      label.includes("Admin") ||
-      label.includes("Configuración") ||
-      label.includes("Branding") ||
-      label.includes("Staff") ||
-      label.includes("Excel Import")
-    ) return "Admin";
 
     if (
       label.includes("Perfil") ||
@@ -128,7 +120,14 @@ export default function Layout() {
       label.includes("Marca")
     ) return "Usuario";
 
-    if (label.includes("Networking")) return "Networking";
+    if (
+      label.includes("Usuarios") ||
+      label.includes("Admin") ||
+      label.includes("Configuración") ||
+      label.includes("Branding") ||
+      label.includes("Staff") ||
+      label.includes("Excel Import")
+    ) return "Admin";
 
     return "Informativos"; // 🔥 clave para no perder nada
   };
@@ -163,8 +162,8 @@ export default function Layout() {
           ${open ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
       >
         <div className="p-5 border-b dark:border-gray-700 text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-          <img public="/public/icons/CMC.svg" className="w-6 h-6" />
-          <span> CMC - App</span>
+          <img src="/icons/Logo_CMC.svg" className="w-12.5 h-12 object-contain" />
+          <span> App</span>
         </div>
 
         <nav className="px-4 py-4 space-y-2">
@@ -280,7 +279,45 @@ export default function Layout() {
               )}
             </button>
 
-            {/* Dark mode */}
+            {/* Vista previa de rol — solo super_admin */}
+            {userProfile?.rol === "super_admin" && (
+              <div className="flex items-center gap-1.5">
+                {isPreviewMode ? (
+                  <button
+                    onClick={clearPreview}
+                    title="Salir de vista previa"
+                    className="flex items-center gap-1 text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-600 px-2 py-1 rounded-lg hover:bg-amber-200 transition font-semibold"
+                  >
+                    <EyeOff size={13} />
+                    Salir: {previewRol}
+                  </button>
+                ) : (
+                  <select
+                    title="Ver la app como otro rol"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) return;
+                      const [rol, pase] = val.split("|");
+                      setPreviewRol(rol, pase || null);
+                      e.target.value = "";
+                    }}
+                    className="text-xs border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>👁 Ver como...</option>
+                    <option value="staff">Staff</option>
+                    <option value="expositor">Expositor</option>
+                    <option value="speaker">Speaker</option>
+                    <option value="asistente_general|general">Asistente General</option>
+                    <option value="asistente_curso|curso">Asistente Curso</option>
+                    <option value="asistente_sesiones|sesiones">Asistente Sesiones</option>
+                    <option value="asistente_combo|combo">Asistente Combo</option>
+                  </select>
+                )}
+              </div>
+            )}
+
+          {/* Dark mode */}
             <button onClick={toggleDark} className="text-gray-700 dark:text-gray-300">
               {dark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
@@ -298,6 +335,20 @@ export default function Layout() {
             </div>
           </div>
         </header>
+
+        {/* Banner modo vista previa */}
+        {isPreviewMode && (
+          <div className="bg-amber-400 dark:bg-amber-600 text-amber-900 dark:text-white px-4 py-1.5 flex items-center justify-between text-xs font-semibold">
+            <span className="flex items-center gap-2">
+              <Eye size={13} />
+              Vista previa como: <strong className="uppercase">{previewRol}</strong>
+              — El menú y los permisos simulan este rol
+            </span>
+            <button onClick={clearPreview} className="underline hover:no-underline">
+              Volver a Super Admin
+            </button>
+          </div>
+        )}
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto p-5 text-gray-900 dark:text-gray-100">

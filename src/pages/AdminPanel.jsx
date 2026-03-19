@@ -77,7 +77,7 @@ export default function AdminPanel() {
   const [success, setSuccess]     = useState(null);
 
   // Sede usada en formularios — inicia desde la sede activa del evento
-  const [sedeForm, setSedeForm] = useState(sedeActiva || "mexico");
+  const [sedeForm, setSedeForm] = useState(sedeActiva || "colombia");
 
   useEffect(() => {
     if (sedeActiva) setSedeForm(sedeActiva);
@@ -93,7 +93,7 @@ export default function AdminPanel() {
     return {
       title: "", description: "", start_at: "", end_at: "",
       room: "", sala: "", dia: 1, tipo: "sesion", categoria: "brujula",
-      sede: sede || "mexico", edicion: edicion || 2025,
+      sede: sede || "colombia", edicion: edicion || 2026,
       capacidad: "", activo: true,
     };
   }
@@ -108,7 +108,7 @@ export default function AdminPanel() {
     return {
       nombre: "", bio: "", company: "", photo_url: "", cargo: "",
       email: "", telefono: "", linkedin_url: "", twitter_url: "",
-      website_url: "", sede: sede || "mexico", edicion: edicion || 2025,
+      website_url: "", sede: sede || "colombia", edicion: edicion || 2026,
       activo: true,
     };
   }
@@ -124,7 +124,7 @@ export default function AdminPanel() {
       nombre: "", descripcion: "", stand: "", logo_url: "",
       categoria: "", website_url: "",
       contact_email: "", contact_telefono: "", contact_nombre: "",
-      sede: sede || "mexico", edicion: edicion || 2025, activo: true,
+      sede: sede || "colombia", edicion: edicion || 2026, activo: true,
     };
   }
 
@@ -190,7 +190,7 @@ export default function AdminPanel() {
         tipo:        sessionForm.tipo,
         categoria:   sessionForm.categoria,
         sede:        sessionForm.sede,
-        edicion:     parseInt(sessionForm.edicion) || edicionActiva || 2025,
+        edicion:     parseInt(sessionForm.edicion) || edicionActiva || 2026,
         capacidad:   sessionForm.capacidad ? parseInt(sessionForm.capacidad) : null,
         activo:      sessionForm.activo !== false,
       };
@@ -220,17 +220,19 @@ export default function AdminPanel() {
   const editSession = (s) => {
     setEditingSessionId(s.id);
     setSessionForm({
-      title:       s.title       || "",
-      description: s.description || "",
-      start_at:    s.start_at    ? s.start_at.slice(0,16) : "",
-      end_at:      s.end_at      ? s.end_at.slice(0,16)   : "",
-      room:        s.room        || "",
-      sala:        s.sala        || "",
+      title:       s.title       || s.titulo      || "",
+      description: s.description || s.descripcion || "",
+      start_at:    s.start_at    ? String(s.start_at).slice(0,16)
+                 : s.horaInicio  ? String(s.horaInicio).slice(0,16) : "",
+      end_at:      s.end_at      ? String(s.end_at).slice(0,16)
+                 : s.horaFin     ? String(s.horaFin).slice(0,16)   : "",
+      room:        s.room        || s.sala  || "",
+      sala:        s.sala        || s.room  || "",
       dia:         s.dia         || s.day_number || 1,
       tipo:        s.tipo        || "sesion",
       categoria:   s.categoria   || "brujula",
       sede:        s.sede        || sedeForm,
-      edicion:     s.edicion     || edicionActiva || 2025,
+      edicion:     s.edicion     || edicionActiva || 2026,
       capacidad:   s.capacidad   || "",
       activo:      s.activo !== false,
     });
@@ -263,7 +265,7 @@ export default function AdminPanel() {
     e.preventDefault();
     try {
       setLoading(true); setError(null);
-      const payload = { ...speakerForm, edicion: parseInt(speakerForm.edicion) || edicionActiva || 2025 };
+      const payload = { ...speakerForm, edicion: parseInt(speakerForm.edicion) || edicionActiva || 2026 };
       if (editingSpeakerId) {
         await API.put(`/speakers/${editingSpeakerId}`, payload);
         flash("Speaker actualizado");
@@ -301,7 +303,7 @@ export default function AdminPanel() {
       twitter_url:  s.twitter_url  || "",
       website_url:  s.website_url  || "",
       sede:         s.sede         || sedeForm,
-      edicion:      s.edicion      || edicionActiva || 2025,
+      edicion:      s.edicion      || edicionActiva || 2026,
       activo:       s.activo !== false,
     });
     setShowSpeakerForm(true);
@@ -347,7 +349,7 @@ export default function AdminPanel() {
         website_url: expositorForm.website_url,
         contact,
         sede:        expositorForm.sede,
-        edicion:     parseInt(expositorForm.edicion) || edicionActiva || 2025,
+        edicion:     parseInt(expositorForm.edicion) || edicionActiva || 2026,
         activo:      expositorForm.activo !== false,
       };
       if (editingExpositorId) {
@@ -387,7 +389,7 @@ export default function AdminPanel() {
       contact_telefono: c.telefono     || "",
       contact_nombre:   c.nombre       || "",
       sede:             ex.sede        || sedeForm,
-      edicion:          ex.edicion     || edicionActiva || 2025,
+      edicion:          ex.edicion     || edicionActiva || 2026,
       activo:           ex.activo !== false,
     });
     setShowExpositorForm(true);
@@ -488,7 +490,7 @@ export default function AdminPanel() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {isAdmin ? "Super Admin" : "Staff"} ·{" "}
             Sede: <span className="font-semibold capitalize">{sedeActiva || "todas"}</span> ·{" "}
-            Edición: <span className="font-semibold">{edicionActiva || 2025}</span>
+            Edición: <span className="font-semibold">{edicionActiva || 2026}</span>
           </p>
         </div>
         <div className="flex gap-2">
@@ -632,12 +634,12 @@ export default function AdminPanel() {
                 <div key={s.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-start justify-between gap-4 hover:shadow-sm transition">
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap gap-2 items-center">
-                      <span className="font-bold text-gray-900 dark:text-white truncate">{s.title}</span>
+                      <span className="font-bold text-gray-900 dark:text-white truncate">{s.titulo || s.title || "(sin título)"}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 capitalize">{s.tipo}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 capitalize">{s.categoria}</span>
                       {!s.activo && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Inactiva</span>}
                     </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">{s.description}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">{s.descripcion || s.description}</p>
                     <div className="flex flex-wrap gap-3 text-xs text-gray-400 mt-1">
                       {s.sala && <span>📍 {s.sala}</span>}
                       {s.dia && <span>Día {s.dia}</span>}

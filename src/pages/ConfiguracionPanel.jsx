@@ -6,10 +6,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import API from '../services/api';
+import { useEvent } from '../contexts/EventContext';
 import { Save, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 export default function ConfiguracionPanel() {
   const { userProfile } = useAuth();
+  const { refreshConfig } = useEvent();
   const [config, setConfig] = useState({
     sede_activa: 'colombia',
     edicion_activa: 2026
@@ -105,7 +107,8 @@ export default function ConfiguracionPanel() {
       console.log('✅ [ConfigPanel] Configuración guardada:', res.data);
       
       setSuccess(true);
-      
+      // Propagar a toda la app
+      if (typeof refreshConfig === 'function') await refreshConfig();
       // Ocultar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {

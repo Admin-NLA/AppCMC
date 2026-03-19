@@ -55,7 +55,7 @@ router.post('/photo', authRequired, async (req, res) => {
 
     // Actualizar avatar_url en la DB
     await pool.query(
-      'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2',
+      'UPDATE users SET avatar_url = $1 WHERE id = $2',
       [avatarUrl, userId]
     );
 

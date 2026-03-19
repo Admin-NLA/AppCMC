@@ -57,8 +57,8 @@ router.get('/:id', authRequired, async (req, res) => {
     const result = await pool.query(
       `SELECT
         id, nombre, email, rol, tipo_pase, sede, multi_sedes, edicion,
-        empresa, movil, ciudad, avatar_url, bio, linkedin_url, twitter_url,
-        activo, created_at, updated_at
+        empresa, movil, avatar_url,
+        activo, created_at
        FROM users
        WHERE id = $1`,
       [id]
@@ -128,7 +128,7 @@ router.post('/', authRequired, async (req, res) => {
     // FIX: INSERT usa password_hash y movil (columnas reales de la tabla)
     const result = await pool.query(
       `INSERT INTO users
-        (email, password_hash, nombre, rol, tipo_pase, sede, empresa, movil, activo, edicion, created_at, updated_at)
+        (email, password_hash, nombre, rol, tipo_pase, sede, empresa, movil, activo, edicion, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 2025, NOW(), NOW())
        RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, created_at`,
       [email.toLowerCase().trim(), password_hash, nombre, rol, tipo_pase, sede, empresa, telefono]
@@ -166,8 +166,7 @@ router.put('/:id', authRequired, async (req, res) => {
 
     const {
       nombre, email, rol, tipo_pase, sede,
-      empresa, telefono, ciudad, bio, linkedin_url, twitter_url,
-      // FIX: Perfil.jsx envía foto_url y avatar_url — aceptamos ambos
+      empresa, telefono,
       foto_url, avatar_url,
     } = req.body;
 
@@ -194,12 +193,9 @@ router.put('/:id', authRequired, async (req, res) => {
       email,
       ...(esAdmin ? { rol, tipo_pase, sede } : {}),  // solo admin cambia estos
       empresa,
-      movil:       telefono,
-      ciudad,
-      bio,
-      linkedin_url,
-      twitter_url,
-      avatar_url:  avatar_url || foto_url,  // FIX: acepta ambos nombres del frontend
+      movil:      telefono,
+      // NOTA: ciudad, bio, linkedin_url, twitter_url NO existen en la tabla users actual
+      avatar_url: avatar_url || foto_url,
     };
 
     for (const [key, val] of Object.entries(fields)) {
@@ -214,12 +210,12 @@ router.put('/:id', authRequired, async (req, res) => {
       return res.status(400).json({ error: 'No hay campos para actualizar' });
     }
 
-    updates.push(`updated_at = NOW()`);
+    // updated_at no existe en users
     values.push(id);
 
     const result = await pool.query(
       `UPDATE users SET ${updates.join(', ')} WHERE id = $${p}
-       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, updated_at`,
+       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo`,
       values
     );
 
@@ -256,7 +252,7 @@ router.delete('/:id', authRequired, async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE users SET activo = false, updated_at = NOW()
+      `UPDATE users SET activo = false
        WHERE id = $1
        RETURNING id, email, nombre`,
       [id]

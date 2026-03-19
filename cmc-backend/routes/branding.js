@@ -74,11 +74,17 @@ async function readBranding() {
 // ── Helper: escribir branding en el jsonb ───────────────
 async function writeBranding(branding, userId) {
   // Leer tipos_activos actual para no perder los tipos de evento
-  const r = await pool.query(
+  let r = await pool.query(
     `SELECT id, tipos_activos FROM configuracion_evento ORDER BY id DESC LIMIT 1`
   );
   if (r.rows.length === 0) {
-    throw new Error('No existe configuración de evento. Crea una primero en Configuración.');
+    // Crear fila inicial si no existe
+    r = await pool.query(
+      `INSERT INTO configuracion_evento (sede_activa, edicion_activa, tipos_activos, updated_at, updated_by)
+       VALUES ('mexico', 2026, $1, NOW(), $2) RETURNING id, tipos_activos`,
+      [JSON.stringify({ __branding: branding }), userId]
+    );
+    return; // ya guardamos el branding, salir
   }
   const row = r.rows[0];
   let existing = row.tipos_activos;

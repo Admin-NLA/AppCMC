@@ -98,9 +98,10 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
         'Scanner',
         'Usuarios',
         'Agenda',
+        'Mapa Expo',
         'Speakers',
         'Expositores',
-        'Galería',
+        'Networking',
         'Encuestas',
         'Notificaciones',
         'Configuración',
@@ -370,6 +371,7 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
       menuItems: [
         'Agenda (D3-D4)',
         'Expositores',
+        'Mapa Expo',
         'Speakers',
         'Networking',
         'Galería',
@@ -414,6 +416,7 @@ export const getPermisosPorRolYPase = (rol, tipo_pase, user = {}) => {
       menuItems: [
         'Agenda (D1-4)',
         'Expositores',
+        'Mapa Expo',
         'Speakers',
         'Networking',
         'Galería',

@@ -1,95 +1,74 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import API from "../services/api";
-import { getPermisosPorRolYPase } from "../utils/sedeHelper"; // ← NUEVA IMPORTACIÓN
+import { getPermisosPorRolYPase } from "../utils/sedeHelper";
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user,        setUser]        = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [permisos, setPermisos] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [permisos,    setPermisos]    = useState(null);
+  const [loading,     setLoading]     = useState(true);
 
-  // ========== NUEVA: buildPermisos usa sedeHelper ==========
-  /**
-   * Construye permisos usando sedeHelper.js
-   * 
-   * @param {Object} userObj - Usuario con rol, tipo_pase, sede, edicion, etc
-   * @returns {Object} Objeto de permisos completo
-   */
-  function buildPermisos(userObj) {
-    if (!userObj) {
-      console.warn("⚠️ buildPermisos: userObj no definido");
-      return {};
-    }
+  // ── MODO VISTA PREVIA (solo super_admin) ─────────────────
+  // previewRol: null = ver con tu rol real | string = ver como ese rol
+  const [previewRol,      setPreviewRolState] = useState(null);
+  const [previewTipoPase, setPreviewTipoPase] = useState(null);
 
-    const { rol, tipo_pase } = userObj;
+  const setPreviewRol = (rol, tipoPase = null) => {
+    setPreviewRolState(rol);
+    setPreviewTipoPase(tipoPase);
+  };
 
-    console.log(`🔑 buildPermisos: rol=${rol}, tipo_pase=${tipo_pase}`);
+  const clearPreview = () => {
+    setPreviewRolState(null);
+    setPreviewTipoPase(null);
+  };
 
-    // Llamar a sedeHelper para obtener permisos
-    const permisosCentralizados = getPermisosPorRolYPase(rol, tipo_pase, userObj);
-
-    // Log para debugging
-    console.log("✅ Permisos obtenidos de sedeHelper:", permisosCentralizados);
-
-    return permisosCentralizados;
+  // ── buildPermisos ─────────────────────────────────────────
+  function buildPermisos(userObj, overrideRol = null, overrideTipoPase = null) {
+    if (!userObj) return {};
+    const rol      = overrideRol      || userObj.rol;
+    const tipoPase = overrideTipoPase || userObj.tipo_pase;
+    return getPermisosPorRolYPase(rol, tipoPase, { ...userObj, rol, tipo_pase: tipoPase });
   }
-  // ========================================================
 
-  // 🔥 EFECTO: Recalcular permisos cuando userProfile cambia
+  // Recalcular permisos cuando cambia el perfil O el previewRol
   useEffect(() => {
     if (userProfile) {
-      console.log("🔄 Actualizando permisos para:", userProfile.email);
-      const nuevosPermisos = buildPermisos(userProfile);
+      const nuevosPermisos = buildPermisos(userProfile, previewRol, previewTipoPase);
       setPermisos(nuevosPermisos);
     } else {
       setPermisos(null);
     }
-  }, [userProfile]); // Se ejecuta cuando userProfile cambia
+  }, [userProfile, previewRol, previewTipoPase]);
 
-  // 🔥 EFECTO: Guardar en localStorage SIEMPRE que user cambie
+  // Guardar en localStorage cuando cambia user
   useEffect(() => {
     if (user) {
-      console.log("💾 Guardando usuario en localStorage:", user.email, user.rol);
       try {
-        localStorage.setItem("user", JSON.stringify(user));
+        localStorage.setItem("user",        JSON.stringify(user));
         localStorage.setItem("userProfile", JSON.stringify(user));
-        localStorage.setItem("userRole", user.rol); // Extra para debugging
-        console.log("✅ Usuario guardado exitosamente");
+        localStorage.setItem("userRole",    user.rol);
       } catch (err) {
         console.error("❌ Error guardando en localStorage:", err);
       }
     }
-  }, [user]); // Se ejecuta cuando user cambia
+  }, [user]);
 
-  // ========== LOGIN ==========
+  // ── LOGIN ─────────────────────────────────────────────────
   const login = async (email, password) => {
-    try {
-      console.log("🔐 Iniciando login para:", email);
-      const res = await API.post("/auth/login", { email, password });
-
-      const userData = res.data.user;
-      console.log("✅ Login exitoso, usuario:", userData.email, userData.rol);
-
-      // Guardar token
-      localStorage.setItem("token", res.data.token);
-      console.log("✅ Token guardado");
-
-      // Actualizar estados (esto disparará useEffect de permisos y localStorage)
-      setUser(userData);
-      setUserProfile(userData);
-
-      return userData;
-    } catch (err) {
-      console.error("❌ Error en login:", err);
-      throw err;
-    }
+    const res      = await API.post("/auth/login", { email, password });
+    const userData = res.data.user;
+    localStorage.setItem("token", res.data.token);
+    setUser(userData);
+    setUserProfile(userData);
+    clearPreview();
+    return userData;
   };
 
-  // ========== LOGOUT ==========
+  // ── LOGOUT ────────────────────────────────────────────────
   const logout = () => {
-    console.log("🚪 Logout");
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     localStorage.removeItem("userProfile");
@@ -97,41 +76,21 @@ export function AuthProvider({ children }) {
     setUser(null);
     setUserProfile(null);
     setPermisos(null);
+    clearPreview();
   };
 
-  // ========== VERIFICAR SESIÓN AL CARGAR LA APP ==========
+  // ── VERIFICAR SESIÓN AL CARGAR ────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("token");
-
-    console.log("🔍 Verificando sesión al cargar...");
-    console.log("Token existe:", token ? "✅ Sí" : "❌ No");
-
-    if (!token) {
-      console.log("❌ No hay token, usuario no autenticado");
-      setLoading(false);
-      return;
-    }
-
-    console.log("📡 Llamando a /auth/me...");
+    if (!token) { setLoading(false); return; }
 
     API.get("/auth/me")
       .then((res) => {
-        console.log(
-          "✅ /auth/me respondió:",
-          res.data.user.email,
-          res.data.user.rol
-        );
-
         const userData = res.data.user;
-
-        // Actualizar estados (esto disparará useEffects)
         setUser(userData);
         setUserProfile(userData);
-
-        console.log("✅ Estados actualizados");
       })
-      .catch((err) => {
-        console.error("❌ Error en /auth/me:", err.message);
+      .catch(() => {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         localStorage.removeItem("userProfile");
@@ -140,30 +99,31 @@ export function AuthProvider({ children }) {
         setUserProfile(null);
         setPermisos(null);
       })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []); // Solo una vez al montar
+      .finally(() => setLoading(false));
+  }, []);
 
-  // ========== updateProfile — actualiza el perfil en memoria ==========
-  // FIX: Perfil.jsx necesita actualizar el avatar en el header sin re-login
+  // ── updateProfile ─────────────────────────────────────────
   const updateProfile = (newData) => {
     setUserProfile((prev) => ({ ...prev, ...newData }));
   };
 
-  // ========== VALORES EXPORTADOS ==========
+  // ── VALORES EXPORTADOS ────────────────────────────────────
   const value = {
-    // Estados
     user,
     userProfile,
-    permisos, // ← Ahora usa sedeHelper
+    permisos,
     currentUser: user,
     loading,
-
+    // Vista previa de rol (super_admin)
+    previewRol,
+    previewTipoPase,
+    isPreviewMode: previewRol !== null,
+    setPreviewRol,
+    clearPreview,
     // Métodos
     login,
     logout,
-    updateProfile, // ← FIX: permite actualizar avatar/nombre sin re-login
+    updateProfile,
   };
 
   return (
@@ -173,7 +133,6 @@ export function AuthProvider({ children }) {
   );
 }
 
-// ========== CUSTOM HOOK ==========
 export function useAuth() {
   return useContext(AuthContext);
 }

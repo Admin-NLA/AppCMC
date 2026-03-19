@@ -30,8 +30,8 @@ router.get('/', async (req, res) => {
 // PUT /api/mapa — actualizar (super_admin)
 router.put('/', authRequired, async (req, res) => {
   try {
-    if (req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
-      return res.status(403).json({ ok: false, error: 'Solo admin/staff' });
+    if (req.user.rol !== 'super_admin') {
+      return res.status(403).json({ ok: false, error: 'Solo super_admin puede actualizar el mapa' });
     }
     const { url_publica } = req.body;
     if (!url_publica) return res.status(400).json({ ok: false, error: 'url_publica requerida' });

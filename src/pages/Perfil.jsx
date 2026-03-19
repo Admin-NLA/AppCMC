@@ -169,9 +169,15 @@ END:VCARD`;
       setError(null);
       setSuccess(false);
 
-      console.log("💾 Guardando perfil...", formData);
+      // Solo enviar campos que existen en la tabla users
+      const payload = {
+        nombre:     formData.nombre,
+        empresa:    formData.empresa,
+        movil:      formData.telefono,
+        avatar_url: formData.foto_url || formData.avatar_url,
+      };
 
-      const res = await API.put("/users/" + userProfile.id, formData);
+      const res = await API.put("/users/" + userProfile.id, payload);
 
       console.log("✅ Perfil guardado:", res.data);
 
