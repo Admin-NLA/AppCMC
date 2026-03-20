@@ -34,15 +34,20 @@ const DEFAULTS = {
     colorSecundario:  '#e8a020',
     colorFondo:       '#0a1628',
     colorTexto:       '#ffffff',
-    colorMenu:        '#0d2240',
+    colorMenu:        '#0d2240',   // sidebar background
+    colorTextoMenu:   '#ffffff',   // sidebar text
+    colorHeader:      '#ffffff',   // top header background (null = blanco)
+    colorFondoApp:    '#f8fafc',   // app pages background
+    colorBoton:       '#2563eb',   // primary button color
     logoUrl:          'https://cmc-latam.com/wp-content/uploads/2024/09/CMC-2025-Logo-Horizontal-Blanco.png',
     logoAlt:          'CMC Latam',
     tagline:          'Congreso de Mantenimiento y Confiabilidad',
     appNombre:        'CMC App',
+    nombreEvento:     'CMC Latam',
     footerTexto:      '© CMC Latam · Todos los derechos reservados',
     imagenFondo:      '',
     fuente:           'Inter',
-    borderRadius:     'xl',   // sm | md | lg | xl | 2xl
+    borderRadius:     'xl',
   },
   mexico: {
     tagline: 'CMC México · Congreso de Mantenimiento y Confiabilidad',

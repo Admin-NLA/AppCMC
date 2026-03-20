@@ -79,33 +79,25 @@ export default function Layout() {
     }
   }, []);
 
-  // Aplicar branding (colores CSS) según sede activa
+  // Branding state — se aplica via style props (sobreescribe Tailwind hardcodeado)
+  const [branding, setBranding] = useState({});
+
   useEffect(() => {
-    const applyBranding = async () => {
+    const loadBranding = async () => {
       try {
         const sede = userProfile?.sede || 'mexico';
         const r = await API.get(`/branding/${sede}`).catch(() => null);
         if (!r?.data?.branding) return;
         const b = r.data.branding;
+        setBranding(b);
+        // CSS variables para componentes que usen var()
         const root = document.documentElement;
-        if (b.colorPrimario)   root.style.setProperty('--color-primary',     b.colorPrimario);
-        if (b.colorSecundario) root.style.setProperty('--color-secondary',    b.colorSecundario);
-        if (b.colorFondo)      root.style.setProperty('--color-bg',           b.colorFondo);
-        if (b.colorMenu)       root.style.setProperty('--color-menu',         b.colorMenu);
-        if (b.colorTextoMenu)  root.style.setProperty('--color-menu-text',    b.colorTextoMenu);
-        if (b.colorHeader)     root.style.setProperty('--color-header',       b.colorHeader);
-        if (b.colorFondoApp)   root.style.setProperty('--color-app-bg',       b.colorFondoApp);
-        if (b.colorBoton)      root.style.setProperty('--color-btn',          b.colorBoton);
-        if (b.colorTexto)      root.style.setProperty('--color-text',         b.colorTexto);
-        if (b.logoUrl)         root.style.setProperty('--logo-url', `url(${b.logoUrl})`);
-        // Aplicar colores directamente a elementos del DOM
-        const sidebar = document.querySelector('.cmc-sidebar');
-        const header  = document.querySelector('.cmc-header');
-        if (sidebar && b.colorMenu)   sidebar.style.backgroundColor = b.colorMenu;
-        if (header  && b.colorHeader) header.style.backgroundColor  = b.colorHeader;
+        if (b.colorPrimario)   root.style.setProperty('--color-primary',   b.colorPrimario);
+        if (b.colorSecundario) root.style.setProperty('--color-secondary',  b.colorSecundario);
+        if (b.colorBoton)      root.style.setProperty('--color-btn',        b.colorBoton);
       } catch { /* silencioso */ }
     };
-    if (userProfile) applyBranding();
+    if (userProfile) loadBranding();
   }, [userProfile?.sede]);
 
   const toggleDark = () => {
@@ -191,16 +183,17 @@ export default function Layout() {
 
       {/* Sidebar */}
       <aside
-        className={`cmc-sidebar fixed top-0 left-0 h-full w-64 bg-white dark:bg-gray-800 shadow-lg z-40 transform transition-transform duration-300
+        className={`cmc-sidebar fixed top-0 left-0 h-full w-64 shadow-lg z-40 transform transition-transform duration-300
           ${open ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
+        style={{ backgroundColor: branding.colorMenu || '#1e293b' }}
       >
-        <div className="p-5 border-b dark:border-gray-700 text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+        <div className="p-5 border-b border-white/10 text-xl font-bold text-white flex items-center gap-2">
           <img src="/icons/Logo_CMC.svg" className="w-12.5 h-12 object-contain" />
           <span> App</span>
         </div>
 
         <nav className="px-4 py-4 space-y-2">
-          <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-2 px-2">
+          <div className="text-xs text-white/50 uppercase mb-2 px-2">
             Menú
             {/* ITEMS DIRECTOS (sin dropdown) */}
             {directItems.map((item, index) => (
@@ -211,8 +204,8 @@ export default function Layout() {
                 className={`flex items-center gap-3 p-2 pl-2 rounded-lg text-sm font-medium transition-all
                   ${
                     location.pathname === item.to
-                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      ? "bg-white/20 text-white font-semibold"
+                      : "text-gray-200 hover:bg-white/10"
                   }`}
               >
                 {item.icon}
@@ -250,8 +243,8 @@ export default function Layout() {
                         className={`flex items-center gap-3 p-2 pl-4 rounded-lg text-sm font-medium transition-all
                           ${
                             location.pathname === item.to
-                              ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
-                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                              ? "bg-white/20 text-white font-semibold"
+                              : "text-gray-200 hover:bg-white/10"
                           }`}
                       >
                         {item.icon}
@@ -292,7 +285,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col ml-0 md:ml-64">
 
         {/* Header */}
-        <header className="flex items-center justify-between bg-white dark:bg-gray-800 shadow px-5 py-3">
+        <header className="flex items-center justify-between shadow px-5 py-3" style={{ backgroundColor: branding.colorHeader || undefined }}>
           <button className="md:hidden text-gray-700 dark:text-gray-300" onClick={toggleMenu}>
             {open ? <X size={26} /> : <Menu size={26} />}
           </button>

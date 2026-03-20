@@ -25,13 +25,16 @@ import { authRequired } from '../utils/authMiddleware.js';
 
 const router = express.Router();
 
-// ── Helper: crear notificación interna ───────────────────
+// ── Helper: crear notificación dirigida a un usuario específico ──
+// Guarda en la tabla notificaciones con meta.user_destino para filtrado
 async function crearNotificacion(pool, { userId, titulo, mensaje, tipo, meta }) {
   try {
+    const metaFinal = { ...( meta || {}), user_destino: userId };
     await pool.query(
-      `INSERT INTO notificaciones (titulo, mensaje, tipo, meta, tipo_usuario, activa, enviada, sede)
-       VALUES ($1, $2, $3, $4, ARRAY[$5], true, true, 'ALL')`,
-      [titulo, mensaje, tipo || 'info', JSON.stringify(meta || {}), userId]
+      `INSERT INTO notificaciones
+         (titulo, mensaje, tipo, meta, tipo_usuario, activa, enviada, sede, created_by)
+       VALUES ($1, $2, $3, $4, ARRAY['todos'], true, true, 'ALL', $5)`,
+      [titulo, mensaje, tipo || 'networking', JSON.stringify(metaFinal), userId]
     );
   } catch (e) {
     console.warn('[Networking] No se pudo crear notificación:', e.message);

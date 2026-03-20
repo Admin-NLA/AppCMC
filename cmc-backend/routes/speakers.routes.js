@@ -142,31 +142,27 @@ router.get('/', async (req, res) => {
         ORDER BY nombre ASC
       `);
 
-      // Obtener sesiones para cada speaker local
+      // Obtener sesiones de TODOS los speakers locales en UNA sola query
       const speakersIds = localResult.rows.map(r => r.id);
       let sesionesMap = {};
       if (speakersIds.length > 0) {
-        const sesRes = await pool.query(
-          `SELECT id, title AS titulo, dia, sala, start_at AS "horaInicio", tipo, sede
-           FROM agenda
-           WHERE activo = true AND speakers && $1::uuid[]
-           ORDER BY dia ASC, start_at ASC`,
-          [speakersIds]
-        ).catch(() => ({ rows: [] }));
-        // Mapear cada sesión a sus speakers
-        for (const ses of sesRes.rows) {
-          // Necesitamos saber a qué speaker pertenece — re-query individual sería costosa
-          // En su lugar, marcamos la sesión en todos los speakers del listado
-        }
-        // Más eficiente: para cada speaker, buscar sus sesiones
-        for (const spk of localResult.rows) {
-          const r = await pool.query(
-            `SELECT id, title AS titulo, dia, sala, start_at AS "horaInicio", tipo, sede
-             FROM agenda WHERE activo = true AND $1::uuid = ANY(speakers)
-             ORDER BY dia ASC, start_at ASC LIMIT 10`,
-            [spk.id]
-          ).catch(() => ({ rows: [] }));
-          sesionesMap[spk.id] = r.rows;
+        // Una sola query con unnest para mapear speaker → sesiones
+        const sesRes = await pool.query(`
+          SELECT
+            unnested_speaker AS speaker_id,
+            a.id, a.title AS titulo, a.dia, a.sala,
+            a.start_at AS "horaInicio", a.tipo, a.sede, a.edicion
+          FROM agenda a, unnest(a.speakers) AS unnested_speaker
+          WHERE a.activo = true
+            AND unnested_speaker = ANY($1::uuid[])
+          ORDER BY a.dia ASC, a.start_at ASC
+        `, [speakersIds]).catch(() => ({ rows: [] }));
+
+        // Agrupar por speaker_id
+        for (const row of sesRes.rows) {
+          if (!sesionesMap[row.speaker_id]) sesionesMap[row.speaker_id] = [];
+          const { speaker_id, ...sesion } = row;
+          sesionesMap[row.speaker_id].push(sesion);
         }
       }
 

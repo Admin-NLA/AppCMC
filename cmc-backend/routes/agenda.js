@@ -300,8 +300,8 @@ router.post('/sessions', authRequired, async (req, res) => {
     }
 
     let speakersArray = null;
-    if (speakerId) {
-      const uuid = await getUUIDFromWpId(speakerId);
+    if (speakerId && speakerId !== '' && speakerId !== 'null') {
+      const uuid = await getUUIDFromWpId(String(speakerId));
       speakersArray = uuid ? [uuid] : null;
     }
 
@@ -347,11 +347,19 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
       return null;
     })();
 
-    let speakersArray = null;
-    if (speakerId) {
-      const uuid = await getUUIDFromWpId(speakerId);
-      speakersArray = uuid ? [uuid] : null;
+    // speakerId = "" → limpiar speakers; speakerId = valor → resolver UUID
+    // speakerId ausente/undefined → no modificar (COALESCE mantiene el valor actual)
+    let speakersArray;
+    const speakerIdEnviado = 'speakerId' in req.body;
+    if (speakerIdEnviado) {
+      if (!speakerId || speakerId === '' || speakerId === 'null') {
+        speakersArray = []; // limpiar explícitamente
+      } else {
+        const uuid = await getUUIDFromWpId(String(speakerId));
+        speakersArray = uuid ? [uuid] : [];
+      }
     }
+    // Si speakerId no vino en el body, speakersArray queda undefined → no modificar
 
     // CASO 1: Sesión de WordPress (ID numérico grande)
     if (!isNaN(id) && parseInt(id) > 1000) {
@@ -376,12 +384,12 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
             tipo          = CASE WHEN $7::text IS NOT NULL AND $7::text != '' THEN $7 ELSE tipo END,
             sede_override = CASE WHEN $8::text IS NOT NULL AND $8::text != '' THEN $8 ELSE sede_override END,
             year_override = COALESCE($9,  year_override),
-            speakers      = COALESCE($10, speakers),
+            speakers      = CASE WHEN $10::uuid[] IS NOT NULL THEN $10 ELSE speakers END,
             override      = true
            WHERE wp_id = $11 AND override = true
            RETURNING wp_id AS id, title AS titulo, description AS descripcion,
                      dia, start_at AS "horaInicio", end_at AS "horaFin", sala, tipo, sede, edicion`,
-          [titulo, descripcion, diaFinal, startTs, endTs, sala, tipo, sede, edicion, speakersArray, wpId]
+          [titulo, descripcion, diaFinal, startTs, endTs, sala, tipo, sede, edicion, speakersArray ?? null, wpId]
         );
         return res.json({ ok: true, session: result.rows[0], message: 'Sesión actualizada (override)' });
 
@@ -421,14 +429,14 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
         sede        = CASE WHEN $8::text IS NOT NULL AND $8::text != '' THEN $8 ELSE sede END,
         edicion     = COALESCE($9,  edicion),
         year        = COALESCE($9,  year),
-        speakers    = COALESCE($10, speakers)
+        speakers    = CASE WHEN $10::uuid[] IS NOT NULL THEN $10 ELSE speakers END
        WHERE id = $11
        RETURNING id, title AS titulo, description AS descripcion,
                  dia, start_at AS "horaInicio", end_at AS "horaFin",
                  sala, tipo, sede, edicion`,
       [titulo, descripcion, diaFinal,
        convertirHoraATimestamp(horaInicio), convertirHoraATimestamp(horaFin),
-       sala, tipo, sede, edicion, speakersArray, id]
+       sala, tipo, sede, edicion, speakersArray ?? null, id]
     );
 
     console.log('[Agenda] ✅ Sesión local actualizada:', id);
