@@ -310,6 +310,7 @@ export default function BrandingPanel() {
               {[
                 { id:"colores",    label:"🎨 Colores" },
                 { id:"identidad",  label:"🖼️ Identidad" },
+                { id:"app",        label:"📱 App" },
                 { id:"tipografia", label:"✏️ Tipografía" },
               ].map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)}
@@ -357,7 +358,7 @@ export default function BrandingPanel() {
                         { label:"CMC Original", colors:{ colorPrimario:"#1a3a5c", colorSecundario:"#e8a020", colorFondo:"#0a1628", colorMenu:"#0d2240" } },
                         { label:"Azul Noche",   colors:{ colorPrimario:"#1e3a8a", colorSecundario:"#60a5fa", colorFondo:"#0f172a", colorMenu:"#1e3a8a" } },
                         { label:"Verde Bosque", colors:{ colorPrimario:"#14532d", colorSecundario:"#4ade80", colorFondo:"#052e16", colorMenu:"#166534" } },
-                        { label:"Rojo Corp",    colors:{ colorPrimario:"#7f1d1d", colorSecundario:"#f87171", colorFondo:"#450a0a", colorMenu:"#991b1b" } },
+                        { label:"Rojo Corp",    colors:{ colorPrimario:"#ffffff", colorSecundario:"#f87171", colorFondo:"#450a0a", colorMenu:"#991b1b" } },
                         { label:"Morado Tech",  colors:{ colorPrimario:"#3b0764", colorSecundario:"#a855f7", colorFondo:"#1a0332", colorMenu:"#581c87" } },
                         { label:"Gris Oscuro",  colors:{ colorPrimario:"#1f2937", colorSecundario:"#6b7280", colorFondo:"#111827", colorMenu:"#374151" } },
                       ].map(preset => (
@@ -379,6 +380,53 @@ export default function BrandingPanel() {
               )}
 
               {/* ── Tab: Identidad ── */}
+              {/* ── Tab: App (colores de la interfaz completa) ── */}
+              {tab === "app" && (
+                <>
+                  <ColorField label="Color del sidebar / menú"
+                    value={form.colorMenu}
+                    onChange={v => setF("colorMenu", v)}
+                    help="Fondo del menú lateral de la app" />
+                  <ColorField label="Color de texto del menú"
+                    value={form.colorTextoMenu}
+                    onChange={v => setF("colorTextoMenu", v)}
+                    help="Color del texto de las opciones del menú" />
+                  <ColorField label="Color del header"
+                    value={form.colorHeader}
+                    onChange={v => setF("colorHeader", v)}
+                    help="Barra superior de la app" />
+                  <ColorField label="Color de fondo de la app"
+                    value={form.colorFondoApp}
+                    onChange={v => setF("colorFondoApp", v)}
+                    help="Fondo principal de las páginas internas" />
+                  <ColorField label="Color de botones primarios"
+                    value={form.colorBoton}
+                    onChange={v => setF("colorBoton", v)}
+                    help="Color de los botones de acción principales" />
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Nombre del evento en la app
+                    </label>
+                    <input className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white"
+                      value={form.nombreEvento || ''}
+                      onChange={e => setF('nombreEvento', e.target.value)}
+                      placeholder="CMC Latam 2026" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Tagline / subtítulo
+                    </label>
+                    <input className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white"
+                      value={form.tagline || ''}
+                      onChange={e => setF('tagline', e.target.value)}
+                      placeholder="Congreso de Mantenimiento y Confiabilidad" />
+                  </div>
+                  <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-xl p-3 text-xs text-blue-700 dark:text-blue-300">
+                    💡 Los cambios de color en App se aplican en tiempo real al guardar. Si no ves los cambios, recarga la página.
+                  </div>
+                </>
+              )}
+
               {tab === "identidad" && (
                 <>
                   <div>

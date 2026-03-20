@@ -88,12 +88,21 @@ export default function Layout() {
         if (!r?.data?.branding) return;
         const b = r.data.branding;
         const root = document.documentElement;
-        if (b.colorPrimario)   root.style.setProperty('--color-primary',    b.colorPrimario);
-        if (b.colorSecundario) root.style.setProperty('--color-secondary',   b.colorSecundario);
-        if (b.colorFondo)      root.style.setProperty('--color-bg',          b.colorFondo);
-        if (b.colorMenu)       root.style.setProperty('--color-menu',        b.colorMenu);
-        if (b.colorTexto)      root.style.setProperty('--color-text',        b.colorTexto);
+        if (b.colorPrimario)   root.style.setProperty('--color-primary',     b.colorPrimario);
+        if (b.colorSecundario) root.style.setProperty('--color-secondary',    b.colorSecundario);
+        if (b.colorFondo)      root.style.setProperty('--color-bg',           b.colorFondo);
+        if (b.colorMenu)       root.style.setProperty('--color-menu',         b.colorMenu);
+        if (b.colorTextoMenu)  root.style.setProperty('--color-menu-text',    b.colorTextoMenu);
+        if (b.colorHeader)     root.style.setProperty('--color-header',       b.colorHeader);
+        if (b.colorFondoApp)   root.style.setProperty('--color-app-bg',       b.colorFondoApp);
+        if (b.colorBoton)      root.style.setProperty('--color-btn',          b.colorBoton);
+        if (b.colorTexto)      root.style.setProperty('--color-text',         b.colorTexto);
         if (b.logoUrl)         root.style.setProperty('--logo-url', `url(${b.logoUrl})`);
+        // Aplicar colores directamente a elementos del DOM
+        const sidebar = document.querySelector('.cmc-sidebar');
+        const header  = document.querySelector('.cmc-header');
+        if (sidebar && b.colorMenu)   sidebar.style.backgroundColor = b.colorMenu;
+        if (header  && b.colorHeader) header.style.backgroundColor  = b.colorHeader;
       } catch { /* silencioso */ }
     };
     if (userProfile) applyBranding();
@@ -182,7 +191,7 @@ export default function Layout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-white dark:bg-gray-800 shadow-lg z-40 transform transition-transform duration-300
+        className={`cmc-sidebar fixed top-0 left-0 h-full w-64 bg-white dark:bg-gray-800 shadow-lg z-40 transform transition-transform duration-300
           ${open ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
       >
         <div className="p-5 border-b dark:border-gray-700 text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
@@ -346,17 +355,18 @@ export default function Layout() {
               {dark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            {/* Avatar */}
-            <div className="flex items-center gap-2">
+            {/* Avatar → click lleva a /perfil */}
+            <Link to="/perfil" className="flex items-center gap-2 hover:opacity-80 transition">
               <img
-                src={userProfile?.avatar || "https://i.pravatar.cc/40"}
-                className="w-9 h-9 rounded-full border dark:border-gray-600"
+                src={userProfile?.avatar_url || userProfile?.avatar
+                  || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile?.nombre||'U')}&background=2563eb&color=fff&size=64`}
+                className="w-9 h-9 rounded-full border dark:border-gray-600 object-cover"
                 alt="avatar"
               />
               <span className="hidden md:block text-gray-700 dark:text-gray-300 text-sm font-medium">
                 {userProfile?.nombre || "Usuario"}
               </span>
-            </div>
+            </Link>
           </div>
         </header>
 

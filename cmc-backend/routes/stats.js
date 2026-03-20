@@ -28,7 +28,7 @@ router.get('/', authRequired, async (req, res) => {
       SELECT COUNT(DISTINCT unnested) as total
       FROM agenda, unnest(speakers) AS unnested
       WHERE activo = true AND speakers IS NOT NULL AND array_length(speakers, 1) > 0
-    `);
+    `).catch(() => ({ rows: [{ total: 0 }] }));
     const totalSpeakers = Math.max(
       parseInt(speakersResult.rows[0]?.total || 0),
       parseInt(speakersAgendaResult.rows[0]?.total || 0)

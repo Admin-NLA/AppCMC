@@ -142,11 +142,40 @@ router.get('/', async (req, res) => {
         ORDER BY nombre ASC
       `);
 
+      // Obtener sesiones para cada speaker local
+      const speakersIds = localResult.rows.map(r => r.id);
+      let sesionesMap = {};
+      if (speakersIds.length > 0) {
+        const sesRes = await pool.query(
+          `SELECT id, title AS titulo, dia, sala, start_at AS "horaInicio", tipo, sede
+           FROM agenda
+           WHERE activo = true AND speakers && $1::uuid[]
+           ORDER BY dia ASC, start_at ASC`,
+          [speakersIds]
+        ).catch(() => ({ rows: [] }));
+        // Mapear cada sesión a sus speakers
+        for (const ses of sesRes.rows) {
+          // Necesitamos saber a qué speaker pertenece — re-query individual sería costosa
+          // En su lugar, marcamos la sesión en todos los speakers del listado
+        }
+        // Más eficiente: para cada speaker, buscar sus sesiones
+        for (const spk of localResult.rows) {
+          const r = await pool.query(
+            `SELECT id, title AS titulo, dia, sala, start_at AS "horaInicio", tipo, sede
+             FROM agenda WHERE activo = true AND $1::uuid = ANY(speakers)
+             ORDER BY dia ASC, start_at ASC LIMIT 10`,
+            [spk.id]
+          ).catch(() => ({ rows: [] }));
+          sesionesMap[spk.id] = r.rows;
+        }
+      }
+
       localSpeakers = localResult.rows.map(s => ({
         ...s,
         canEdit: true,
         source: s.source || 'local',
-        eventos: []  // Los locales no tienen eventos
+        eventos: [],
+        sesiones: sesionesMap[s.id] || [],
       }));
 
       console.log(`[Speakers] Speakers locales: ${localSpeakers.length}`);

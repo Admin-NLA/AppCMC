@@ -25,6 +25,21 @@ import { authRequired } from '../utils/authMiddleware.js';
 
 const router = express.Router();
 
+// ── Helper: crear notificación interna ───────────────────
+async function crearNotificacion(pool, { userId, titulo, mensaje, tipo, meta }) {
+  try {
+    await pool.query(
+      `INSERT INTO notificaciones (titulo, mensaje, tipo, meta, tipo_usuario, activa, enviada, sede)
+       VALUES ($1, $2, $3, $4, ARRAY[$5], true, true, 'ALL')`,
+      [titulo, mensaje, tipo || 'info', JSON.stringify(meta || {}), userId]
+    );
+  } catch (e) {
+    console.warn('[Networking] No se pudo crear notificación:', e.message);
+  }
+}
+
+
+
 const ROLES_ADMIN = ['super_admin', 'staff'];
 const STATUS_VALIDOS = ['pendiente', 'confirmada', 'rechazada', 'cancelada'];
 
@@ -222,7 +237,29 @@ router.post('/', authRequired, async (req, res) => {
       RETURNING *
     `, [solicitante_id, expositor_id, fecha, hora, hora_fin || null, notas || null, expo.sede || null]);
 
-    res.status(201).json({ ok: true, cita: r.rows[0], message: 'Cita solicitada correctamente' });
+    const citaCreada = r.rows[0];
+
+    // Notificar al expositor (si tiene usuario vinculado)
+    if (expo.user_id) {
+      const sol = await getSolicitante(solicitante_id);
+      await crearNotificacion(pool, {
+        userId: expo.user_id,
+        titulo: '📅 Nueva solicitud de cita',
+        mensaje: `${sol?.nombre || 'Un asistente'} quiere reunirse contigo el ${fecha} a las ${hora.slice(0,5)}`,
+        tipo: 'cita_solicitada',
+        meta: { cita_id: citaCreada.id, solicitante_id, expositor_id },
+      });
+    }
+    // Notificar al solicitante (confirmación de envío)
+    await crearNotificacion(pool, {
+      userId: solicitante_id,
+      titulo: '✅ Solicitud enviada',
+      mensaje: `Tu solicitud de cita con ${expo.nombre} para el ${fecha} a las ${hora.slice(0,5)} fue enviada. Espera confirmación.`,
+      tipo: 'cita_enviada',
+      meta: { cita_id: citaCreada.id, expositor_id },
+    });
+
+    res.status(201).json({ ok: true, cita: citaCreada, message: 'Cita solicitada correctamente' });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -285,7 +322,40 @@ router.put('/:id', authRequired, async (req, res) => {
       RETURNING *
     `, [status || null, ubicacion || null, notas || null, hora_fin || null, id]);
 
-    res.json({ ok: true, cita: r.rows[0] });
+    const citaActualizada = r.rows[0];
+
+    // Notificaciones según el nuevo status
+    if (status) {
+      const msgs = {
+        confirmada: {
+          paraQuien: cita.solicitante_id,
+          titulo: '✅ Cita confirmada',
+          mensaje: `Tu cita con ${cita.expositor_nombre || 'el expositor'} el ${cita.fecha} a las ${cita.hora?.slice(0,5)} fue confirmada.${ubicacion ? ` Ubicación: ${ubicacion}` : ''}`,
+        },
+        rechazada: {
+          paraQuien: cita.solicitante_id,
+          titulo: '❌ Cita rechazada',
+          mensaje: `Lo sentimos, tu solicitud de cita con el expositor para el ${cita.fecha} fue rechazada.`,
+        },
+        cancelada: {
+          paraQuien: cita.expositor_user_id,
+          titulo: '🚫 Cita cancelada',
+          mensaje: `${(await getSolicitante(cita.solicitante_id).catch(()=>({nombre:'El asistente'})))?.nombre} canceló la cita del ${cita.fecha} a las ${cita.hora?.slice(0,5)}.`,
+        },
+      };
+      const notif = msgs[status];
+      if (notif?.paraQuien) {
+        await crearNotificacion(pool, {
+          userId: notif.paraQuien,
+          titulo: notif.titulo,
+          mensaje: notif.mensaje,
+          tipo: `cita_${status}`,
+          meta: { cita_id: id },
+        });
+      }
+    }
+
+    res.json({ ok: true, cita: citaActualizada });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

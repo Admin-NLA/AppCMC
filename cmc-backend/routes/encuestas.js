@@ -73,12 +73,16 @@ router.get('/admin', authRequired, async (req, res) => {
 
     // Encuestas externas (encuestas_config)
     let q1 = `
-      SELECT id, nombre, descripcion, 'externa' AS fuente,
-             zoho_form_link_name AS form_url,
-             tipo, rol_permitido, sede, edicion,
-             activa, obligatoria, fecha_inicio, fecha_fin,
-             (SELECT COUNT(*) FROM respuestas_encuesta r WHERE r.encuesta_id = e.id) AS total_respuestas
-      FROM encuestas_config e WHERE 1=1
+      SELECT e.id, e.nombre, e.descripcion, 'externa' AS fuente,
+             e.zoho_form_link_name AS form_url,
+             e.tipo, e.rol_permitido, e.sede, e.edicion,
+             e.activa, e.obligatoria, e.fecha_inicio, e.fecha_fin,
+             e.entidad_id,
+             (SELECT COUNT(*) FROM respuestas_encuesta r WHERE r.encuesta_id = e.id) AS total_respuestas,
+             a.title AS sesion_titulo
+      FROM encuestas_config e
+      LEFT JOIN agenda a ON a.id = e.entidad_id
+      WHERE 1=1
     `;
     const p1 = [];
     if (sede)    { q1 += ` AND sede = $${p1.length+1}`;    p1.push(sede); }
@@ -130,13 +134,19 @@ router.get('/disponibles', authRequired, async (req, res) => {
 
     // ── Externas (encuestas_config) ───────────────────────────
     const r1 = await pool.query(`
-      SELECT e.*, 'externa' AS fuente,
+      SELECT e.*,
+             'externa' AS fuente,
              e.zoho_form_link_name AS form_url,
              EXISTS(
                SELECT 1 FROM respuestas_encuesta r
                WHERE r.encuesta_id = e.id AND r.user_id = $1
-             ) AS ya_respondio
+             ) AS ya_respondio,
+             -- Datos de la sesión/curso ligado (entidad_id referencia agenda.id)
+             a.title AS sesion_titulo,
+             a.dia   AS sesion_dia,
+             a.sala  AS sesion_sala
       FROM encuestas_config e
+      LEFT JOIN agenda a ON a.id = e.entidad_id
       WHERE e.activa = true
         AND (e.sede IS NULL OR e.sede = $2)
         AND (e.edicion IS NULL OR e.edicion = $3)
@@ -196,7 +206,7 @@ router.post('/', authRequired, async (req, res) => {
       // Campos externos
       form_url, tipo, rol_permitido = 'todos',
       sede, edicion, activa = true, obligatoria = false,
-      fecha_inicio, fecha_fin,
+      fecha_inicio, fecha_fin, entidad_id,
       // Campos nativos
       preguntas = [], tipo_pase = 'todos', sesion_id,
     } = req.body;
@@ -209,13 +219,15 @@ router.post('/', authRequired, async (req, res) => {
       const r = await pool.query(`
         INSERT INTO encuestas_config
           (nombre, descripcion, zoho_form_link_name, tipo, rol_permitido,
-           sede, edicion, activa, obligatoria, fecha_inicio, fecha_fin, created_by)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+           sede, edicion, activa, obligatoria, fecha_inicio, fecha_fin,
+           entidad_id, created_by)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
         RETURNING *
       `, [nombre, descripcion, form_url, tipo || 'general', rol_permitido,
           sede || null, edicion ? parseInt(edicion) : null,
           activa, obligatoria,
-          fecha_inicio || null, fecha_fin || null, req.user.id]);
+          fecha_inicio || null, fecha_fin || null,
+          entidad_id || null, req.user.id]);
 
       return res.status(201).json({ ok: true, encuesta: { ...r.rows[0], fuente: 'externa' } });
     }

@@ -319,6 +319,7 @@ function FormEncuesta({ encuesta, onSave, onCancel }) {
     sede: '', edicion: new Date().getFullYear(),
     activa: true, obligatoria: false,
     fecha_inicio: '', fecha_fin: '',
+    entidad_id: '',   // UUID de sesión o curso específico
     // Nativa
     preguntas: [], tipo_pase: ['todos'],
   };
@@ -341,10 +342,20 @@ function FormEncuesta({ encuesta, onSave, onCancel }) {
     tipo_pase: Array.isArray(encuesta.tipo_pase)
       ? encuesta.tipo_pase
       : encuesta.tipo_pase ? encuesta.tipo_pase.split(',').map(s=>s.trim()) : ['todos'],
+    entidad_id: encuesta.entidad_id || '',
   } : blank);
 
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState(null);
+  const [saving,    setSaving]    = useState(false);
+  const [error,     setError]     = useState(null);
+  const [sesiones,  setSesiones]  = useState([]);
+
+  // Cargar sesiones para el selector
+  useEffect(() => {
+    API.get('/agenda/sessions').then(r => {
+      const list = Array.isArray(r.data.sessions) ? r.data.sessions : [];
+      setSesiones(list);
+    }).catch(() => {});
+  }, []);
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -470,12 +481,35 @@ function FormEncuesta({ encuesta, onSave, onCancel }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-1">Tipo</label>
-                  <select className={inputCls} value={form.tipo} onChange={e => setF('tipo', e.target.value)}>
+                  <select className={inputCls} value={form.tipo}
+                    onChange={e => { setF('tipo', e.target.value); setF('entidad_id', ''); }}>
                     {['general','sesion','curso','expositor'].map(t =>
                       <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase()+t.slice(1)}</option>
                     )}
                   </select>
                 </div>
+                {/* Sesión o curso específico */}
+                {(form.tipo === 'sesion' || form.tipo === 'curso') && (
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-1">
+                      {form.tipo === 'sesion' ? '🎯 Sesión específica' : '🎯 Curso específico'}
+                      <span className="text-gray-400 font-normal ml-1">(opcional)</span>
+                    </label>
+                    <select className={inputCls} value={form.entidad_id} onChange={e => setF('entidad_id', e.target.value)}>
+                      <option value="">— Aplica a todas —</option>
+                      {sesiones
+                        .filter(s => form.tipo === 'curso' ? s.tipo === 'curso' : s.tipo !== 'curso')
+                        .map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.titulo || s.title || 'Sin título'}
+                            {s.dia ? ` · Día ${s.dia}` : ''}
+                            {s.sala ? ` · ${s.sala}` : ''}
+                          </option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-1">
                     Visible para <span className="text-gray-400 font-normal">(puedes elegir varios)</span>
@@ -757,7 +791,7 @@ export default function Encuestas() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
-                  {['Nombre','Tipo','Plataforma','Rol','Estado','Respuestas',''].map(h => (
+                  {['Nombre','Tipo / Sesión','Plataforma','Rol','Estado','Resp.',''].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                       {h}
                     </th>
@@ -896,6 +930,11 @@ function EncuestaCard({ enc, onAbrir, badgeFn, respondida = false }) {
 
       <div className="flex flex-wrap gap-2 text-xs text-gray-400 mb-4">
         {enc.tipo && <span className="capitalize">📋 {enc.tipo}</span>}
+        {enc.sesion_titulo && (
+          <span className="text-blue-600 dark:text-blue-400 font-medium">
+            🎯 {enc.sesion_titulo}{enc.sesion_dia ? ` · Día ${enc.sesion_dia}` : ''}
+          </span>
+        )}
         {enc.sede && <span>📍 {enc.sede}</span>}
         {enc.fecha_fin && <span>⏰ Vence: {new Date(enc.fecha_fin).toLocaleDateString('es')}</span>}
       </div>

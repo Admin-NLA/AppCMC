@@ -29,7 +29,7 @@ import {
   Plus, Edit2, Trash2, Save, X, Bell, Users,
   FileUp, AlertCircle, CheckCircle, Loader2,
   Calendar, Mic, Building2, ExternalLink, ChevronDown,
-  RefreshCw, Wifi, WifiOff,
+  RefreshCw, Wifi, WifiOff, Clock,
 } from "lucide-react";
 
 // ── Sedes del sistema ─────────────────────────────────────
@@ -86,6 +86,11 @@ export default function AdminPanel() {
 
   // ── Sesiones ────────────────────────────────────────────
   const [sessions,        setSessions]        = useState([]);
+  const [eventos,         setEventos]         = useState([]);
+  const [showEventoForm,  setShowEventoForm]  = useState(false);
+  const [editingEventoId, setEditingEventoId] = useState(null);
+  const [eventoForm,      setEventoForm]      = useState({ titulo:"", dia:1, horaInicio:"", horaFin:"", tipo:"registro", sala:"" });
+
   const [filtroSede,      setFiltroSede]      = useState("");
   const [sinTitulo,       setSinTitulo]       = useState([]);
   const [syncing,         setSyncing]         = useState(false);
@@ -159,6 +164,8 @@ export default function AdminPanel() {
   useEffect(() => {
     if (!userProfile) return;
     if (activeTab === "sesiones")       loadSessions();
+    if (activeTab === "eventos")        loadEventos();
+    loadSpeakers(); // para el selector en form de sesiones
     loadWpConfig();
     loadSinTitulo();
 
@@ -235,7 +242,37 @@ export default function AdminPanel() {
     ? sessions.filter(s => (s.sede || '').toLowerCase() === filtroSede.toLowerCase())
     : sessions;
 
+  const loadEventos = async () => {
+    try {
+      const tiposL = ["registro","recepcion","expo_abierta","keynote","coffee_break","almuerzo","networking","clausura","otro"];
+      const r = await API.get(`/agenda/sessions?sede=${sedeForm || sedeActiva}`);
+      const all = r.data?.sessions || [];
+      setEventos(all.filter(s => tiposL.includes(s.tipo) || s.categoria === "logistica"));
+    } catch { setEventos([]); }
+  };
+
+  const submitEvento = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const p = {
+        titulo: eventoForm.titulo, horaInicio: eventoForm.horaInicio || null,
+        horaFin: eventoForm.horaFin || null, dia: parseInt(eventoForm.dia) || 1,
+        tipo: eventoForm.tipo, categoria: "logistica",
+        sala: eventoForm.sala, sede: sedeForm || sedeActiva,
+        edicion: parseInt(edicionActiva) || 2026, activo: true,
+      };
+      if (editingEventoId) { await API.put(`/agenda/sessions/${editingEventoId}`, p); flash("Evento actualizado"); }
+      else                 { await API.post("/agenda/sessions", p);                   flash("Evento creado"); }
+      setShowEventoForm(false); setEditingEventoId(null);
+      setEventoForm({ titulo:"", dia:1, horaInicio:"", horaFin:"", tipo:"registro", sala:"" });
+      loadEventos();
+    } catch(err) { flash(err.response?.data?.error || err.message, true); }
+    finally { setLoading(false); }
+  };
+
   const loadSessions = async () => {
+
 
     try {
       setLoading(true);
@@ -546,10 +583,23 @@ export default function AdminPanel() {
 
   // Tabs disponibles según rol
   const TABS = [
-    { id: "sesiones",       label: "📅 Sesiones",       icon: Calendar  },
-    { id: "speakers",       label: "🎤 Speakers",        icon: Mic       },
-    { id: "expositores",    label: "🏢 Expositores",     icon: Building2 },
+    { id: "sesiones",       label: "📅 Sesiones",        icon: Calendar  },
+    { id: "eventos",        label: "⏱ Minuto a Minuto",  icon: Clock     },
+    { id: "speakers",       label: "🎤 Speakers",         icon: Mic       },
+    { id: "expositores",    label: "🏢 Expositores",      icon: Building2 },
     ...(isAdmin ? [{ id: "notificaciones", label: "🔔 Notificaciones", icon: Bell }] : []),
+  ];
+
+  const TIPOS_EVENTO = [
+    { v: 'registro',     l: '📋 Registro / Check-in' },
+    { v: 'recepcion',    l: '🤝 Recepción' },
+    { v: 'expo_abierta', l: '🏢 Expo Abierta' },
+    { v: 'keynote',      l: '🎙 Keynote' },
+    { v: 'coffee_break', l: '☕ Coffee Break' },
+    { v: 'almuerzo',     l: '🍽 Almuerzo' },
+    { v: 'networking',   l: '🤝 Networking' },
+    { v: 'clausura',     l: '🏁 Clausura' },
+    { v: 'otro',         l: '📌 Otro' },
   ];
 
   // ────────────────────────────────────────────────────────
@@ -624,8 +674,12 @@ export default function AdminPanel() {
               className="text-sm border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-1.5 bg-white dark:bg-gray-700 dark:text-white"
             >
               <option value="">Todas las sedes</option>
-              {[...new Set(sessions.map(s => s.sede).filter(Boolean))].sort().map(s => (
-                <option key={s} value={s} className="capitalize">{s}</option>
+              {[...new Set(sessions.map(s => {
+                  // Normalizar abreviaturas a nombres completos
+                  const norm = { cl:'chile', mx:'mexico', co:'colombia', pe:'peru', ar:'argentina' };
+                  return norm[(s.sede||'').toLowerCase()] || (s.sede||'').toLowerCase();
+                }).filter(Boolean))].sort().map(s => (
+                <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase()+s.slice(1)}</option>
               ))}
             </select>
             {/* Botón sync WP */}
@@ -1086,6 +1140,126 @@ export default function AdminPanel() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════
+          TAB: MINUTO A MINUTO (EVENTOS LOGÍSTICA)
+      ═══════════════════════════════════════════════════ */}
+      {activeTab === "eventos" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold dark:text-white">Minuto a Minuto</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Espacios logísticos del evento: registro, recepción, breaks, etc.</p>
+            </div>
+            {isAdmin && (
+              <button onClick={() => { setEditingEventoId(null); setShowEventoForm(true); }} className={btnPrimary}>
+                <Plus size={16} /> Agregar Espacio
+              </button>
+            )}
+          </div>
+
+          {/* Formulario */}
+          {showEventoForm && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border-l-4 border-purple-500 border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="font-bold text-lg dark:text-white mb-4">{editingEventoId ? "✏️ Editar Espacio" : "Nuevo Espacio"}</h3>
+              <form onSubmit={submitEvento} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Nombre del espacio *">
+                  <input className={inputCls} required value={eventoForm.titulo}
+                    placeholder="Ej: Registro de asistentes, Coffee Break"
+                    onChange={e => setEventoForm(p => ({...p, titulo: e.target.value}))} />
+                </Field>
+                <Field label="Tipo">
+                  <select className={inputCls} value={eventoForm.tipo}
+                    onChange={e => setEventoForm(p => ({...p, tipo: e.target.value}))}>
+                    {TIPOS_EVENTO.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
+                  </select>
+                </Field>
+                <Field label="Día">
+                  <select className={inputCls} value={eventoForm.dia}
+                    onChange={e => setEventoForm(p => ({...p, dia: e.target.value}))}>
+                    {[1,2,3,4].map(d => <option key={d} value={d}>Día {d}</option>)}
+                  </select>
+                </Field>
+                <Field label="Sala / Ubicación">
+                  <input className={inputCls} value={eventoForm.sala}
+                    placeholder="Ej: Lobby, Hall Principal"
+                    onChange={e => setEventoForm(p => ({...p, sala: e.target.value}))} />
+                </Field>
+                <Field label="Hora inicio">
+                  <input type="datetime-local" className={inputCls} value={eventoForm.horaInicio}
+                    onChange={e => setEventoForm(p => ({...p, horaInicio: e.target.value}))} />
+                </Field>
+                <Field label="Hora fin">
+                  <input type="datetime-local" className={inputCls} value={eventoForm.horaFin}
+                    onChange={e => setEventoForm(p => ({...p, horaFin: e.target.value}))} />
+                </Field>
+                <div className="md:col-span-2 flex gap-3 pt-2">
+                  <button type="submit" disabled={loading} className={btnPrimary}>
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    {editingEventoId ? "Guardar Cambios" : "Crear Espacio"}
+                  </button>
+                  <button type="button" onClick={() => setShowEventoForm(false)} className={btnGhost}>
+                    <X size={16} /> Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Lista por día */}
+          {[1,2,3,4].map(dia => {
+            const del_dia = eventos.filter(e => parseInt(e.dia) === dia);
+            if (del_dia.length === 0) return null;
+            return (
+              <div key={dia}>
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                  <Clock size={13} className="inline mr-1" /> Día {dia}
+                </h3>
+                <div className="space-y-2">
+                  {del_dia.sort((a,b) => (a.horaInicio||'') < (b.horaInicio||'') ? -1 : 1).map(ev => {
+                    const tipoLabel = TIPOS_EVENTO.find(t => t.v === ev.tipo)?.l || ev.tipo;
+                    return (
+                      <div key={ev.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className="text-2xl">{tipoLabel.split(' ')[0]}</span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900 dark:text-white truncate">{ev.titulo || ev.title}</p>
+                            <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-0.5">
+                              {ev.horaInicio && <span>🕐 {new Date(ev.horaInicio).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}{ev.horaFin ? ` – ${new Date(ev.horaFin).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}` : ''}</span>}
+                              {ev.sala && <span>📍 {ev.sala}</span>}
+                              <span className="capitalize text-purple-600 dark:text-purple-400">{tipoLabel.slice(3)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        {isAdmin && (
+                          <div className="flex gap-1 shrink-0">
+                            <button onClick={() => { setEditingEventoId(ev.id); setEventoForm({ titulo: ev.titulo||ev.title||'', dia: ev.dia||1, horaInicio: ev.horaInicio?String(ev.horaInicio).slice(0,16):'', horaFin: ev.horaFin?String(ev.horaFin).slice(0,16):'', tipo: ev.tipo||'registro', sala: ev.sala||'' }); setShowEventoForm(true); }}
+                              className="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
+                              <Edit2 size={14} />
+                            </button>
+                            <button onClick={async () => { if(confirm('¿Eliminar este espacio?')) { await API.delete(`/agenda/sessions/${ev.id}`); loadEventos(); } }}
+                              className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {eventos.length === 0 && !showEventoForm && (
+            <div className="text-center py-12 text-gray-400">
+              <Clock size={40} className="mx-auto mb-2 opacity-30" />
+              <p>No hay espacios logísticos registrados</p>
+              <p className="text-sm mt-1">Agrega el registro, recepción, breaks, etc.</p>
             </div>
           )}
         </div>

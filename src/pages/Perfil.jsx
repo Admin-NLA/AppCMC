@@ -138,13 +138,6 @@ END:VCARD`;
       });
 
       const res = await API.post("/upload/photo", { data: base64 });
-      //Info prueba
-      setUser(prev => ({
-        ...prev,
-        avatar_url: res.data.url
-      }));
-
-      console.log("✅ Foto subida:", res.data);
 
       // Actualizar formulario con URL de foto
       const newUrl = res.data.url;
