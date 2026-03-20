@@ -1,3 +1,4 @@
+// Last updated: 2026-03-20 18:32 — agenda routes
 import express from 'express';
 import { wordpressAPI } from '../config/wordpress.js';
 import pool from '../db.js';
@@ -323,6 +324,112 @@ router.post('/sessions', authRequired, async (req, res) => {
 // ============================================================
 // PUT /sessions/:id — Actualizar sesión (WP override o local)
 // ============================================================
+
+// Rutas específicas ANTES del parámetro genérico /:id
+router.post('/sessions/sync-wp', authRequired, async (req, res) => {
+  try {
+    if (req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
+      return res.status(403).json({ error: 'Sin permisos' });
+    }
+
+    const { sede, forzar_limpiar } = req.body;
+
+    // 1. Traer sesiones de WordPress
+    let wpSessions = [];
+    try {
+      const params = { per_page: 100, _fields: 'id,title,content,slug,class_list,acf' };
+      const wpResp = await wordpressAPI.get('/session', { params, timeout: 15000 });
+      wpSessions = wpResp.data || [];
+    } catch (wpErr) {
+      return res.status(502).json({ ok: false, error: 'No se pudo conectar con WordPress: ' + wpErr.message });
+    }
+
+    let reparadas = 0, limpias = 0;
+
+    for (const post of wpSessions) {
+      if (!post.id) continue;
+      const titulo = post.title?.rendered?.trim() || '';
+      if (!titulo) continue; // si WP tampoco tiene título, saltar
+
+      // Buscar override corrupto (sin título) para este wp_id
+      const corrupt = await pool.query(
+        `SELECT id FROM agenda
+         WHERE wp_id = $1 AND override = true
+           AND (title IS NULL OR title = '' OR title = 'Sin título')`,
+        [post.id]
+      );
+
+      if (corrupt.rows.length > 0) {
+        // Reparar: actualizar el título desde WP
+        const parsed = parseSessionClassList(post.class_list || []);
+        await pool.query(
+          `UPDATE agenda SET
+            title       = $1,
+            description = $2,
+            dia         = COALESCE($3, dia),
+            wp_synced_at = NOW()
+           WHERE wp_id = $4 AND override = true`,
+          [titulo, post.content?.rendered?.replace(/<[^>]+>/g,'').substring(0,500) || '',
+           post.acf?.dia || null, post.id]
+        );
+        reparadas++;
+      }
+
+      // Si forzar_limpiar=true, actualizar TODOS los overrides desde WP (útil para resync completo)
+      if (forzar_limpiar && sede) {
+        const parsed = parseSessionClassList(post.class_list || []);
+        if (parsed.sede === sede || !sede) {
+          await pool.query(`UPDATE agenda SET wp_synced_at = NOW() WHERE wp_id = $1`, [post.id]);
+          limpias++;
+        }
+      }
+    }
+
+    // Actualizar última sync en configuracion_evento
+    await pool.query(
+      `UPDATE configuracion_evento SET ultima_sync_wp = NOW() WHERE id IN (SELECT id FROM configuracion_evento LIMIT 1)`
+    ).catch(() => {}); // silencioso si no hay fila
+
+    res.json({
+      ok: true,
+      message: `Sincronización completada`,
+      reparadas,
+      total_wp: wpSessions.length,
+      ...(forzar_limpiar ? { actualizadas: limpias } : {}),
+    });
+  } catch (err) {
+    console.error('❌ POST /sessions/sync-wp:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================================
+// GET /sessions/sin-titulo — sesiones con título vacío
+// Para diagnóstico y recuperación
+// ============================================================
+router.get('/sessions/sin-titulo', authRequired, async (req, res) => {
+  try {
+    if (req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
+      return res.status(403).json({ error: 'Sin permisos' });
+    }
+    const r = await pool.query(`
+      SELECT id, wp_id, title, description, dia, sede, edicion, override, source, wp_synced_at
+      FROM agenda
+      WHERE (title IS NULL OR title = '' OR title = 'Sin título')
+        AND activo = true
+      ORDER BY created_at DESC
+    `);
+    res.json({ ok: true, sesiones: r.rows, total: r.rows.length });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================================
+// DELETE /sessions/:id — soft delete (marca inactiva, recuperable)
+// Si la sesión viene de WP, solo borra el override local.
+// La sesión original en WP NO se toca.
+// ============================================================
 router.put('/sessions/:id', authRequired, async (req, res) => {
   try {
     const { id } = req.params;
@@ -431,37 +538,7 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
 // ============================================================
 // DELETE /sessions/:id — Eliminar sesión
 // ============================================================
-router.delete('/sessions/:id', authRequired, async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    if (!isNaN(id) && parseInt(id) > 1000) {
-      await pool.query(
-        'UPDATE agenda SET activo = false WHERE wp_id = $1 AND override = true',
-        [parseInt(id)]
-      );
-      return res.json({ ok: true, message: 'Override eliminado. La sesión volverá a mostrar datos de WordPress' });
-    }
-
-    const check = await pool.query('SELECT id FROM agenda WHERE id = $1', [id]);
-    if (check.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: 'Sesión no encontrada' });
-    }
-
-    await pool.query('UPDATE agenda SET activo = false WHERE id = $1', [id]);
-
-    console.log('[Agenda] ✅ Sesión eliminada:', id);
-    res.json({ ok: true, message: 'Sesión eliminada exitosamente' });
-
-  } catch (err) {
-    console.error('❌ Error eliminando sesión:', err);
-    res.status(500).json({ ok: false, error: 'Error eliminando sesión', details: err.message });
-  }
-});
-
-// ============================================================
-// POST /favorite/:id — Agregar a favoritos
-// ============================================================
 router.post('/favorite/:id', authRequired, async (req, res) => {
   try {
     await pool.query(
@@ -533,6 +610,54 @@ router.post('/checkin', authRequired, async (req, res) => {
   } catch (err) {
     console.error('❌ Error en check-in:', err);
     res.status(500).json({ error: 'Error al registrar asistencia' });
+  }
+});
+
+
+// ============================================================
+// POST /sessions/sync-wp — Forzar re-sincronización con WP
+// Borra overrides corruptos (sin título) y los re-importa de WP
+// ============================================================
+
+
+router.delete('/sessions/:id', authRequired, async (req, res) => {
+  try {
+    if (req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
+      return res.status(403).json({ error: 'Solo admin puede eliminar sesiones' });
+    }
+    const { id } = req.params;
+
+    // Detectar si es ID de WP (numérico) o UUID
+    const esWpId = !isNaN(id) && parseInt(id) > 1000;
+
+    if (esWpId) {
+      // Sesión de WP: borrar solo el override local (si existe)
+      // La sesión original en WP se mantiene intacta
+      const r = await pool.query(
+        'DELETE FROM agenda WHERE wp_id = $1 AND override = true RETURNING id, title',
+        [parseInt(id)]
+      );
+      if (r.rows.length === 0) {
+        // No hay override — la sesión solo existe en WP, no se puede "borrar" desde la app
+        return res.json({
+          ok: true,
+          message: 'Esta sesión viene de WordPress y no tiene modificaciones locales. Se seguirá mostrando desde WP.',
+          wp_only: true,
+        });
+      }
+      return res.json({ ok: true, message: 'Override local eliminado. La sesión original de WP sigue disponible.', deleted: r.rows[0] });
+    }
+
+    // Sesión local (UUID) — soft delete
+    const r = await pool.query(
+      'UPDATE agenda SET activo = false WHERE id = $1 RETURNING id, title',
+      [id]
+    );
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
+
+    res.json({ ok: true, message: 'Sesión desactivada correctamente', deleted: r.rows[0] });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

@@ -29,6 +29,7 @@ import {
   Plus, Edit2, Trash2, Save, X, Bell, Users,
   FileUp, AlertCircle, CheckCircle, Loader2,
   Calendar, Mic, Building2, ExternalLink, ChevronDown,
+  RefreshCw, Wifi, WifiOff,
 } from "lucide-react";
 
 // ── Sedes del sistema ─────────────────────────────────────
@@ -85,6 +86,16 @@ export default function AdminPanel() {
 
   // ── Sesiones ────────────────────────────────────────────
   const [sessions,        setSessions]        = useState([]);
+  const [filtroSede,      setFiltroSede]      = useState("");
+  const [sinTitulo,       setSinTitulo]       = useState([]);
+  const [syncing,         setSyncing]         = useState(false);
+  const [wpConfig,        setWpConfig]        = useState(null);
+  const [wpStatus,        setWpStatus]        = useState(null); // null|'ok'|'error'
+  const [showWpPanel,     setShowWpPanel]     = useState(false);
+  const [wpForm,          setWpForm]          = useState({ wp_api_url:'', wp_username:'', wp_app_password:'' });
+  const [testingWp,       setTestingWp]       = useState(false);
+  const [wpTestResult,    setWpTestResult]    = useState(null);
+
   const [showSessionForm, setShowSessionForm] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState(null);
   const [sessionForm,     setSessionForm]     = useState(blankSession(sedeForm, edicionActiva));
@@ -148,6 +159,9 @@ export default function AdminPanel() {
   useEffect(() => {
     if (!userProfile) return;
     if (activeTab === "sesiones")       loadSessions();
+    loadWpConfig();
+    loadSinTitulo();
+
     if (activeTab === "speakers")       loadSpeakers();
     if (activeTab === "expositores")    loadExpositores();
     if (activeTab === "notificaciones") loadUsers();
@@ -161,7 +175,68 @@ export default function AdminPanel() {
   // ────────────────────────────────────────────────────────
   // SESIONES
   // ────────────────────────────────────────────────────────
+  const loadWpConfig = async () => {
+    try {
+      const r = await API.get('/config/wp-config');
+      setWpConfig(r.data);
+      setWpForm(f => ({
+        wp_api_url: r.data.wp_config?.wp_api_url || '',
+        wp_username: r.data.wp_config?.wp_username || '',
+        wp_app_password: '',
+      }));
+    } catch { /* silencioso */ }
+  };
+
+  const loadSinTitulo = async () => {
+    try {
+      const r = await API.get('/agenda/sessions/sin-titulo');
+      setSinTitulo(r.data.sesiones || []);
+    } catch { setSinTitulo([]); }
+  };
+
+  const handleSyncWp = async (forzar = false) => {
+    if (!confirm(forzar
+      ? '¿Re-sincronizar TODAS las sesiones desde WordPress? Esto recuperará las que quedaron sin título.'
+      : '¿Sincronizar sesiones desde WordPress ahora?'
+    )) return;
+    setSyncing(true);
+    try {
+      const r = await API.post('/agenda/sessions/sync-wp', {
+        sede: filtroSede || null,
+        forzar_limpiar: forzar,
+      });
+      flash(`✅ ${r.data.message} — ${r.data.reparadas} sesiones recuperadas`);
+      loadSessions();
+      loadSinTitulo();
+    } catch (e) {
+      flash(e.response?.data?.error || 'Error al sincronizar', true);
+    } finally { setSyncing(false); }
+  };
+
+  const handleTestWp = async () => {
+    setTestingWp(true); setWpTestResult(null);
+    try {
+      const r = await API.post('/config/test-wp', wpForm);
+      setWpTestResult(r.data);
+    } catch { setWpTestResult({ ok: false, mensaje: 'Error de conexión' }); }
+    finally { setTestingWp(false); }
+  };
+
+  const handleSaveWpConfig = async () => {
+    try {
+      await API.put('/config/wp-config', wpForm);
+      flash('Configuración de WordPress guardada');
+      setShowWpPanel(false);
+      loadWpConfig();
+    } catch (e) { flash(e.response?.data?.error || 'Error', true); }
+  };
+
+  const sessionsFiltradas = filtroSede
+    ? sessions.filter(s => (s.sede || '').toLowerCase() === filtroSede.toLowerCase())
+    : sessions;
+
   const loadSessions = async () => {
+
     try {
       setLoading(true);
       const res = await API.get("/agenda/sessions");
@@ -539,14 +614,114 @@ export default function AdminPanel() {
       ═══════════════════════════════════════════════════ */}
       {activeTab === "sesiones" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold dark:text-white">Sesiones ({sessions.length})</h2>
+          {/* Barra de control de sesiones */}
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-xl font-bold dark:text-white flex-1">Sesiones ({sessionsFiltradas.length}{filtroSede ? ` de ${sessions.length}` : ""})</h2>
+            {/* Filtro por sede */}
+            <select
+              value={filtroSede}
+              onChange={e => setFiltroSede(e.target.value)}
+              className="text-sm border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-1.5 bg-white dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">Todas las sedes</option>
+              {[...new Set(sessions.map(s => s.sede).filter(Boolean))].sort().map(s => (
+                <option key={s} value={s} className="capitalize">{s}</option>
+              ))}
+            </select>
+            {/* Botón sync WP */}
+            <button onClick={() => handleSyncWp(false)} disabled={syncing}
+              title="Sincronizar sesiones desde WordPress"
+              className="flex items-center gap-2 border border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-xl text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition font-semibold">
+              <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Sincronizando..." : "Sincronizar WP"}
+            </button>
+            {/* Config WP */}
+            {isAdmin && (
+              <button onClick={() => setShowWpPanel(p => !p)}
+                className="flex items-center gap-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                <Wifi size={15} /> Config WP
+              </button>
+            )}
             {isAdmin && (
               <button onClick={() => { resetSessionForm(); setShowSessionForm(true); }} className={btnPrimary}>
                 <Plus size={16} /> Nueva Sesión
               </button>
             )}
           </div>
+
+          {/* Panel configuración WordPress */}
+          {showWpPanel && (
+            <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-700 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-blue-800 dark:text-blue-300 flex items-center gap-2"><Wifi size={16} /> Conexión con WordPress</h3>
+                {wpConfig?.ultima_sync_wp && (
+                  <span className="text-xs text-gray-500">Última sync: {new Date(wpConfig.ultima_sync_wp).toLocaleString("es")}</span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-3">
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-1">URL de la API WordPress</label>
+                  <input className={inputCls} value={wpForm.wp_api_url}
+                    onChange={e => setWpForm(p=>({...p,wp_api_url:e.target.value}))}
+                    placeholder="https://mi-sitio.com/wp-json/wp/v2" />
+                  <p className="text-xs text-gray-400 mt-0.5">Cambia esto si migraste tu sitio WordPress a otro dominio.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-1">Usuario WordPress</label>
+                  <input className={inputCls} value={wpForm.wp_username}
+                    onChange={e => setWpForm(p=>({...p,wp_username:e.target.value}))}
+                    placeholder="admin" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-1">Contraseña de aplicación</label>
+                  <input type="password" className={inputCls} value={wpForm.wp_app_password}
+                    onChange={e => setWpForm(p=>({...p,wp_app_password:e.target.value}))}
+                    placeholder="xxxx xxxx xxxx xxxx (Application Password de WP)" />
+                </div>
+              </div>
+              {wpTestResult && (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm ${
+                  wpTestResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                }`}>
+                  {wpTestResult.ok ? <Wifi size={14}/> : <WifiOff size={14}/>}
+                  {wpTestResult.mensaje}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={handleTestWp} disabled={testingWp}
+                  className="flex items-center gap-2 border border-blue-400 text-blue-600 px-4 py-2 rounded-xl text-sm hover:bg-blue-50 disabled:opacity-50 font-semibold transition">
+                  <Wifi size={15}/> {testingWp ? "Probando..." : "Probar conexión"}
+                </button>
+                <button onClick={handleSaveWpConfig}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-700 font-semibold transition">
+                  <Save size={15}/> Guardar y aplicar
+                </button>
+                <button onClick={() => handleSyncWp(true)} disabled={syncing}
+                  className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-orange-600 disabled:opacity-50 font-semibold transition">
+                  <RefreshCw size={15} className={syncing?"animate-spin":""}/> Re-sync completo
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Sesiones sin título — panel de recuperación */}
+          {sinTitulo.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-600 rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                  ⚠️ {sinTitulo.length} sesión(es) sin título detectada(s)
+                </p>
+                <button onClick={() => handleSyncWp(true)} disabled={syncing}
+                  className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-lg hover:bg-amber-600 font-semibold transition">
+                  Recuperar desde WP
+                </button>
+              </div>
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Estas sesiones fueron editadas y perdieron su título. Usa "Recuperar desde WP" para restaurar los datos originales desde WordPress.
+              </p>
+            </div>
+          )}
+
 
           {showSessionForm && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl border-l-4 border-blue-500 border border-gray-200 dark:border-gray-700 p-6 space-y-4">
@@ -643,11 +818,22 @@ export default function AdminPanel() {
             </div>
           ) : (
             <div className="space-y-2">
-              {sessions.map(s => (
+              {sessionsFiltradas.map(s => (
                 <div key={s.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-start justify-between gap-4 hover:shadow-sm transition">
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap gap-2 items-center">
                       <span className="font-bold text-gray-900 dark:text-white truncate">{s.titulo || s.title || "(sin título)"}</span>
+                      {/* Indicador de origen */}
+                      {s.source === "wordpress" && !s.isOverride && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 font-semibold shrink-0">WP</span>
+                      )}
+                      {s.isOverride && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-semibold shrink-0">WP editada</span>
+                      )}
+                      {s.source === "local" && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-semibold shrink-0">Local</span>
+                      )}
+
                       <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 capitalize">{s.tipo}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 capitalize">{s.categoria}</span>
                       {!s.activo && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Inactiva</span>}

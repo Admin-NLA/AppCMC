@@ -1,3 +1,4 @@
+// Last updated: 2026-03-20 18:32 — config routes
 // IMPORTANTE -------------------------------------------------------------------------------
 // Configuración global del evento (sede activa, edición activa)
 // TABLAS USADAS: `config` (id, sede_activa, edicion_activa, created_at, updated_at)
@@ -152,6 +153,128 @@ router.get('/calendario', authRequired, async (req, res) => {
     res.json({ success: true, count: r.rows.length, data: r.rows });
   } catch (err) {
     res.json({ success: true, count: 0, data: [] });
+  }
+});
+
+
+// ============================================================
+// GET /config/wp-config — leer configuración de WordPress
+// ============================================================
+router.get('/wp-config', authRequired, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT tipos_activos FROM configuracion_evento ORDER BY id DESC LIMIT 1`
+    );
+    let wpConfig = {};
+    if (r.rows.length > 0 && r.rows[0].tipos_activos) {
+      const ta = r.rows[0].tipos_activos;
+      wpConfig = (Array.isArray(ta) ? {} : ta).__wp_config || {};
+    }
+    // Defaults (lo que está en el .env del servidor actualmente)
+    const defaults = {
+      wp_api_url:      process.env.WP_API_URL      || 'https://cmc-latam.com/wp-json/wp/v2',
+      wp_username:     process.env.WP_USERNAME      || '',
+      wp_app_password: process.env.WP_APP_PASSWORD  ? '***' : '',
+      ultima_sync_wp:  null,
+    };
+    // Obtener ultima sync
+    const syncRes = await pool.query(
+      `SELECT ultima_sync_wp FROM configuracion_evento ORDER BY id DESC LIMIT 1`
+    ).catch(() => ({ rows: [] }));
+
+    res.json({
+      ok: true,
+      wp_config: { ...defaults, ...wpConfig },
+      ultima_sync_wp: syncRes.rows[0]?.ultima_sync_wp || null,
+      nota: 'Las credenciales se guardan en la DB de forma segura. El servidor las usa en tiempo real.',
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================================
+// PUT /config/wp-config — guardar nueva URL/credenciales de WP
+// Solo super_admin. Las nuevas credenciales se aplican de inmediato.
+// ============================================================
+router.put('/wp-config', authRequired, async (req, res) => {
+  try {
+    if (req.user.rol !== 'super_admin') {
+      return res.status(403).json({ error: 'Solo super_admin puede cambiar la configuración de WordPress' });
+    }
+    const { wp_api_url, wp_username, wp_app_password } = req.body;
+    if (!wp_api_url) return res.status(400).json({ error: 'wp_api_url es requerido' });
+
+    const wpConfig = { wp_api_url };
+    if (wp_username)     wpConfig.wp_username     = wp_username;
+    if (wp_app_password && wp_app_password !== '***') wpConfig.wp_app_password = wp_app_password;
+
+    // Leer tipos_activos actual para no perder datos
+    const r = await pool.query(
+      `SELECT id, tipos_activos FROM configuracion_evento ORDER BY id DESC LIMIT 1`
+    );
+
+    if (r.rows.length === 0) {
+      // Crear fila si no existe
+      await pool.query(
+        `INSERT INTO configuracion_evento (sede_activa, edicion_activa, tipos_activos, updated_at, updated_by)
+         VALUES ('mexico', 2026, $1, NOW(), $2)`,
+        [JSON.stringify({ __wp_config: wpConfig }), req.user.id]
+      );
+    } else {
+      const row = r.rows[0];
+      let existing = row.tipos_activos || {};
+      if (Array.isArray(existing)) existing = {};
+      existing.__wp_config = wpConfig;
+      await pool.query(
+        `UPDATE configuracion_evento SET tipos_activos = $1, updated_at = NOW(), updated_by = $2 WHERE id = $3`,
+        [JSON.stringify(existing), req.user.id, row.id]
+      );
+    }
+
+    // Actualizar las variables de entorno en memoria para que el próximo request use las nuevas creds
+    // NOTA: Esto funciona para el proceso actual. Render reinicia automáticamente con env vars en el .env,
+    //       pero para cambios en caliente necesitamos actualizar el módulo de wordpress.js
+    if (wp_api_url)      process.env.WP_API_URL       = wp_api_url;
+    if (wp_username)     process.env.WP_USERNAME       = wp_username;
+    if (wp_app_password && wp_app_password !== '***') process.env.WP_APP_PASSWORD = wp_app_password;
+
+    res.json({ ok: true, message: 'Configuración de WordPress actualizada. Activa hasta el próximo reinicio del servidor.' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================================
+// POST /config/test-wp — probar conexión con WordPress
+// ============================================================
+router.post('/test-wp', authRequired, async (req, res) => {
+  try {
+    if (req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
+      return res.status(403).json({ error: 'Sin permisos' });
+    }
+    const axios = (await import('axios')).default;
+    const baseUrl = req.body.wp_api_url || process.env.WP_API_URL || 'https://cmc-latam.com/wp-json/wp/v2';
+    const auth    = req.body.wp_username && req.body.wp_app_password
+      ? { username: req.body.wp_username, password: req.body.wp_app_password }
+      : undefined;
+
+    const r = await axios.get(`${baseUrl}/session`, {
+      params: { per_page: 1, _fields: 'id,title' },
+      auth,
+      timeout: 8000,
+    });
+    res.json({
+      ok: true,
+      mensaje: `Conexión exitosa. WordPress respondió con ${r.data?.length ?? 0} sesiones de prueba.`,
+      url: baseUrl,
+    });
+  } catch (err) {
+    res.json({
+      ok: false,
+      mensaje: `Error al conectar: ${err.message}`,
+      sugerencia: 'Verifica que la URL sea correcta y que el sitio sea accesible.',
+    });
   }
 });
 

@@ -58,10 +58,13 @@ export default function Layout() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState({});
   const toggleGroup = (group) => {
-    setOpenGroups(prev => ({
-      ...prev,
-      [group]: !prev[group]
-    }));
+    // Solo un grupo abierto a la vez — cerrar los demás
+    setOpenGroups(prev => {
+      const estaAbierto = prev[group];
+      // Cerrar todos y abrir solo el clickeado (si estaba cerrado)
+      const reset = Object.fromEntries(Object.keys(prev).map(k => [k, false]));
+      return { ...reset, [group]: !estaAbierto };
+    });
   };
 
   const { unreadCount } = useNotificaciones();
