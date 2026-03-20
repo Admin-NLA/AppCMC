@@ -86,11 +86,18 @@ router.get("/", authRequired, async (req, res) => {
            AND nv.user_id = $1
        WHERE n.activa = true
          AND (
-               'todos' = ANY(n.tipo_usuario)
-            OR $2 = ANY(n.tipo_usuario)
-            OR $3 = ANY(n.tipo_usuario)
+               -- Notificaciones broadcast (por tipo de usuario)
+               (
+                 (
+                   'todos' = ANY(n.tipo_usuario)
+                OR $2 = ANY(n.tipo_usuario)
+                OR $3 = ANY(n.tipo_usuario)
+                 )
+                 AND (n.sede IS NULL OR n.sede = 'todos' OR n.sede = 'ALL' OR n.sede = $4)
+               )
+               -- Notificaciones dirigidas directamente a este usuario (ej: citas networking)
+               OR (n.meta->>'user_destino' = $1::text)
          )
-         AND (n.sede = 'todos' OR n.sede = $4)
        ORDER BY n.created_at DESC
        LIMIT 100`,
       [user.id, tipoPase, rolSistema, sedeUsuario]

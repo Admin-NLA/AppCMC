@@ -82,23 +82,30 @@ export default function Layout() {
   // Branding state — se aplica via style props (sobreescribe Tailwind hardcodeado)
   const [branding, setBranding] = useState({});
 
+  const loadBranding = async () => {
+    try {
+      const sede = userProfile?.sede || 'mexico';
+      const r = await API.get(`/branding/${sede}`).catch(() => null);
+      if (!r?.data?.branding) return;
+      const b = r.data.branding;
+      setBranding(b);
+      const root = document.documentElement;
+      if (b.colorPrimario)   root.style.setProperty('--color-primary',   b.colorPrimario);
+      if (b.colorSecundario) root.style.setProperty('--color-secondary',  b.colorSecundario);
+      if (b.colorBoton)      root.style.setProperty('--color-btn',        b.colorBoton);
+    } catch { /* silencioso */ }
+  };
+
   useEffect(() => {
-    const loadBranding = async () => {
-      try {
-        const sede = userProfile?.sede || 'mexico';
-        const r = await API.get(`/branding/${sede}`).catch(() => null);
-        if (!r?.data?.branding) return;
-        const b = r.data.branding;
-        setBranding(b);
-        // CSS variables para componentes que usen var()
-        const root = document.documentElement;
-        if (b.colorPrimario)   root.style.setProperty('--color-primary',   b.colorPrimario);
-        if (b.colorSecundario) root.style.setProperty('--color-secondary',  b.colorSecundario);
-        if (b.colorBoton)      root.style.setProperty('--color-btn',        b.colorBoton);
-      } catch { /* silencioso */ }
-    };
     if (userProfile) loadBranding();
   }, [userProfile?.sede]);
+
+  // Recargar branding cuando BrandingPanel guarda cambios
+  useEffect(() => {
+    const handler = () => { if (userProfile) loadBranding(); };
+    window.addEventListener('branding-updated', handler);
+    return () => window.removeEventListener('branding-updated', handler);
+  }, [userProfile]);
 
   const toggleDark = () => {
     const newMode = !dark;

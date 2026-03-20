@@ -65,15 +65,15 @@ const DEFAULTS = {
 
 // ── Helper: leer branding del jsonb ─────────────────────
 async function readBranding() {
-  const r = await pool.query(
-    `SELECT tipos_activos FROM configuracion_evento ORDER BY id DESC LIMIT 1`
-  );
-  if (r.rows.length === 0) return {};
-  const raw = r.rows[0].tipos_activos;
-  if (!raw) return {};
-  // tipos_activos puede ser array JSON o objeto
-  if (Array.isArray(raw)) return {};
-  return raw.__branding || {};
+  try {
+    const r = await pool.query(
+      `SELECT tipos_activos FROM configuracion_evento ORDER BY id DESC LIMIT 1`
+    );
+    if (r.rows.length === 0) return {};
+    const raw = r.rows[0].tipos_activos;
+    if (!raw || Array.isArray(raw)) return {};
+    return raw.__branding || {};
+  } catch { return {}; }
 }
 
 // ── Helper: escribir branding en el jsonb ───────────────

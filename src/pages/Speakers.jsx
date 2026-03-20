@@ -660,6 +660,30 @@ function SpeakerModal({ speaker, onClose, userRole }) {
             )}
           </div>
 
+          {/* Sesiones del speaker */}
+          {speaker.sesiones && speaker.sesiones.length > 0 && (
+            <div className="border-t pt-4">
+              <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <span>📅</span> Sesiones en el evento
+              </h4>
+              <div className="space-y-2">
+                {speaker.sesiones.map((s, i) => (
+                  <div key={s.id || i} className="bg-blue-50 rounded-xl p-3">
+                    <p className="font-semibold text-gray-900 text-sm">{s.titulo || s.title}</p>
+                    <div className="flex flex-wrap gap-2 mt-1 text-xs text-gray-500">
+                      {s.dia && <span>📆 Día {s.dia}</span>}
+                      {s.horaInicio && (
+                        <span>🕐 {new Date(s.horaInicio).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}</span>
+                      )}
+                      {s.sala && <span>📍 {s.sala}</span>}
+                      {s.sede && <span className="capitalize">🌎 {s.sede}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Información de fuente */}
           <div className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 border border-gray-200">
             {speaker.source === "wordpress" && (

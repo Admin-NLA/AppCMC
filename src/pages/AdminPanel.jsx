@@ -923,8 +923,21 @@ export default function AdminPanel() {
       ═══════════════════════════════════════════════════ */}
       {activeTab === "speakers" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold dark:text-white">Speakers ({speakers.length})</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-xl font-bold dark:text-white flex-1">Speakers ({speakers.length})</h2>
+            <button onClick={async () => {
+              if (!confirm('¿Sincronizar speakers desde WordPress? Esto importará todos los speakers del sitio a la DB local.')) return;
+              setLoading(true);
+              try {
+                const r = await API.post('/speakers/sync-from-wp');
+                flash(`✅ ${r.data.message}`);
+                loadSpeakers();
+              } catch(e) { flash(e.response?.data?.error || 'Error al sincronizar', true); }
+              finally { setLoading(false); }
+            }}
+              className="flex items-center gap-2 border border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-xl text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 font-semibold transition">
+              <RefreshCw size={14} /> Sync desde WP
+            </button>
             <button onClick={() => { resetSpeakerForm(); setShowSpeakerForm(true); }} className={btnPrimary}>
               <Plus size={16} /> Nuevo Speaker
             </button>
