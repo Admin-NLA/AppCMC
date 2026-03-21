@@ -82,30 +82,23 @@ export default function Layout() {
   // Branding state — se aplica via style props (sobreescribe Tailwind hardcodeado)
   const [branding, setBranding] = useState({});
 
-  const loadBranding = async () => {
-    try {
-      const sede = userProfile?.sede || 'mexico';
-      const r = await API.get(`/branding/${sede}`).catch(() => null);
-      if (!r?.data?.branding) return;
-      const b = r.data.branding;
-      setBranding(b);
-      const root = document.documentElement;
-      if (b.colorPrimario)   root.style.setProperty('--color-primary',   b.colorPrimario);
-      if (b.colorSecundario) root.style.setProperty('--color-secondary',  b.colorSecundario);
-      if (b.colorBoton)      root.style.setProperty('--color-btn',        b.colorBoton);
-    } catch { /* silencioso */ }
-  };
-
   useEffect(() => {
+    const loadBranding = async () => {
+      try {
+        const sede = userProfile?.sede || 'mexico';
+        const r = await API.get(`/branding/${sede}`).catch(() => null);
+        if (!r?.data?.branding) return;
+        const b = r.data.branding;
+        setBranding(b);
+        // CSS variables para componentes que usen var()
+        const root = document.documentElement;
+        if (b.colorPrimario)   root.style.setProperty('--color-primary',   b.colorPrimario);
+        if (b.colorSecundario) root.style.setProperty('--color-secondary',  b.colorSecundario);
+        if (b.colorBoton)      root.style.setProperty('--color-btn',        b.colorBoton);
+      } catch { /* silencioso */ }
+    };
     if (userProfile) loadBranding();
   }, [userProfile?.sede]);
-
-  // Recargar branding cuando BrandingPanel guarda cambios
-  useEffect(() => {
-    const handler = () => { if (userProfile) loadBranding(); };
-    window.addEventListener('branding-updated', handler);
-    return () => window.removeEventListener('branding-updated', handler);
-  }, [userProfile]);
 
   const toggleDark = () => {
     const newMode = !dark;
@@ -194,13 +187,26 @@ export default function Layout() {
           ${open ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
         style={{ backgroundColor: branding.colorMenu || '#1e293b' }}
       >
-        <div className="p-5 border-b border-white/10 text-xl font-bold text-white flex items-center gap-2">
-          <img src="/icons/Logo_CMC.svg" className="w-12.5 h-12 object-contain" />
-          <span> App</span>
+        <div className="p-4 border-b border-white/10 flex items-center gap-2 min-h-[68px]">
+          {branding.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt={branding.logoAlt || "CMC"}
+              className="h-10 max-w-[160px] object-contain"
+              onError={e => { e.target.style.display='none'; }}
+            />
+          ) : (
+            <>
+              <img src="/icons/Logo_CMC.svg" className="w-10 h-10 object-contain" />
+              <span className="text-xl font-bold" style={{ color: branding.colorTextoMenu || '#ffffff' }}>
+                {branding.appNombre || 'CMC App'}
+              </span>
+            </>
+          )}
         </div>
 
-        <nav className="px-4 py-4 space-y-2">
-          <div className="text-xs text-white/50 uppercase mb-2 px-2">
+        <nav className="px-4 py-4 space-y-2" style={{ color: branding.colorTextoMenu || "#ffffff" }}>
+          <div className="text-xs uppercase mb-2 px-2 opacity-50">
             Menú
             {/* ITEMS DIRECTOS (sin dropdown) */}
             {directItems.map((item, index) => (
