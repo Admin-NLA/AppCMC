@@ -136,6 +136,7 @@ router.get('/', async (req, res) => {
           activo,
           es_destacado as destacado,
           source,
+          wp_id,
           wp_slug as slug
         FROM speakers
         WHERE activo = true
@@ -183,9 +184,12 @@ router.get('/', async (req, res) => {
     // ========================================================
     // COMBINAR AMBAS FUENTES
     // ========================================================
-    let allSpeakersData = [...wpSpeakers, ...localSpeakers];
+    // Deduplicar: priorizar speakers locales (UUID) sobre duplicados de WP
+    const localWpIds = new Set(localSpeakers.map(s => s.wp_id).filter(Boolean));
+    const wpSpeakersUnicos = wpSpeakers.filter(s => !localWpIds.has(s.wp_id));
+    let allSpeakersData = [...localSpeakers, ...wpSpeakersUnicos];
 
-    console.log(`[Speakers] Total antes de filtros: ${allSpeakersData.length}`);
+    console.log(`[Speakers] Local: ${localSpeakers.length}, WP únicos: ${wpSpeakersUnicos.length}, Total: ${allSpeakersData.length}`);
 
     // ========================================================
     // APLICAR FILTROS
@@ -313,6 +317,83 @@ router.get('/:id', async (req, res) => {
 // ========================================================
 // POST /speakers - Crear speaker (solo autenticados)
 // ========================================================
+
+// ============================================================
+// POST /speakers/sync-from-wp
+// Sincroniza speakers de WordPress a la tabla local
+// ============================================================
+router.post('/sync-from-wp', authRequired, async (req, res) => {
+  try {
+    if (!['super_admin','staff'].includes(req.user.rol)) {
+      return res.status(403).json({ error: 'Sin permisos' });
+    }
+
+    let wpSpeakers = [];
+    let page = 1, hasMore = true;
+    while (hasMore) {
+      const r = await wordpressAPI.get('/team-member', {
+        params: { page, per_page: 100, _fields: 'id,title,content,slug,acf,class_list' }
+      }).catch(() => null);
+      if (!r?.data?.length) { hasMore = false; break; }
+      wpSpeakers = wpSpeakers.concat(r.data);
+      if (r.data.length < 100) hasMore = false;
+      page++;
+    }
+
+    let insertados = 0, actualizados = 0;
+    for (const post of wpSpeakers) {
+      const nombre = post.title?.rendered?.trim() || '';
+      if (!nombre) continue;
+      const { sede, edicion } = parseSpeakerClassList(post.class_list || []);
+      const cargo    = post.acf?.cargo    || post.acf?.position || '';
+      const empresa  = post.acf?.empresa  || post.acf?.company  || '';
+      const bio      = post.content?.rendered?.replace(/<[^>]+>/g,'').substring(0,1000) || '';
+      const foto     = post.acf?.photo_url || '';
+      const linkedin = post.acf?.linkedin_url || '';
+      const twitter  = post.acf?.twitter_url  || '';
+      const website  = post.acf?.website_url  || '';
+      const email    = post.acf?.email || '';
+
+      const existing = await pool.query(
+        'SELECT id FROM speakers WHERE wp_id = $1', [post.id]
+      );
+      if (existing.rows.length > 0) {
+        await pool.query(
+          `UPDATE speakers SET
+            nombre=$1, bio=$2, cargo=$3, company=$4, photo_url=$5,
+            linkedin_url=$6, twitter_url=$7, website_url=$8, email=$9,
+            sede=$10, edicion=$11, wp_slug=$12, wp_synced_at=NOW()
+           WHERE wp_id=$13`,
+          [nombre,bio,cargo,empresa,foto,linkedin,twitter,website,email,
+           sede,edicion,post.slug,post.id]
+        );
+        actualizados++;
+      } else {
+        await pool.query(
+          `INSERT INTO speakers
+            (id,nombre,bio,cargo,company,photo_url,linkedin_url,twitter_url,
+             website_url,email,sede,edicion,wp_id,wp_slug,wp_synced_at,source,activo,es_destacado)
+           VALUES
+            (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),'wordpress',true,false)`,
+          [nombre,bio,cargo,empresa,foto,linkedin,twitter,website,email,
+           sede,edicion,post.id,post.slug]
+        );
+        insertados++;
+      }
+    }
+
+    res.json({
+      ok: true,
+      message: `Sync completado: ${insertados} nuevos, ${actualizados} actualizados`,
+      total_wp: wpSpeakers.length, insertados, actualizados
+    });
+  } catch (err) {
+    console.error('❌ sync-from-wp:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+
 router.post('/', authRequired, async (req, res) => {
   try {
     const {
@@ -425,10 +506,24 @@ router.put('/:id', authRequired, async (req, res) => {
 
     console.log('✏️ Actualizando speaker:', id);
 
-    // Verificar que existe y es local
+    // Si el id es numérico (wp_id), buscar el UUID real en la tabla
+    let realId = id;
+    const isNumeric = /^\d+$/.test(id);
+    if (isNumeric) {
+      const byWpId = await pool.query(
+        'SELECT id FROM speakers WHERE wp_id = $1 LIMIT 1', [parseInt(id)]
+      );
+      if (byWpId.rows.length === 0) {
+        return res.status(404).json({ error: `Speaker con wp_id ${id} no encontrado en tabla local. Ejecuta primero "Sync desde WP".` });
+      }
+      realId = byWpId.rows[0].id;
+      console.log(`[Speakers] Resolviendo wp_id ${id} → UUID ${realId}`);
+    }
+
+    // Verificar que existe
     const check = await pool.query(
       'SELECT id, source FROM speakers WHERE id = $1',
-      [id]
+      [realId]
     );
 
     if (check.rows.length === 0) {
@@ -438,6 +533,7 @@ router.put('/:id', authRequired, async (req, res) => {
     // Permitir editar speakers de WP sincronizados (al editar se marcan como 'wordpress_local')
     const result = await pool.query(
       `UPDATE speakers SET
+        source = CASE WHEN source = 'wordpress' THEN 'wordpress_local' ELSE source END,
         nombre = COALESCE($1, nombre),
         bio = COALESCE($2, bio),
         cargo = COALESCE($3, cargo),
