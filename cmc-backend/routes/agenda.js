@@ -29,14 +29,14 @@ function convertirHoraATimestamp(hora) {
 async function getUUIDFromWpId(speakerId) {
   if (!speakerId) return null;
   try {
-    // Si ya es un UUID válido, devolverlo directamente (verificar que existe)
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(speakerId);
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(speakerId));
     if (isUUID) {
-      const r = await pool.query('SELECT id FROM speakers WHERE id = $1 LIMIT 1', [speakerId]);
-      return r.rows[0]?.id ?? speakerId; // si no está en tabla local, devolver el UUID tal cual
+      // Si es UUID: devolver directamente (existe o no en la tabla, el UUID es válido)
+      // La agenda.speakers[] acepta cualquier UUID — no necesita estar en la tabla speakers
+      return speakerId;
     }
-    // Si es número, buscar por wp_id
-    const r = await pool.query('SELECT id FROM speakers WHERE wp_id = $1 LIMIT 1', [speakerId]);
+    // Si es número: buscar el UUID correspondiente en la tabla por wp_id
+    const r = await pool.query('SELECT id FROM speakers WHERE wp_id = $1 LIMIT 1', [parseInt(speakerId)]);
     return r.rows[0]?.id ?? null;
   } catch {
     return null;
@@ -347,19 +347,25 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
       return null;
     })();
 
-    // speakerId = "" → limpiar speakers; speakerId = valor → resolver UUID
-    // speakerId ausente/undefined → no modificar (COALESCE mantiene el valor actual)
+    // speakerId = ""    → limpiar (speakersArray=[])
+    // speakerId = UUID   → guardar ese UUID (speakersArray=[uuid])
+    // speakerId ausente  → no tocar (speakersArray=undefined)
+    // uuid no encontrado → no tocar (speakersArray=undefined, mejor que borrar)
     let speakersArray;
     const speakerIdEnviado = 'speakerId' in req.body;
     if (speakerIdEnviado) {
       if (!speakerId || speakerId === '' || speakerId === 'null') {
-        speakersArray = []; // limpiar explícitamente
+        speakersArray = [];  // el usuario quitó el speaker explícitamente
       } else {
         const uuid = await getUUIDFromWpId(String(speakerId));
-        speakersArray = uuid ? [uuid] : [];
+        if (uuid) {
+          speakersArray = [uuid];  // ✓ speaker encontrado
+        }
+        // uuid===null → speaker no existe en tabla local → speakersArray queda undefined
+        // → la DB no lo modifica (evita borrar el valor existente)
+        console.log(`[Agenda PUT] speakerId=${speakerId} → uuid=${uuid} → speakersArray=${JSON.stringify(speakersArray)}`);
       }
     }
-    // Si speakerId no vino en el body, speakersArray queda undefined → no modificar
 
     // CASO 1: Sesión de WordPress (ID numérico grande)
     if (!isNaN(id) && parseInt(id) > 1000) {
