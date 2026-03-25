@@ -20,6 +20,9 @@ export default function Speakers() {
   const [filteredSpeakers, setFilteredSpeakers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState(null);
+  const [speakerSesiones, setSpeakerSesiones] = useState([]);
+  const [loadingSesiones, setLoadingSesiones] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [accessDenied, setAccessDenied] = useState(false);
@@ -346,7 +349,26 @@ export default function Speakers() {
             <SpeakerCard
               key={speaker.id}
               speaker={speaker}
-              onViewDetails={() => setSelectedSpeaker(speaker)}
+              onViewDetails={async () => {
+                setSelectedSpeaker(speaker);
+                setSpeakerSesiones([]);
+                if (speaker.sesiones?.length > 0) {
+                  setSpeakerSesiones(speaker.sesiones);
+                } else {
+                  // Para speakers de WP sin sesiones precargadas, buscar en agenda
+                  setLoadingSesiones(true);
+                  try {
+                    const r = await API.get('/agenda/sessions');
+                    const all = r.data?.sessions || [];
+                    const mias = all.filter(s =>
+                      s.speakerId === speaker.id ||
+                      s.speakerId === speaker.wp_id?.toString()
+                    );
+                    setSpeakerSesiones(mias);
+                  } catch { setSpeakerSesiones([]); }
+                  finally { setLoadingSesiones(false); }
+                }
+              }}
               userRole={userProfile?.rol}
             />
           ))
@@ -661,7 +683,13 @@ function SpeakerModal({ speaker, onClose, userRole }) {
           </div>
 
           {/* Sesiones del speaker */}
-          {speaker.sesiones && speaker.sesiones.length > 0 && (
+          {loadingSesiones && (
+            <div className="border-t pt-4 text-sm text-gray-400 flex items-center gap-2">
+              <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+              Cargando sesiones...
+            </div>
+          )}
+          {!loadingSesiones && speaker.sesiones && speaker.sesiones.length > 0 && (
             <div className="border-t pt-4">
               <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                 <span>📅</span> Sesiones en el evento

@@ -365,12 +365,13 @@ export default function BrandingPanel() {
                     <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Paletas rápidas</p>
                     <div className="flex flex-wrap gap-2">
                       {[
-                        { label:"CMC Original", colors:{ colorPrimario:"#1a3a5c", colorSecundario:"#e8a020", colorFondo:"#0a1628", colorMenu:"#0d2240" } },
-                        { label:"Azul Noche",   colors:{ colorPrimario:"#1e3a8a", colorSecundario:"#60a5fa", colorFondo:"#0f172a", colorMenu:"#1e3a8a" } },
-                        { label:"Verde Bosque", colors:{ colorPrimario:"#14532d", colorSecundario:"#4ade80", colorFondo:"#052e16", colorMenu:"#166534" } },
-                        { label:"Rojo Corp",    colors:{ colorPrimario:"#ffffff", colorSecundario:"#f87171", colorFondo:"#450a0a", colorMenu:"#991b1b" } },
-                        { label:"Morado Tech",  colors:{ colorPrimario:"#3b0764", colorSecundario:"#a855f7", colorFondo:"#1a0332", colorMenu:"#581c87" } },
-                        { label:"Gris Oscuro",  colors:{ colorPrimario:"#1f2937", colorSecundario:"#6b7280", colorFondo:"#111827", colorMenu:"#374151" } },
+                        { label:"CMC Original", colors:{ colorPrimario:"#1a3a5c", colorSecundario:"#e8a020", colorFondo:"#0a1628", colorMenu:"#0d2240", colorTextoMenu:"#ffffff" } },
+                        { label:"Azul Noche",   colors:{ colorPrimario:"#1e3a8a", colorSecundario:"#60a5fa", colorFondo:"#0f172a", colorMenu:"#1e3a8a", colorTextoMenu:"#ffffff" } },
+                        { label:"Verde Bosque", colors:{ colorPrimario:"#14532d", colorSecundario:"#4ade80", colorFondo:"#052e16", colorMenu:"#166534", colorTextoMenu:"#ffffff" } },
+                        { label:"Rojo Corp",    colors:{ colorPrimario:"#ffffff", colorSecundario:"#f87171", colorFondo:"#450a0a", colorMenu:"#991b1b", colorTextoMenu:"#ffffff" } },
+                        { label:"Morado Tech",  colors:{ colorPrimario:"#3b0764", colorSecundario:"#a855f7", colorFondo:"#1a0332", colorMenu:"#581c87", colorTextoMenu:"#ffffff" } },
+                        { label:"Gris Oscuro",  colors:{ colorPrimario:"#1f2937", colorSecundario:"#6b7280", colorFondo:"#111827", colorMenu:"#374151", colorTextoMenu:"#ffffff" } },
+                        { label:"Fondo Blanco", colors:{ colorPrimario:"#2563eb", colorSecundario:"#f59e0b", colorFondo:"#f8fafc", colorMenu:"#ffffff",  colorTextoMenu:"#1e293b" } },
                       ].map(preset => (
                         <button key={preset.label}
                           onClick={() => setForm(p => ({ ...p, ...preset.colors }))}

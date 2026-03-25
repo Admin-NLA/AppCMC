@@ -112,6 +112,17 @@ async function cargarSesionesLocales(sede, edicion) {
     WHERE wp_id IS NOT NULL AND override = true AND activo = true
   `);
 
+  // Resolver nombres de speakers para overrides
+  const overrideSpeakerIds = overridesResult.rows.map(o => o.speakers?.[0]).filter(Boolean);
+  const speakerNombresMap = {};
+  if (overrideSpeakerIds.length > 0) {
+    const spRes = await pool.query(
+      `SELECT id, nombre FROM speakers WHERE id = ANY($1::uuid[])`,
+      [overrideSpeakerIds]
+    ).catch(() => ({ rows: [] }));
+    spRes.rows.forEach(sp => { speakerNombresMap[sp.id] = sp.nombre; });
+  }
+
   const overridesMap = {};
   overridesResult.rows.forEach((o) => {
     overridesMap[o.wp_id] = {
@@ -128,7 +139,7 @@ async function cargarSesionesLocales(sede, edicion) {
       sede: o.sede_final || o.sede,
       edicion: o.edicion_final || o.edicion,
       speakerId: o.speakers?.[0] ?? null,
-      speakerNombre: '',
+      speakerNombre: speakerNombresMap[o.speakers?.[0]] || '',
       qrSala: o.qrSala,
       slug: o.slug,
       source: 'wordpress-edited',
@@ -161,6 +172,17 @@ async function cargarSesionesLocales(sede, edicion) {
     ORDER BY start_at ASC NULLS LAST
   `);
 
+  // Añadir speakers de sesiones locales al mapa (puede haber nuevos no en overrides)
+  const localSpeakerIds = localResult.rows.map(s => s.speakers?.[0]).filter(Boolean);
+  const newIds = localSpeakerIds.filter(id => !speakerNombresMap[id]);
+  if (newIds.length > 0) {
+    const spRes2 = await pool.query(
+      `SELECT id, nombre FROM speakers WHERE id = ANY($1::uuid[])`,
+      [newIds]
+    ).catch(() => ({ rows: [] }));
+    spRes2.rows.forEach(sp => { speakerNombresMap[sp.id] = sp.nombre; });
+  }
+
   const localSessions = localResult.rows.map((s) => ({
     id: s.id,
     titulo: s.titulo,
@@ -174,7 +196,7 @@ async function cargarSesionesLocales(sede, edicion) {
     sede: s.sede_final || s.sede,
     edicion: s.edicion_final || s.edicion,
     speakerId: s.speakers?.[0] ?? null,
-    speakerNombre: '',
+    speakerNombre: speakerNombresMap[s.speakers?.[0]] || '',
     qrSala: s.qrSala,
     slug: s.slug,
     source: 'local',

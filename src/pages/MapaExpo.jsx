@@ -1,3 +1,4 @@
+import React from 'react';
 // src/pages/MapaExpo.jsx
 // Mapa de exposición CMC
 //
@@ -37,6 +38,7 @@ export default function MapaExpo() {
   const [editingUrl,   setEditingUrl]   = useState(false);
   const [newUrl,       setNewUrl]       = useState("");
   const [saving,       setSaving]       = useState(false);
+  const [imgError,     setImgError]     = useState(false);
   const [saveMsg,      setSaveMsg]      = useState(null);
 
   const imgRef = useRef(null);
@@ -206,45 +208,110 @@ export default function MapaExpo() {
 
             {/* Imagen */}
             <div className="overflow-auto bg-gray-50 dark:bg-gray-900" style={{ maxHeight: "520px" }}>
-              {mapa?.url_publica ? (
-                <div className="relative inline-block min-w-full" style={{ transformOrigin: "top left" }}>
-                  <img
-                    ref={imgRef}
-                    src={mapa.url_publica}
-                    alt="Mapa de exposición CMC"
-                    style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.2s" }}
-                    className="block max-w-none"
-                    onError={e => { e.target.style.display="none"; }}
-                  />
-                  {/* Pins de expositores con coordenadas */}
-                  {selected && selected.posicion_x && selected.posicion_y && (
-                    <div
-                      className="absolute w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg -translate-x-1/2 -translate-y-1/2 flex items-center justify-center animate-bounce"
-                      style={{
-                        left:  `${selected.posicion_x}%`,
-                        top:   `${selected.posicion_y}%`,
-                        transform: `scale(${1/zoom}) translate(-50%, -50%)`,
-                      }}
-                      title={selected.nombre}
-                    >
-                      <span className="text-white text-xs font-bold">★</span>
+              {/* Mapa con imagen o generado por coordenadas */}
+              {(() => {
+                const expoConCoordenadas = expositores.filter(e => e.posicion_x != null && e.posicion_y != null);
+                const mostrarGenerado = !mapa?.url_publica || imgError;
+
+                if (!mostrarGenerado) {
+                  // Imagen real del mapa
+                  return (
+                    <div className="relative inline-block min-w-full" style={{ transformOrigin: "top left" }}>
+                      <img
+                        ref={imgRef}
+                        src={mapa.url_publica}
+                        alt="Mapa de exposición CMC"
+                        style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.2s" }}
+                        className="block max-w-none"
+                        onError={() => setImgError(true)}
+                      />
+                      {selected && selected.posicion_x != null && selected.posicion_y != null && (
+                        <div
+                          className="absolute w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center animate-bounce z-10"
+                          style={{ left: `${selected.posicion_x}%`, top: `${selected.posicion_y}%`, transform: `translate(-50%, -50%) scale(${1/zoom})` }}
+                          title={selected.nombre}
+                        >
+                          <span className="text-white text-xs font-bold">★</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <Map size={56} className="mb-3 opacity-30" />
-                  <p className="font-semibold">Sin mapa configurado</p>
-                  {esAdmin && (
-                    <p className="text-sm mt-1">
-                      Usa el botón <strong>"Cambiar imagen del mapa"</strong> para subir el plano del salón.
-                    </p>
-                  )}
-                  {!esAdmin && (
-                    <p className="text-sm mt-1">El equipo del CMC publicará el mapa próximamente.</p>
-                  )}
-                </div>
-              )}
+                  );
+                }
+
+                // Mapa generado con coordenadas
+                if (expoConCoordenadas.length > 0) {
+                  return (
+                    <div
+                      className="relative w-full bg-gray-100 dark:bg-gray-900 rounded-xl overflow-hidden"
+                      style={{ minHeight: 420, transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.2s" }}
+                    >
+                      {/* Grid del salón */}
+                      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"
+                        className="absolute inset-0 opacity-10 pointer-events-none">
+                        {Array.from({length:10}, (_,i) => (
+                          <React.Fragment key={i}>
+                            <line x1={i*10} y1="0" x2={i*10} y2="100" stroke="#666" strokeWidth="0.3"/>
+                            <line x1="0" y1={i*10} x2="100" y2={i*10} stroke="#666" strokeWidth="0.3"/>
+                          </React.Fragment>
+                        ))}
+                      </svg>
+                      {/* Stands posicionados */}
+                      {expositores.filter(e => e.posicion_x != null && e.posicion_y != null).map(expo => {
+                        const isSelected = selected?.id === expo.id;
+                        return (
+                          <div
+                            key={expo.id}
+                            onClick={() => setSelected(isSelected ? null : expo)}
+                            title={`${expo.nombre}${expo.stand ? ' · Stand '+expo.stand : ''}`}
+                            className={`absolute cursor-pointer transition-all duration-200 flex flex-col items-center justify-center rounded-lg border-2 text-center
+                              ${isSelected
+                                ? 'border-blue-500 bg-blue-100 dark:bg-blue-900 shadow-lg z-20 scale-110'
+                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-blue-400 hover:shadow-md z-10'}`}
+                            style={{
+                              left: `${expo.posicion_x}%`,
+                              top: `${expo.posicion_y}%`,
+                              width: '9%', height: '9%',
+                              transform: 'translate(-50%, -50%)',
+                            }}
+                          >
+                            {expo.logo_url ? (
+                              <img src={expo.logo_url} alt={expo.nombre}
+                                className="w-6 h-6 object-contain"
+                                onError={e => { e.target.style.display='none'; }} />
+                            ) : (
+                              <Building2 size={14} className="text-gray-400 dark:text-gray-500" />
+                            )}
+                            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate w-full px-0.5 leading-tight mt-0.5" style={{fontSize:'0.55rem'}}>
+                              {expo.stand || expo.nombre.split(' ')[0]}
+                            </p>
+                          </div>
+                        );
+                      })}
+                      {/* Leyenda */}
+                      <div className="absolute bottom-2 left-2 bg-white/80 dark:bg-gray-800/80 rounded-lg px-2 py-1 text-xs text-gray-500">
+                        Mapa generado · {expoConCoordenadas.length} stands
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Sin imagen ni coordenadas
+                return (
+                  <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                    <Map size={56} className="mb-3 opacity-30" />
+                    <p className="font-semibold text-lg">Sin mapa configurado</p>
+                    {esAdmin ? (
+                      <div className="mt-3 text-sm text-center space-y-1">
+                        <p>Opción 1: Sube una imagen del plano con <strong>"Cambiar imagen del mapa"</strong></p>
+                        <p>Opción 2: Configura las coordenadas (posicion_x, posicion_y) de cada expositor</p>
+                        <p className="text-xs text-gray-400 mt-2">Los stands aparecerán posicionados automáticamente en el mapa</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm mt-1">El equipo del CMC publicará el mapa próximamente.</p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Nota al pie */}

@@ -87,7 +87,7 @@ router.get('/admin', authRequired, async (req, res) => {
     const p1 = [];
     if (sede)    { q1 += ` AND sede = $${p1.length+1}`;    p1.push(sede); }
     if (edicion) { q1 += ` AND edicion = $${p1.length+1}`; p1.push(parseInt(edicion)); }
-    q1 += ' ORDER BY created_at DESC';
+    q1 += ' ORDER BY e.created_at DESC';
 
     // Encuestas nativas (encuestas)
     let q2 = `
@@ -101,7 +101,7 @@ router.get('/admin', authRequired, async (req, res) => {
       FROM encuestas e WHERE 1=1
     `;
     const p2 = [];
-    q2 += ' ORDER BY created_at DESC';
+    q2 += ' ORDER BY e.created_at DESC';
 
     const [r1, r2] = await Promise.all([
       pool.query(q1, p1),

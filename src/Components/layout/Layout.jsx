@@ -217,8 +217,8 @@ export default function Layout() {
                 className={`flex items-center gap-3 p-2 pl-2 rounded-lg text-sm font-medium transition-all
                   ${
                     location.pathname === item.to
-                      ? "bg-white/20 text-white font-semibold"
-                      : "text-gray-200 hover:bg-white/10"
+                      ? "bg-white/10 font-semibold"
+                      : "opacity-80 hover:bg-white/10 hover:opacity-100"
                   }`}
               >
                 {item.icon}
@@ -256,8 +256,8 @@ export default function Layout() {
                         className={`flex items-center gap-3 p-2 pl-4 rounded-lg text-sm font-medium transition-all
                           ${
                             location.pathname === item.to
-                              ? "bg-white/20 text-white font-semibold"
-                              : "text-gray-200 hover:bg-white/10"
+                              ? "bg-white/10 font-semibold"
+                              : "opacity-80 hover:bg-white/10 hover:opacity-100"
                           }`}
                       >
                         {item.icon}

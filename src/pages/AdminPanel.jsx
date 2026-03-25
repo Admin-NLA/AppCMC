@@ -305,7 +305,8 @@ export default function AdminPanel() {
         edicion:     parseInt(sessionForm.edicion) || edicionActiva || 2026,
         capacidad:   sessionForm.capacidad ? parseInt(sessionForm.capacidad) : null,
         activo:      sessionForm.activo !== false,
-        speakerId:   sessionForm.speakerId || null,
+        // speakerId: solo enviarlo si tiene valor real (evita borrar speaker existente)
+        ...(sessionForm.speakerId ? { speakerId: sessionForm.speakerId } : {}),
       };
       if (editingSessionId) {
         await API.put(`/agenda/sessions/${editingSessionId}`, payload);
