@@ -20,6 +20,7 @@
 //   fecha, hora, hora_fin, status, ubicacion, notas, sede, created_at, updated_at
 
 import express from 'express';
+import { emailCitaSolicitada, emailCitaConfirmada, emailCitaRechazada, emailCitaCancelada } from '../utils/email.js';
 import pool    from '../db.js';
 import { authRequired } from '../utils/authMiddleware.js';
 
@@ -262,6 +263,15 @@ router.post('/', authRequired, async (req, res) => {
       meta: { cita_id: citaCreada.id, expositor_id },
     });
 
+    // Email al expositor (silencioso — no falla si no hay email)
+    if (expo.user_email) {
+      emailCitaSolicitada({
+        solicitante: { nombre: sol?.nombre || 'Un asistente', empresa: sol?.empresa },
+        expositor:   { nombre: expo.nombre, email: expo.user_email },
+        cita:        citaCreada,
+      }).catch(() => {});
+    }
+
     res.status(201).json({ ok: true, cita: citaCreada, message: 'Cita solicitada correctamente' });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -355,6 +365,41 @@ router.put('/:id', authRequired, async (req, res) => {
           tipo: `cita_${status}`,
           meta: { cita_id: id },
         });
+      }
+    }
+
+    // Emails según el nuevo status
+    if (status === 'confirmada') {
+      const solicitante = await getSolicitante(cita.solicitante_id).catch(() => null);
+      if (solicitante?.email) {
+        emailCitaConfirmada({
+          solicitante: { nombre: solicitante.nombre, email: solicitante.email },
+          expositor:   { nombre: cita.expositor_nombre || 'El expositor' },
+          cita:        { ...citaActualizada, ubicacion },
+        }).catch(() => {});
+      }
+    } else if (status === 'rechazada') {
+      const solicitante = await getSolicitante(cita.solicitante_id).catch(() => null);
+      if (solicitante?.email) {
+        emailCitaRechazada({
+          solicitante: { nombre: solicitante.nombre, email: solicitante.email },
+          expositor:   { nombre: cita.expositor_nombre || 'El expositor' },
+          cita:        citaActualizada,
+        }).catch(() => {});
+      }
+    } else if (status === 'cancelada') {
+      // Notificar al expositor
+      const expoUser = cita.expositor_user_id
+        ? await getSolicitante(cita.expositor_user_id).catch(() => null)
+        : null;
+      if (expoUser?.email) {
+        const solicitante = await getSolicitante(cita.solicitante_id).catch(() => null);
+        emailCitaCancelada({
+          expositorEmail:   expoUser.email,
+          expositorNombre:  cita.expositor_nombre || 'Expositor',
+          solicitanteNombre: solicitante?.nombre || 'El asistente',
+          cita:             citaActualizada,
+        }).catch(() => {});
       }
     }
 

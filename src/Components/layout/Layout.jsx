@@ -12,6 +12,8 @@ import {
   ClipboardList, Palette, ChevronDown, ChevronRight, Eye, EyeOff
 } from "lucide-react";
 
+import { useMemo } from "react";
+
 // ============================================================
 // Mapeo centralizado: label → ruta  ícono
 // Agrega aquí cualquier nuevo item de sedeHelper.menuItems
@@ -108,11 +110,19 @@ export default function Layout() {
   };
 
   // Construir menú desde permisos.menuItems usando MENU_MAP
-  const menu = permisos
+  /*const menu = permisos
     ? permisos.menuItems
         .map((label) => ({ label, ...MENU_MAP[label] }))
         .filter((item) => item.to) // descartar labels no mapeados
-    : [];
+    : [];*/
+
+    const menu = useMemo(() => {
+      return permisos
+        ? permisos.menuItems
+            .map((label) => ({ label, ...MENU_MAP[label] }))
+            .filter((item) => item.to)
+        : [];
+    }, [permisos]);
 
    useEffect(() => {
       if (menu.length > 0) {
@@ -193,7 +203,10 @@ export default function Layout() {
               src={branding.logoUrl}
               alt={branding.logoAlt || "CMC"}
               className="h-10 max-w-[160px] object-contain"
-              onError={e => { e.target.style.display='none'; }}
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = "/icon-192.png"; // fallback local
+              }}
             />
           ) : (
             <>

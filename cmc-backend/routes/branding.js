@@ -39,7 +39,7 @@ const DEFAULTS = {
     colorHeader:      '#ffffff',   // top header background (null = blanco)
     colorFondoApp:    '#f8fafc',   // app pages background
     colorBoton:       '#2563eb',   // primary button color
-    logoUrl:          'https://cmc-latam.com/wp-content/uploads/2024/09/CMC-2025-Logo-Horizontal-Blanco.png',
+    logoUrl:          'https://cmc-latam.com/wp-content/uploads/2022/01/Logo-CMC-Recurso-31.png',
     logoAlt:          'CMC Latam',
     tagline:          'Congreso de Mantenimiento y Confiabilidad',
     appNombre:        'CMC App',

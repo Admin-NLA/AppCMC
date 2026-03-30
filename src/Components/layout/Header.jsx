@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
+//import logo from "../../../public/icon-192.png";
 
 // Mismo mapeo que Layout.jsx — fuente única de verdad
 const MENU_MAP = {
@@ -104,10 +105,9 @@ export default function Header() {
           {/* Logo */}
           <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
             <img
-              src="/icon-192.png"
-              alt="CMC Logo"
+              src={branding.logoUrl || "/icons/Logo_CMC.svg"}
+              alt={branding.logoAlt || "CMC"}
               className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-white p-0.5"
-              onError={(e) => (e.target.style.display = "none")}
             />
             <div className="hidden sm:block">
               <h1 className="text-sm md:text-lg font-bold leading-tight">CMC LATAM APP</h1>

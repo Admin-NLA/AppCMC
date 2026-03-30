@@ -7,11 +7,11 @@ import { useAuth } from "../contexts/AuthContext";
 // ============================================================
 const BRAND = {
   // Logo: usar URL directa o importar desde /public
-  logoUrl: "https://cmc-latam.com/wp-content/uploads/2024/09/CMC-2025-Logo-Horizontal-Blanco.png",
+  logoUrl: "https://cmc-latam.com/wp-content/uploads/2022/01/Logo-CMC-Recurso-31.png",
   // Fallback si el logo no carga
   logoAlt: "CMC Latam",
   // Tagline debajo del logo
-  tagline: "Congreso de Mantenimiento y Confiabilidad",
+  tagline: "El Congreso de Mantenimiento y Confiabilidad más importante de Latinoamérica",
   // Gradiente de fondo (tailwind classes)
   bgGradient: "from-[#0a1628] via-[#0d2240] to-[#1a3a5c]",
   // Color del botón principal

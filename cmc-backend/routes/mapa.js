@@ -36,6 +36,11 @@ router.put('/', authRequired, async (req, res) => {
     const { url_publica } = req.body;
     if (!url_publica) return res.status(400).json({ ok: false, error: 'url_publica requerida' });
 
+    // Validar tamaño si es base64 (máx ~5MB)
+    if (url_publica.startsWith('data:image') && url_publica.length > 7 * 1024 * 1024) {
+      return res.status(400).json({ ok: false, error: 'La imagen es demasiado grande (máx 5MB)' });
+    }
+
     // Verificar si ya existe un registro
     const existing = await pool.query('SELECT id FROM mapa ORDER BY uploaded_at DESC LIMIT 1');
     let r;

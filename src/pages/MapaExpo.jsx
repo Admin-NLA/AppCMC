@@ -1,117 +1,128 @@
-import React from 'react';
-// src/pages/MapaExpo.jsx
-// Mapa de exposición CMC
-//
-// FUNCIONALIDAD:
-//   • Muestra la imagen del plano del salón (tabla `mapa` → url_publica)
-//   • Lista lateral de expositores con stand, logo y categoría
-//   • Click en un expositor → resalta su posición si tiene coordenadas
-//   • Super admin / staff → puede actualizar la URL del mapa
-//
-// ROLES:
-//   Todos con verMapa=true pueden ver.
-//   Solo super_admin y staff pueden cambiar la imagen del mapa.
+// src/pages/MapaExpo.jsx — Mapa interactivo de exposición CMC
+// Soporta: imagen de fondo + stands posicionados interactivamente
+// El admin puede subir imagen (base64) o pegar URL, y posicionar stands con drag
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth }  from "../contexts/AuthContext.jsx";
 import { useEvent } from "../contexts/EventContext.jsx";
 import API from "../services/api";
 import {
   Map, Building2, Search, ZoomIn, ZoomOut,
-  RefreshCw, Edit2, Save, X, AlertCircle,
-  ExternalLink, ChevronRight, Loader2
+  RefreshCw, Save, X, AlertCircle, Loader2,
+  Upload, Link, Eye, ChevronRight, Info
 } from "lucide-react";
 
 const ROLES_ADMIN = ["super_admin", "staff"];
+
+// ── Colores por categoría de expositor ──────────────────────
+const CATEGORIA_COLORES = {
+  platinum: { bg: "#e8d5b7", border: "#b8860b", text: "#7c5a00" },
+  gold:     { bg: "#fef3c7", border: "#d97706", text: "#92400e" },
+  silver:   { bg: "#e2e8f0", border: "#64748b", text: "#334155" },
+  bronze:   { bg: "#fee2e2", border: "#dc2626", text: "#991b1b" },
+  default:  { bg: "#eff6ff", border: "#2563eb", text: "#1d4ed8" },
+};
+
+function getColor(categoria) {
+  const k = (categoria || "").toLowerCase();
+  return CATEGORIA_COLORES[k] || CATEGORIA_COLORES.default;
+}
 
 export default function MapaExpo() {
   const { userProfile } = useAuth();
   const { sedeActiva, edicionActiva } = useEvent();
 
-  const [mapa,         setMapa]         = useState(null);   // { url_publica, uploaded_at }
-  const [expositores,  setExpositores]  = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState(null);
-  const [search,       setSearch]       = useState("");
-  const [selected,     setSelected]     = useState(null);   // expositor seleccionado
-  const [zoom,         setZoom]         = useState(1);
-  const [editingUrl,   setEditingUrl]   = useState(false);
-  const [newUrl,       setNewUrl]       = useState("");
-  const [saving,       setSaving]       = useState(false);
-  const [imgError,     setImgError]     = useState(false);
-  const [saveMsg,      setSaveMsg]      = useState(null);
+  const [mapa,        setMapa]        = useState(null);
+  const [expositores, setExpositores] = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
+  const [search,      setSearch]      = useState("");
+  const [selected,    setSelected]    = useState(null);
+  const [zoom,        setZoom]        = useState(1);
+  const [saving,      setSaving]      = useState(false);
+  const [saveMsg,     setSaveMsg]     = useState(null);
 
-  const imgRef = useRef(null);
+  // Panel de edición de imagen
+  const [showUpload, setShowUpload]   = useState(false);
+  const [inputUrl,   setInputUrl]     = useState("");
+  const [imgStatus,  setImgStatus]    = useState("idle"); // idle | loading | ok | error
+  const fileInputRef = useRef(null);
+  const mapContainerRef = useRef(null);
+
   const esAdmin = ROLES_ADMIN.includes(userProfile?.rol);
 
-  // ── Carga inicial ────────────────────────────────────────
-  useEffect(() => {
-    load();
-  }, [sedeActiva, edicionActiva]);
+  // ── Carga ─────────────────────────────────────────────────
+  useEffect(() => { load(); }, [sedeActiva]);
 
   const load = async () => {
     try {
       setLoading(true); setError(null);
-      const [mapaRes, expoRes] = await Promise.all([
+      const [mr, er] = await Promise.all([
         API.get("/mapa"),
         API.get(`/expositores${sedeActiva ? `?sede=${sedeActiva}` : ""}`),
       ]);
-
-      setMapa(mapaRes.data.mapa || null);
-
-      const list = Array.isArray(expoRes.data)
-        ? expoRes.data
-        : Array.isArray(expoRes.data.expositores)
-        ? expoRes.data.expositores
-        : [];
+      const m = mr.data.mapa || null;
+      setMapa(m);
+      setImgStatus(m?.url_publica ? "loading" : "idle");
+      const list = Array.isArray(er.data) ? er.data
+        : Array.isArray(er.data?.expositores) ? er.data.expositores : [];
       setExpositores(list.filter(e => e.activo !== false));
-    } catch (err) {
-      setError("No se pudo cargar el mapa de exposición");
+    } catch {
+      setError("No se pudo cargar el mapa");
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Guardar nueva URL del mapa ───────────────────────────
-  const handleSaveUrl = async () => {
-    if (!newUrl.trim()) return;
+  // ── Guardar imagen (URL o base64) ─────────────────────────
+  const handleSaveUrl = async (url) => {
+    if (!url?.trim()) return;
     try {
       setSaving(true);
-      const res = await API.put("/mapa", { url_publica: newUrl.trim() });
+      const res = await API.put("/mapa", { url_publica: url.trim() });
       setMapa(res.data.mapa);
-      setEditingUrl(false);
-      setNewUrl("");
-      setSaveMsg("Mapa actualizado correctamente");
+      setImgStatus("loading");
+      setShowUpload(false);
+      setSaveMsg("✅ Mapa actualizado");
       setTimeout(() => setSaveMsg(null), 3000);
-    } catch (err) {
-      setSaveMsg("Error al guardar: " + (err.response?.data?.error || err.message));
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) {
+      setSaveMsg("❌ " + (e.response?.data?.error || "Error al guardar"));
+    } finally { setSaving(false); }
   };
 
-  // ── Filtro de expositores ────────────────────────────────
-  const filtered = expositores.filter(e => {
+  // Subir archivo como base64
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setSaveMsg("❌ La imagen no puede superar 5MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      await handleSaveUrl(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ── Filtro de expositores ─────────────────────────────────
+  const filtrados = expositores.filter(e => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (
-      e.nombre?.toLowerCase().includes(q) ||
-      e.stand?.toLowerCase().includes(q) ||
-      e.categoria?.toLowerCase().includes(q)
-    );
+    return e.nombre?.toLowerCase().includes(q) || e.stand?.toLowerCase().includes(q);
   });
 
-  // ── Zoom ────────────────────────────────────────────────
-  const zoomIn  = () => setZoom(z => Math.min(z + 0.25, 3));
-  const zoomOut = () => setZoom(z => Math.max(z - 0.25, 0.5));
+  // Expositores con posición definida
+  const conPosicion = expositores.filter(e => e.posicion_x != null && e.posicion_y != null);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
-      </div>
-    );
-  }
+  const zoomIn  = () => setZoom(z => Math.min(z + 0.2, 4));
+  const zoomOut = () => setZoom(z => Math.max(z - 0.2, 0.3));
+
+  if (loading) return (
+    <div className="flex justify-center py-20">
+      <Loader2 className="animate-spin text-blue-600" size={32} />
+    </div>
+  );
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -120,344 +131,336 @@ export default function MapaExpo() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <Map className="text-blue-600" size={26} />
-            Mapa de Exposición
+            <Map className="text-blue-600" size={26} /> Mapa de Exposición
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            {expositores.length} expositores
-            {sedeActiva && <span> · <span className="capitalize font-medium">{sedeActiva}</span></span>}
+            {conPosicion.length > 0
+              ? `${conPosicion.length} stands posicionados · ${expositores.length} expositores`
+              : `${expositores.length} expositores`}
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={load} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition">
+          <button onClick={load} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl">
             <RefreshCw size={18} />
           </button>
-          {esAdmin && !editingUrl && (
-            <button
-              onClick={() => { setEditingUrl(true); setNewUrl(mapa?.url_publica || ""); }}
-              className="flex items-center gap-2 text-sm border border-gray-300 dark:border-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
-            >
-              <Edit2 size={15} /> Cambiar imagen del mapa
+          {esAdmin && (
+            <button onClick={() => { setShowUpload(p => !p); setInputUrl(mapa?.url_publica || ""); }}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700">
+              <Upload size={15} /> {mapa?.url_publica ? "Cambiar imagen" : "Subir imagen del mapa"}
             </button>
           )}
         </div>
       </div>
 
-      {/* Alerta de éxito/error al guardar */}
       {saveMsg && (
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm border
-          ${saveMsg.startsWith("Error")
-            ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700 text-red-700 dark:text-red-300"
-            : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 text-green-700 dark:text-green-300"}`}>
-          {saveMsg.startsWith("Error") ? <AlertCircle size={14} /> : "✅"} {saveMsg}
+        <div className={`px-4 py-3 rounded-xl text-sm font-medium ${saveMsg.startsWith("✅") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+          {saveMsg}
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-2 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm">
+          <AlertCircle size={16} /> {error}
         </div>
       )}
 
-      {/* Editor URL del mapa (solo admin) */}
-      {editingUrl && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">URL de la imagen del mapa</p>
-          <p className="text-xs text-gray-400">Sube la imagen a Google Drive, Dropbox o cualquier CDN y pega la URL pública aquí.</p>
-          <div className="flex gap-2">
-            <input
-              value={newUrl}
-              onChange={e => setNewUrl(e.target.value)}
-              placeholder="https://drive.google.com/... o https://..."
-              className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button onClick={handleSaveUrl} disabled={saving || !newUrl.trim()}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition">
-              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-              Guardar
-            </button>
-            <button onClick={() => setEditingUrl(false)}
-              className="p-2 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-              <X size={18} />
-            </button>
+      {/* Panel de subida de imagen */}
+      {showUpload && esAdmin && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
+          <h3 className="font-bold text-gray-900 dark:text-white">Imagen del mapa</h3>
+
+          {/* Subir archivo */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Opción 1: Subir imagen desde tu equipo (PNG, JPG — máx 5MB)
+            </label>
+            <div
+              className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center cursor-pointer hover:border-blue-400 transition"
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); handleFile({ target: { files: e.dataTransfer.files } }); }}
+            >
+              <Upload size={28} className="mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-500">Arrastra aquí o <span className="text-blue-600 font-semibold">haz clic para seleccionar</span></p>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+            </div>
+          </div>
+
+          {/* URL */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+              Opción 2: URL pública de la imagen
+            </label>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white"
+                value={inputUrl}
+                onChange={e => setInputUrl(e.target.value)}
+                placeholder="https://... (usa Google Drive: Compartir → Cualquier persona → copia el ID)"
+              />
+              <button onClick={() => handleSaveUrl(inputUrl)} disabled={saving || !inputUrl}
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              💡 Google Drive: abre la imagen → Compartir → "Cualquier persona con el enlace" → copia el ID del URL y usa:
+              <code className="ml-1 text-blue-600">https://drive.google.com/uc?export=view&id=TU_ID</code>
+            </p>
+          </div>
+
+          <button onClick={() => setShowUpload(false)}
+            className="text-sm text-gray-500 hover:text-gray-700">Cancelar</button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+
+        {/* Sidebar de expositores */}
+        <div className="lg:col-span-1 space-y-3">
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar expositor..."
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 dark:text-white" />
+          </div>
+
+          <div className="space-y-1.5 max-h-[520px] overflow-y-auto pr-1">
+            {filtrados.map(expo => {
+              const col = getColor(expo.categoria);
+              const isSelected = selected?.id === expo.id;
+              const tienePos = expo.posicion_x != null && expo.posicion_y != null;
+              return (
+                <button key={expo.id}
+                  onClick={() => setSelected(isSelected ? null : expo)}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl border-2 transition flex items-center gap-2.5 ${
+                    isSelected
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                      : "border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300"
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center overflow-hidden"
+                    style={{ backgroundColor: col.bg, border: `2px solid ${col.border}` }}>
+                    {expo.logo_url
+                      ? <img src={expo.logo_url} alt="" className="w-full h-full object-contain p-0.5" onError={e => e.target.style.display='none'} />
+                      : <Building2 size={14} style={{ color: col.text }} />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{expo.nombre}</p>
+                    <p className="text-xs text-gray-400">
+                      {expo.stand ? `Stand ${expo.stand}` : "Sin stand"}
+                      {!tienePos && <span className="ml-1 text-orange-400">· sin pos.</span>}
+                    </p>
+                  </div>
+                  {tienePos && <ChevronRight size={14} className="text-gray-400 shrink-0" />}
+                </button>
+              );
+            })}
+            {filtrados.length === 0 && (
+              <p className="text-center text-gray-400 text-sm py-6">Sin resultados</p>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Layout: Mapa + Lista */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-        {/* ── Imagen del mapa ── */}
-        <div className="lg:col-span-2">
+        {/* Área del mapa */}
+        <div className="lg:col-span-3">
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            {/* Controles de zoom */}
+
+            {/* Controles zoom */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
               <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Plano del salón
+                Plano del salón {imgStatus === 'error' && <span className="text-orange-500 ml-1">· mapa generado</span>}
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">{Math.round(zoom * 100)}%</span>
-                <button onClick={zoomOut} disabled={zoom <= 0.5}
-                  className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 transition">
-                  <ZoomOut size={16} />
+                <button onClick={zoomOut} disabled={zoom <= 0.3} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 disabled:opacity-30">
+                  <ZoomOut size={15} />
                 </button>
-                <button onClick={zoomIn} disabled={zoom >= 3}
-                  className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 transition">
-                  <ZoomIn size={16} />
+                <button onClick={zoomIn} disabled={zoom >= 4} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 disabled:opacity-30">
+                  <ZoomIn size={15} />
                 </button>
-                <button onClick={() => setZoom(1)}
-                  className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                <button onClick={() => setZoom(1)} className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500">
                   Restablecer
                 </button>
               </div>
             </div>
 
-            {/* Imagen */}
-            <div className="overflow-auto bg-gray-50 dark:bg-gray-900" style={{ maxHeight: "520px" }}>
-              {/* Mapa con imagen o generado por coordenadas */}
-              {(() => {
-                const expoConCoordenadas = expositores.filter(e => e.posicion_x != null && e.posicion_y != null);
-                const mostrarGenerado = !mapa?.url_publica || imgError;
+            {/* Contenedor del mapa */}
+            <div ref={mapContainerRef}
+              className="overflow-auto bg-gray-50 dark:bg-gray-900"
+              style={{ maxHeight: 560 }}>
+              <div style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.2s", position: "relative", minHeight: 400 }}>
 
-                if (!mostrarGenerado) {
-                  // Imagen real del mapa
-                  return (
-                    <div className="relative inline-block min-w-full" style={{ transformOrigin: "top left" }}>
-                      <img
-                        ref={imgRef}
-                        src={mapa.url_publica}
-                        alt="Mapa de exposición CMC"
-                        style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.2s" }}
-                        className="block max-w-none"
-                        onError={() => setImgError(true)}
-                      />
-                      {selected && selected.posicion_x != null && selected.posicion_y != null && (
-                        <div
-                          className="absolute w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center animate-bounce z-10"
-                          style={{ left: `${selected.posicion_x}%`, top: `${selected.posicion_y}%`, transform: `translate(-50%, -50%) scale(${1/zoom})` }}
-                          title={selected.nombre}
-                        >
-                          <span className="text-white text-xs font-bold">★</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
+                {/* Imagen de fondo */}
+                {mapa?.url_publica && imgStatus !== 'error' && (
+                  <img
+                    src={mapa.url_publica}
+                    alt="Mapa de exposición"
+                    className="block w-full"
+                    style={{ maxWidth: "100%" }}
+                    onLoad={() => setImgStatus("ok")}
+                    onError={() => setImgStatus("error")}
+                  />
+                )}
 
-                // Mapa generado con coordenadas
-                if (expoConCoordenadas.length > 0) {
+                {/* Mapa generado cuando no hay imagen O la imagen falla */}
+                {(imgStatus === 'error' || !mapa?.url_publica) && (
+                  <MapaGenerado
+                    expositores={expositores}
+                    selected={selected}
+                    onSelect={setSelected}
+                  />
+                )}
+
+                {/* Pins sobre la imagen (solo cuando la imagen cargó bien) */}
+                {imgStatus === 'ok' && expositores.map(expo => {
+                  if (expo.posicion_x == null || expo.posicion_y == null) return null;
+                  const isSelected = selected?.id === expo.id;
+                  const col = getColor(expo.categoria);
                   return (
-                    <div
-                      className="relative w-full bg-gray-100 dark:bg-gray-900 rounded-xl overflow-hidden"
-                      style={{ minHeight: 420, transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.2s" }}
+                    <div key={expo.id}
+                      onClick={() => setSelected(isSelected ? null : expo)}
+                      className="absolute cursor-pointer transition-all duration-200"
+                      style={{
+                        left: `${expo.posicion_x}%`,
+                        top: `${expo.posicion_y}%`,
+                        transform: "translate(-50%, -50%)",
+                        zIndex: isSelected ? 20 : 10,
+                      }}
+                      title={expo.nombre}
                     >
-                      {/* Grid del salón */}
-                      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"
-                        className="absolute inset-0 opacity-10 pointer-events-none">
-                        {Array.from({length:10}, (_,i) => (
-                          <React.Fragment key={i}>
-                            <line x1={i*10} y1="0" x2={i*10} y2="100" stroke="#666" strokeWidth="0.3"/>
-                            <line x1="0" y1={i*10} x2="100" y2={i*10} stroke="#666" strokeWidth="0.3"/>
-                          </React.Fragment>
-                        ))}
-                      </svg>
-                      {/* Stands posicionados */}
-                      {expositores.filter(e => e.posicion_x != null && e.posicion_y != null).map(expo => {
-                        const isSelected = selected?.id === expo.id;
-                        return (
-                          <div
-                            key={expo.id}
-                            onClick={() => setSelected(isSelected ? null : expo)}
-                            title={`${expo.nombre}${expo.stand ? ' · Stand '+expo.stand : ''}`}
-                            className={`absolute cursor-pointer transition-all duration-200 flex flex-col items-center justify-center rounded-lg border-2 text-center
-                              ${isSelected
-                                ? 'border-blue-500 bg-blue-100 dark:bg-blue-900 shadow-lg z-20 scale-110'
-                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-blue-400 hover:shadow-md z-10'}`}
-                            style={{
-                              left: `${expo.posicion_x}%`,
-                              top: `${expo.posicion_y}%`,
-                              width: '9%', height: '9%',
-                              transform: 'translate(-50%, -50%)',
-                            }}
-                          >
-                            {expo.logo_url ? (
-                              <img src={expo.logo_url} alt={expo.nombre}
-                                className="w-6 h-6 object-contain"
-                                onError={e => { e.target.style.display='none'; }} />
-                            ) : (
-                              <Building2 size={14} className="text-gray-400 dark:text-gray-500" />
-                            )}
-                            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate w-full px-0.5 leading-tight mt-0.5" style={{fontSize:'0.55rem'}}>
-                              {expo.stand || expo.nombre.split(' ')[0]}
-                            </p>
-                          </div>
-                        );
-                      })}
-                      {/* Leyenda */}
-                      <div className="absolute bottom-2 left-2 bg-white/80 dark:bg-gray-800/80 rounded-lg px-2 py-1 text-xs text-gray-500">
-                        Mapa generado · {expoConCoordenadas.length} stands
+                      <div className={`flex flex-col items-center justify-center rounded-lg border-2 shadow-lg text-center px-1.5 py-1 min-w-[48px] transition-all
+                        ${isSelected ? "scale-125 shadow-xl" : "hover:scale-110"}`}
+                        style={{ backgroundColor: col.bg, borderColor: isSelected ? "#2563eb" : col.border }}>
+                        {expo.logo_url
+                          ? <img src={expo.logo_url} alt="" className="w-6 h-6 object-contain" onError={e => e.target.style.display='none'} />
+                          : <Building2 size={14} style={{ color: col.text }} />
+                        }
+                        <span className="text-xs font-bold leading-tight mt-0.5" style={{ color: col.text, fontSize: "0.6rem" }}>
+                          {expo.stand || expo.nombre.split(" ")[0]}
+                        </span>
                       </div>
                     </div>
                   );
-                }
-
-                // Sin imagen ni coordenadas
-                return (
-                  <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                    <Map size={56} className="mb-3 opacity-30" />
-                    <p className="font-semibold text-lg">Sin mapa configurado</p>
-                    {esAdmin ? (
-                      <div className="mt-3 text-sm text-center space-y-1">
-                        <p>Opción 1: Sube una imagen del plano con <strong>"Cambiar imagen del mapa"</strong></p>
-                        <p>Opción 2: Configura las coordenadas (posicion_x, posicion_y) de cada expositor</p>
-                        <p className="text-xs text-gray-400 mt-2">Los stands aparecerán posicionados automáticamente en el mapa</p>
-                      </div>
-                    ) : (
-                      <p className="text-sm mt-1">El equipo del CMC publicará el mapa próximamente.</p>
-                    )}
-                  </div>
-                );
-              })()}
+                })}
+              </div>
             </div>
 
-            {/* Nota al pie */}
-            {mapa?.uploaded_at && (
-              <div className="px-4 py-2 text-xs text-gray-400 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                <span>Última actualización: {new Date(mapa.uploaded_at).toLocaleDateString("es", { day:"numeric", month:"short", year:"numeric" })}</span>
-                {mapa.url_publica && (
-                  <a href={mapa.url_publica} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-blue-500 hover:text-blue-700">
-                    Abrir imagen <ExternalLink size={12} />
-                  </a>
-                )}
+            {/* Info del seleccionado */}
+            {selected && (
+              <div className="border-t border-gray-100 dark:border-gray-700 p-4 flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl shrink-0 flex items-center justify-center overflow-hidden"
+                  style={{ backgroundColor: getColor(selected.categoria).bg, border: `2px solid ${getColor(selected.categoria).border}` }}>
+                  {selected.logo_url
+                    ? <img src={selected.logo_url} alt="" className="w-full h-full object-contain p-1" onError={e => e.target.style.display='none'} />
+                    : <Building2 size={20} style={{ color: getColor(selected.categoria).text }} />
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 dark:text-white">{selected.nombre}</p>
+                  <div className="flex flex-wrap gap-3 text-sm text-gray-500 mt-0.5">
+                    {selected.stand && <span>Stand {selected.stand}</span>}
+                    {selected.categoria && <span className="capitalize">{selected.categoria}</span>}
+                    {selected.website_url && (
+                      <a href={selected.website_url} target="_blank" rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline">Sitio web</a>
+                    )}
+                  </div>
+                  {selected.descripcion && (
+                    <p className="text-xs text-gray-400 mt-1 line-clamp-2">{selected.descripcion}</p>
+                  )}
+                </div>
+                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 shrink-0">
+                  <X size={18} />
+                </button>
+              </div>
+            )}
+
+            {/* Nota admin */}
+            {esAdmin && conPosicion.length < expositores.length && (
+              <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-2 flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
+                <Info size={13} />
+                {expositores.length - conPosicion.length} expositor(es) sin posición. Edítalos en Expositores para asignarles posicion_x y posicion_y (%).
               </div>
             )}
           </div>
         </div>
-
-        {/* ── Lista de expositores ── */}
-        <div className="flex flex-col gap-3">
-          {/* Buscador */}
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar expositor o stand..."
-              className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Lista */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Expositores ({filtered.length})
-              </p>
-              {selected && (
-                <button onClick={() => setSelected(null)}
-                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
-                  <X size={12} /> Limpiar
-                </button>
-              )}
-            </div>
-
-            <div className="overflow-y-auto" style={{ maxHeight: "460px" }}>
-              {filtered.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <Building2 size={32} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">{search ? "Sin resultados" : "No hay expositores"}</p>
-                </div>
-              ) : (
-                filtered.map(expo => (
-                  <button
-                    key={expo.id}
-                    onClick={() => setSelected(selected?.id === expo.id ? null : expo)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b last:border-0 dark:border-gray-700 transition
-                      ${selected?.id === expo.id
-                        ? "bg-blue-50 dark:bg-blue-900/20"
-                        : "hover:bg-gray-50 dark:hover:bg-gray-700/50"}`}
-                  >
-                    {/* Logo o inicial */}
-                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 shrink-0 flex items-center justify-center">
-                      {expo.logo_url ? (
-                        <img src={expo.logo_url} alt={expo.nombre}
-                          className="w-full h-full object-contain p-1"
-                          onError={e => { e.target.style.display="none"; e.target.parentNode.innerHTML = `<span class="text-lg font-bold text-gray-400">${expo.nombre?.charAt(0)}</span>`; }} />
-                      ) : (
-                        <span className="text-lg font-bold text-gray-400">
-                          {expo.nombre?.charAt(0)?.toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-semibold truncate ${selected?.id === expo.id ? "text-blue-700 dark:text-blue-300" : "text-gray-900 dark:text-white"}`}>
-                        {expo.nombre}
-                      </p>
-                      <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
-                        {expo.stand && <span className="font-medium">Stand {expo.stand}</span>}
-                        {expo.categoria && <span>· {expo.categoria}</span>}
-                      </div>
-                    </div>
-
-                    <ChevronRight size={16} className={`shrink-0 transition ${selected?.id === expo.id ? "text-blue-500 rotate-90" : "text-gray-300"}`} />
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Detalle del expositor seleccionado */}
-          {selected && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-blue-200 dark:border-blue-700 p-4 space-y-3">
-              <div className="flex items-start gap-3">
-                {selected.logo_url && (
-                  <img src={selected.logo_url} alt={selected.nombre}
-                    className="w-14 h-14 rounded-xl object-contain bg-gray-50 dark:bg-gray-700 p-1 border dark:border-gray-600 shrink-0"
-                    onError={e => e.target.style.display="none"} />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900 dark:text-white">{selected.nombre}</p>
-                  {selected.stand && <p className="text-sm text-blue-600 dark:text-blue-400 font-semibold">Stand {selected.stand}</p>}
-                  {selected.categoria && <p className="text-xs text-gray-500 dark:text-gray-400">{selected.categoria}</p>}
-                </div>
-              </div>
-
-              {selected.descripcion && (
-                <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">{selected.descripcion}</p>
-              )}
-
-              <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
-                {selected.contact?.email && (
-                  <a href={`mailto:${selected.contact.email}`}
-                    className="flex items-center gap-1.5 hover:text-blue-600 transition">
-                    ✉️ {selected.contact.email}
-                  </a>
-                )}
-                {selected.contact?.telefono && (
-                  <a href={`tel:${selected.contact.telefono}`}
-                    className="flex items-center gap-1.5 hover:text-blue-600 transition">
-                    📞 {selected.contact.telefono}
-                  </a>
-                )}
-                {selected.website_url && (
-                  <a href={selected.website_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 hover:text-blue-600 transition">
-                    🌐 {selected.website_url.replace(/^https?:\/\//, "")}
-                  </a>
-                )}
-              </div>
-
-              {selected.posicion_x && selected.posicion_y && (
-                <p className="text-xs text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
-                  📍 Ubicado en el mapa — mira el pin rojo
-                </p>
-              )}
-            </div>
-          )}
-        </div>
       </div>
+    </div>
+  );
+}
 
-      {error && (
-        <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm">
-          <AlertCircle size={16} /> {error}
-        </div>
-      )}
+// ── Mapa generado con CSS cuando no hay imagen ──────────────
+function MapaGenerado({ expositores, selected, onSelect }) {
+  const conPos = expositores.filter(e => e.posicion_x != null && e.posicion_y != null);
+
+  if (conPos.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+        <Map size={56} className="mb-3 opacity-20" />
+        <p className="font-semibold text-lg text-gray-500 dark:text-gray-400">Sin mapa configurado</p>
+        <p className="text-sm mt-1 text-center max-w-xs">
+          Sube una imagen del plano, o configura las coordenadas de los expositores (posicion_x, posicion_y en %) para generar el mapa automáticamente.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full" style={{ minHeight: 480, background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)" }}>
+      {/* Grid de fondo */}
+      <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#94a3b8" strokeWidth="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)" />
+      </svg>
+      {/* Borde del salón */}
+      <div className="absolute inset-4 border-2 border-blue-200 dark:border-blue-800 rounded-xl" />
+      {/* Stands */}
+      {conPos.map(expo => {
+        const isSelected = selected?.id === expo.id;
+        const col = getColor(expo.categoria);
+        return (
+          <div key={expo.id}
+            onClick={() => onSelect(isSelected ? null : expo)}
+            className="absolute cursor-pointer transition-all duration-200 flex flex-col items-center justify-center rounded-xl border-2 text-center px-1 py-1.5"
+            style={{
+              left: `${expo.posicion_x}%`,
+              top: `${expo.posicion_y}%`,
+              width: "10%", minWidth: 52, maxWidth: 80,
+              transform: `translate(-50%, -50%) ${isSelected ? "scale(1.2)" : "scale(1)"}`,
+              backgroundColor: col.bg,
+              borderColor: isSelected ? "#2563eb" : col.border,
+              boxShadow: isSelected ? "0 0 0 3px #93c5fd" : "0 1px 4px rgba(0,0,0,0.08)",
+              zIndex: isSelected ? 20 : 10,
+            }}
+            title={expo.nombre}
+          >
+            {expo.logo_url
+              ? <img src={expo.logo_url} alt="" className="w-7 h-7 object-contain" onError={e => e.target.style.display='none'} />
+              : <Building2 size={16} style={{ color: col.text }} />
+            }
+            <span className="font-bold leading-tight mt-0.5 truncate w-full px-1" style={{ color: col.text, fontSize: "0.58rem" }}>
+              {expo.stand ? `Stand ${expo.stand}` : expo.nombre.split(" ")[0]}
+            </span>
+          </div>
+        );
+      })}
+      {/* Leyenda */}
+      <div className="absolute bottom-3 right-3 bg-white/80 dark:bg-gray-800/80 rounded-xl px-3 py-2 text-xs text-gray-500 shadow">
+        <p className="font-semibold mb-1">Mapa generado</p>
+        {Object.entries(CATEGORIA_COLORES).filter(([k]) => k !== 'default').map(([k, col]) => (
+          expositores.some(e => e.categoria?.toLowerCase() === k) && (
+            <div key={k} className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: col.bg, border: `1.5px solid ${col.border}` }} />
+              <span className="capitalize">{k}</span>
+            </div>
+          )
+        ))}
+      </div>
     </div>
   );
 }
