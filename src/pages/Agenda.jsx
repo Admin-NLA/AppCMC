@@ -14,6 +14,18 @@ import {
   Filter,
 } from "lucide-react";
 
+
+  // Normaliza variantes de sede al mismo valor canónico
+  const normalizarSede = (s) => {
+    if (!s) return s;
+    const mapa = {
+      'cl': 'chile', 'CL': 'chile', 'Chile': 'chile',
+      'mx': 'mexico', 'MX': 'mexico', 'México': 'mexico', 'Mexico': 'mexico',
+      'co': 'colombia', 'CO': 'colombia', 'Colombia': 'colombia',
+    };
+    return mapa[s] || s.toLowerCase();
+  };
+
 export default function Agenda() {
   const { userProfile, permisos } = useAuth();
   const navigate = useNavigate();
@@ -107,7 +119,7 @@ export default function Agenda() {
       console.log("[Agenda] Sesiones recibidas del backend:", sessionData.length);
 
       // Extraer sedes y ediciones disponibles para los selectores
-      const sedes = [...new Set(sessionData.map((s) => s.sede).filter(Boolean))];
+      const sedes = [...new Set(sessionData.map((s) => normalizarSede(s.sede)).filter(Boolean))];
       setAvailableSedes(sedes.sort());
 
       const ediciones = [...new Set(sessionData.map((s) => s.edicion).filter(Boolean))];
@@ -191,7 +203,7 @@ export default function Agenda() {
     // en el selector — ya se aplican en el backend, pero si el backend
     // retornó datos mixtos por algún motivo, esto actúa como segunda barrera)
     if (selectedSede) {
-      filtered = filtered.filter((s) => s.sede === selectedSede || s.sede === selectedSede.toLowerCase());
+      filtered = filtered.filter((s) => normalizarSede(s.sede) === selectedSede);
     }
     if (selectedEdicion) {
       filtered = filtered.filter(

@@ -28,7 +28,7 @@ import API from "../services/api";
 import {
   Plus, Edit2, Trash2, Save, X, Bell, Users,
   FileUp, AlertCircle, CheckCircle, Loader2,
-  Calendar, Mic, Building2, ExternalLink, ChevronDown,
+  Calendar, Mic, Building2, Map, ExternalLink, ChevronDown,
   RefreshCw, Wifi, WifiOff, Clock,
 } from "lucide-react";
 
@@ -67,6 +67,263 @@ const btnGhost   = "flex items-center gap-2 border border-gray-300 dark:border-g
 // ────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ────────────────────────────────────────────────────────────
+
+// ============================================================
+// Componente: Configuración visual del mapa de stands
+// ============================================================
+function MapaStandsAdmin({ expositores, sedeActiva, edicionActiva, flash, loadExpositores }) {
+  const [gridCols,  setGridCols]  = React.useState(20);
+  const [gridFilas, setGridFilas] = React.useState(15);
+  const [saving,    setSaving]    = React.useState(false);
+  const [editMode,  setEditMode]  = React.useState(false); // modo asignar posición
+
+  // Construir gridMap
+  const gridMap = {};
+  expositores.forEach(e => {
+    if (e.grid_col != null && e.grid_fila != null) {
+      for (let dc = 0; dc < (e.ancho_celdas||1); dc++) {
+        for (let df = 0; df < (e.alto_celdas||1); df++) {
+          gridMap[`${e.grid_col+dc}-${e.grid_fila+df}`] = { expo: e, isOrigin: dc===0 && df===0 };
+        }
+      }
+    }
+  });
+
+  const ESTADOS = {
+    libre:         { label:"Libre",          color:"#f0fdf4", border:"#86efac", text:"#16a34a" },
+    solicitado:    { label:"Solicitado",      color:"#fffbeb", border:"#fcd34d", text:"#d97706" },
+    ocupado:       { label:"Ocupado",         color:"#eff6ff", border:"#93c5fd", text:"#2563eb" },
+    no_disponible: { label:"No disponible",   color:"#f9fafb", border:"#d1d5db", text:"#6b7280" },
+  };
+
+  const cambiarEstado = async (expo, nuevoEstado) => {
+    try {
+      await API.patch(`/expositores/${expo.id}/estado`, { estado_stand: nuevoEstado });
+      flash(`✅ ${expo.nombre}: ${ESTADOS[nuevoEstado]?.label}`);
+      loadExpositores();
+    } catch { flash("Error al cambiar estado", true); }
+  };
+
+  const asignarPosicion = async (expo, col, fila) => {
+    try {
+      await API.patch(`/expositores/${expo.id}/posicion`, { grid_col: col, grid_fila: fila });
+      flash(`✅ ${expo.nombre} → posición (${col},${fila})`);
+      loadExpositores();
+    } catch { flash("Error al asignar posición", true); }
+  };
+
+  const sinPosicion = expositores.filter(e => e.grid_col == null || e.grid_fila == null);
+  const [standAcomodar, setStandAcomodar] = React.useState(null);
+
+  return (
+    <div className="space-y-5">
+      {/* Config del grid */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+        <h3 className="font-bold text-gray-900 dark:text-white mb-4">Dimensiones del área de exposición</h3>
+        <div className="grid grid-cols-2 gap-4 max-w-sm">
+          <div>
+            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 block">Columnas</label>
+            <input type="number" min="5" max="40" value={gridCols}
+              onChange={e => setGridCols(parseInt(e.target.value)||20)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 block">Filas</label>
+            <input type="number" min="5" max="40" value={gridFilas}
+              onChange={e => setGridFilas(parseInt(e.target.value)||15)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white" />
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">
+          Grid {gridCols}×{gridFilas} = {gridCols*gridFilas} celdas totales
+        </p>
+      </div>
+
+      {/* Stands sin posición */}
+      {sinPosicion.length > 0 && (
+        <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-700 rounded-2xl p-4">
+          <p className="text-sm font-semibold text-orange-700 dark:text-orange-300 mb-3">
+            ⚠️ {sinPosicion.length} expositores sin posición en el mapa
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {sinPosicion.map(expo => (
+              <div key={expo.id}
+                className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl p-2.5 border border-orange-100 dark:border-orange-700">
+                {expo.logo_url && <img src={expo.logo_url} className="w-8 h-8 object-contain rounded" onError={e=>e.target.style.display='none'} />}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{expo.nombre}</p>
+                  <p className="text-xs text-gray-400">Stand: {expo.stand || "sin número"}</p>
+                </div>
+                <button
+                  onClick={() => setStandAcomodar(standAcomodar?.id === expo.id ? null : expo)}
+                  className={`text-xs px-2 py-1 rounded-lg font-semibold transition ${
+                    standAcomodar?.id === expo.id
+                      ? "bg-blue-600 text-white"
+                      : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 border border-blue-200"
+                  }`}>
+                  {standAcomodar?.id === expo.id ? "Cancelar" : "Ubicar →"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {standAcomodar && (
+        <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-700 rounded-2xl p-4">
+          <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-1">
+            Ubicando: <strong>{standAcomodar.nombre}</strong>
+          </p>
+          <p className="text-xs text-blue-500 mb-3">Haz clic en una celda vacía del grid para posicionar el stand</p>
+        </div>
+      )}
+
+      {/* Grid visual de administración */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Vista del plano ({gridCols}×{gridFilas})
+          </span>
+          <div className="flex gap-2">
+            {Object.entries(ESTADOS).map(([k,v]) => (
+              <span key={k} className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                style={{ backgroundColor: v.color, color: v.text, border: `1px solid ${v.border}` }}>
+                {v.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="overflow-auto p-3" style={{ maxHeight: 480 }}>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
+            gap: "2px",
+            background: "#e2e8f0",
+            padding: "2px",
+            borderRadius: "8px",
+          }}>
+            {Array.from({ length: gridCols * gridFilas }, (_, i) => {
+              const col  = (i % gridCols) + 1;
+              const fila = Math.floor(i / gridCols) + 1;
+              const cell = gridMap[`${col}-${fila}`];
+              if (cell && !cell.isOrigin) return null;
+
+              const expo  = cell?.expo;
+              const estado = ESTADOS[expo?.estado_stand || "libre"];
+              const ancho  = expo?.ancho_celdas || 1;
+              const alto   = expo?.alto_celdas  || 1;
+
+              return (
+                <div key={`${col}-${fila}`}
+                  onClick={() => {
+                    if (standAcomodar && !expo) {
+                      asignarPosicion(standAcomodar, col, fila);
+                      setStandAcomodar(null);
+                    }
+                  }}
+                  style={{
+                    gridColumn: `span ${ancho}`,
+                    gridRow:    `span ${alto}`,
+                    backgroundColor: expo ? estado.color : (standAcomodar ? "#f0f9ff" : "#ffffff"),
+                    border: `2px solid ${expo ? estado.border : (standAcomodar ? "#7dd3fc" : "#f3f4f6")}`,
+                    borderRadius: "4px",
+                    minHeight: "44px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "3px",
+                    cursor: expo ? "pointer" : (standAcomodar ? "crosshair" : "default"),
+                    position: "relative",
+                  }}
+                  title={expo ? expo.nombre : `Celda (${col},${fila}) — clic para ubicar`}
+                >
+                  {expo ? (
+                    <>
+                      {expo.logo_url
+                        ? <img src={expo.logo_url} style={{width:24,height:24}} className="object-contain" onError={e=>e.target.style.display='none'} />
+                        : <span style={{ fontSize:"0.6rem", color: estado.text, fontWeight: 700 }}>
+                            {expo.stand || expo.nombre?.charAt(0)}
+                          </span>
+                      }
+                      {/* Botón de estado en hover */}
+                      <div className="absolute inset-0 opacity-0 hover:opacity-100 bg-white/90 dark:bg-gray-800/90 rounded flex flex-col items-center justify-center gap-0.5 transition-opacity p-1">
+                        <span style={{ fontSize:"0.5rem", fontWeight:700, color:"#1e293b", textAlign:"center", lineHeight:1.2 }}>
+                          {expo.nombre?.split(" ")[0]}
+                        </span>
+                        <div className="flex gap-0.5">
+                          {Object.entries(ESTADOS).map(([k,v]) => (
+                            <button key={k}
+                              onClick={e => { e.stopPropagation(); cambiarEstado(expo, k); }}
+                              className="w-3 h-3 rounded-full border hover:scale-125 transition-transform"
+                              style={{ backgroundColor: v.color, borderColor: v.border }}
+                              title={v.label}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <span style={{ fontSize:"0.45rem", color:"#cbd5e1" }}>{col},{fila}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabla de expositores con estado */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Estado de todos los stands</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th className="px-4 py-2 text-left text-gray-500">Empresa</th>
+                <th className="px-3 py-2 text-left text-gray-500">Stand</th>
+                <th className="px-3 py-2 text-left text-gray-500">Posición</th>
+                <th className="px-3 py-2 text-left text-gray-500">Estado</th>
+                <th className="px-3 py-2 text-left text-gray-500">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              {expositores.map(expo => {
+                const estado = ESTADOS[expo.estado_stand || "libre"];
+                return (
+                  <tr key={expo.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <td className="px-4 py-2 font-medium text-gray-900 dark:text-white">{expo.nombre}</td>
+                    <td className="px-3 py-2 text-gray-500">{expo.stand || "—"}</td>
+                    <td className="px-3 py-2 text-gray-500">
+                      {expo.grid_col != null ? `(${expo.grid_col},${expo.grid_fila})` : <span className="text-orange-500">Sin posición</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="px-2 py-0.5 rounded-full font-semibold"
+                        style={{ backgroundColor: estado.color, color: estado.text, border: `1px solid ${estado.border}` }}>
+                        {estado.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        value={expo.estado_stand || "libre"}
+                        onChange={e => cambiarEstado(expo, e.target.value)}
+                        className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                        {Object.entries(ESTADOS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   const { userProfile } = useAuth();
   const { sedeActiva, edicionActiva } = useEvent();
@@ -140,6 +397,7 @@ export default function AdminPanel() {
       nombre: "", descripcion: "", stand: "", logo_url: "",
       categoria: "", website_url: "",
       contact_email: "", contact_telefono: "", contact_nombre: "",
+      posicion_x: "", posicion_y: "",
       sede: sede || "colombia", edicion: edicion || 2026, activo: true,
     };
   }
@@ -305,8 +563,7 @@ export default function AdminPanel() {
         edicion:     parseInt(sessionForm.edicion) || edicionActiva || 2026,
         capacidad:   sessionForm.capacidad ? parseInt(sessionForm.capacidad) : null,
         activo:      sessionForm.activo !== false,
-        // speakerId: solo enviarlo si tiene valor real (evita borrar speaker existente)
-        ...(sessionForm.speakerId ? { speakerId: sessionForm.speakerId } : {}),
+        speakerId:   sessionForm.speakerId || null,
       };
       if (editingSessionId) {
         await API.put(`/agenda/sessions/${editingSessionId}`, payload);
@@ -463,6 +720,8 @@ export default function AdminPanel() {
         categoria:   expositorForm.categoria,
         website_url: expositorForm.website_url,
         contact,
+        posicion_x:  expositorForm.posicion_x !== "" ? parseFloat(expositorForm.posicion_x) : null,
+        posicion_y:  expositorForm.posicion_y !== "" ? parseFloat(expositorForm.posicion_y) : null,
         sede:        expositorForm.sede,
         edicion:     parseInt(expositorForm.edicion) || edicionActiva || 2026,
         activo:      expositorForm.activo !== false,
@@ -501,6 +760,8 @@ export default function AdminPanel() {
       categoria:        ex.categoria   || "",
       website_url:      ex.website_url || "",
       contact_email:    c.email        || "",
+      posicion_x:       ex.posicion_x  != null ? String(ex.posicion_x) : "",
+      posicion_y:       ex.posicion_y  != null ? String(ex.posicion_y) : "",
       contact_telefono: c.telefono     || "",
       contact_nombre:   c.nombre       || "",
       sede:             ex.sede        || sedeForm,
@@ -588,6 +849,7 @@ export default function AdminPanel() {
     { id: "eventos",        label: "⏱ Minuto a Minuto",  icon: Clock     },
     { id: "speakers",       label: "🎤 Speakers",         icon: Mic       },
     { id: "expositores",    label: "🏢 Expositores",      icon: Building2 },
+    ...(isAdmin ? [{ id: "mapa_stands",    label: "🗺️ Mapa Stands",     icon: Map }] : []),
     ...(isAdmin ? [{ id: "notificaciones", label: "🔔 Notificaciones", icon: Bell }] : []),
   ];
 
@@ -1083,6 +1345,31 @@ export default function AdminPanel() {
                     <input className={inputCls} placeholder="A-01" value={expositorForm.stand}
                       onChange={e => setExpositorForm(p => ({...p, stand: e.target.value}))} />
                   </Field>
+                  <div className="col-span-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-1">
+                      Posición en el Mapa de Expo <span className="text-gray-400 font-normal">(0–100 %)</span>
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-gray-500 mb-0.5 block">Posición X (horizontal %)</label>
+                        <input type="number" min="0" max="100" step="0.5" className={inputCls}
+                          placeholder="ej. 25.5"
+                          value={expositorForm.posicion_x}
+                          onChange={e => setExpositorForm(p => ({...p, posicion_x: e.target.value}))} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-0.5 block">Posición Y (vertical %)</label>
+                        <input type="number" min="0" max="100" step="0.5" className={inputCls}
+                          placeholder="ej. 40.0"
+                          value={expositorForm.posicion_y}
+                          onChange={e => setExpositorForm(p => ({...p, posicion_y: e.target.value}))} />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      💡 0,0 = esquina superior izquierda · 100,100 = esquina inferior derecha. 
+                      Ejemplo: stand en el centro = X:50, Y:50
+                    </p>
+                  </div>
                   <Field label="Website">
                     <input type="url" className={inputCls} placeholder="https://empresa.com" value={expositorForm.website_url}
                       onChange={e => setExpositorForm(p => ({...p, website_url: e.target.value}))} />
@@ -1158,6 +1445,21 @@ export default function AdminPanel() {
           )}
         </div>
       )}
+
+      {/* ═══════ TAB: MAPA DE STANDS ═══════ */}
+      {activeTab === "mapa_stands" && (
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold dark:text-white">🗺️ Configuración del Mapa de Stands</h2>
+          <MapaStandsAdmin
+            expositores={expositores}
+            sedeActiva={sedeForm}
+            edicionActiva={edicionActiva}
+            flash={flash}
+            loadExpositores={loadExpositores}
+          />
+        </div>
+      )}
+
 
       {/* ═══════════════════════════════════════════════════
           TAB: MINUTO A MINUTO (EVENTOS LOGÍSTICA)

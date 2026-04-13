@@ -491,22 +491,24 @@ router.post('/', authRequired, async (req, res) => {
 router.put('/:id', authRequired, async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      nombre,
-      bio,
-      cargo,
-      empresa,
-      foto,
-      linkedin,
-      twitter,
-      website,
-      email,
-      telefono
-    } = req.body;
+
+    // Aceptar todos los nombres de campos que usa el AdminPanel
+    const nombre   = req.body.nombre;
+    const bio      = req.body.bio;
+    const cargo    = req.body.cargo;
+    const empresa  = req.body.empresa    || req.body.company      || null;
+    const foto     = req.body.foto       || req.body.photo_url    || null;
+    const linkedin = req.body.linkedin   || req.body.linkedin_url || null;
+    const twitter  = req.body.twitter    || req.body.twitter_url  || null;
+    const website  = req.body.website    || req.body.website_url  || null;
+    const email    = req.body.email;
+    const telefono = req.body.telefono;
+    const sede     = req.body.sede;
+    const edicion  = req.body.edicion ? parseInt(req.body.edicion) : null;
 
     console.log('✏️ Actualizando speaker:', id);
 
-    // Si el id es numérico (wp_id), buscar el UUID real en la tabla
+    // Si el id es numérico (wp_id), resolver a UUID real
     let realId = id;
     const isNumeric = /^\d+$/.test(id);
     if (isNumeric) {
@@ -514,61 +516,56 @@ router.put('/:id', authRequired, async (req, res) => {
         'SELECT id FROM speakers WHERE wp_id = $1 LIMIT 1', [parseInt(id)]
       );
       if (byWpId.rows.length === 0) {
-        return res.status(404).json({ error: `Speaker con wp_id ${id} no encontrado en tabla local. Ejecuta primero "Sync desde WP".` });
+        return res.status(404).json({ error: `Speaker con wp_id ${id} no encontrado. Ejecuta "Sync desde WP" primero.` });
       }
       realId = byWpId.rows[0].id;
-      console.log(`[Speakers] Resolviendo wp_id ${id} → UUID ${realId}`);
+      console.log(`[Speakers] wp_id ${id} → UUID ${realId}`);
     }
 
-    // Verificar que existe
     const check = await pool.query(
-      'SELECT id, source FROM speakers WHERE id = $1',
-      [realId]
+      'SELECT id FROM speakers WHERE id = $1', [realId]
     );
-
     if (check.rows.length === 0) {
       return res.status(404).json({ error: 'Speaker no encontrado' });
     }
 
-    // Permitir editar speakers de WP sincronizados (al editar se marcan como 'wordpress_local')
     const result = await pool.query(
       `UPDATE speakers SET
-        source = CASE WHEN source = 'wordpress' THEN 'wordpress_local' ELSE source END,
-        nombre = COALESCE($1, nombre),
-        bio = COALESCE($2, bio),
-        cargo = COALESCE($3, cargo),
-        company = COALESCE($4, company),
-        photo_url = COALESCE($5, photo_url),
-        linkedin_url = COALESCE($6, linkedin_url),
-        twitter_url = COALESCE($7, twitter_url),
-        website_url = COALESCE($8, website_url),
-        email = COALESCE($9, email),
-        telefono = COALESCE($10, telefono)
-      WHERE id = $11
-      RETURNING 
-        id,
-        nombre,
-        bio,
-        cargo,
-        company as empresa,
-        photo_url as foto
-      `,
+        source       = CASE WHEN source = 'wordpress' THEN 'wordpress_local' ELSE source END,
+        nombre       = CASE WHEN $1::text  IS NOT NULL AND $1 != '' THEN $1 ELSE nombre       END,
+        bio          = CASE WHEN $2::text  IS NOT NULL             THEN $2 ELSE bio            END,
+        cargo        = CASE WHEN $3::text  IS NOT NULL AND $3 != '' THEN $3 ELSE cargo         END,
+        company      = CASE WHEN $4::text  IS NOT NULL AND $4 != '' THEN $4 ELSE company       END,
+        photo_url    = CASE WHEN $5::text  IS NOT NULL AND $5 != '' THEN $5 ELSE photo_url     END,
+        linkedin_url = CASE WHEN $6::text  IS NOT NULL AND $6 != '' THEN $6 ELSE linkedin_url  END,
+        twitter_url  = CASE WHEN $7::text  IS NOT NULL AND $7 != '' THEN $7 ELSE twitter_url   END,
+        website_url  = CASE WHEN $8::text  IS NOT NULL AND $8 != '' THEN $8 ELSE website_url   END,
+        email        = CASE WHEN $9::text  IS NOT NULL AND $9 != '' THEN $9 ELSE email         END,
+        telefono     = CASE WHEN $10::text IS NOT NULL AND $10 != '' THEN $10 ELSE telefono    END,
+        sede         = CASE WHEN $11::text IS NOT NULL AND $11 != '' THEN $11 ELSE sede        END,
+        edicion      = CASE WHEN $12::integer IS NOT NULL THEN $12 ELSE edicion END
+       WHERE id = $13
+       RETURNING id, nombre, bio, cargo,
+                 company as empresa, photo_url as foto,
+                 linkedin_url, twitter_url, website_url, email, telefono, sede, edicion`,
       [
-        nombre,
-        bio,
-        cargo,
-        empresa,
-        foto,
-        linkedin,
-        twitter,
-        website,
-        email,
-        telefono,
-        id
+        nombre   || null,
+        bio      ?? null,
+        cargo    || null,
+        empresa  || null,
+        foto     || null,
+        linkedin || null,
+        twitter  || null,
+        website  || null,
+        email    || null,
+        telefono || null,
+        sede     || null,
+        edicion,
+        realId,          // ← realId, no id original
       ]
     );
 
-    console.log('✅ Speaker actualizado:', id);
+    console.log('✅ Speaker actualizado:', realId);
 
     res.json({
       ok: true,

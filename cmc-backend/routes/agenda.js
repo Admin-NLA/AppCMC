@@ -13,12 +13,18 @@ const router = express.Router();
 function convertirHoraATimestamp(hora) {
   if (!hora) return null;
   try {
+    // Caso 1: ISO completo con Z → devolver tal cual
     if (hora.includes('T') && hora.includes('Z')) return hora;
-    const [h, m, s] = hora.split(':').map(Number);
+    // Caso 2: datetime-local "2026-03-25T07:00" → guardar sin offset UTC
+    if (hora.includes('T') && hora.length >= 16) {
+      return hora.slice(0, 19); // "2026-03-25T07:00:00" — PostgreSQL lo guarda como hora local
+    }
+    // Caso 3: solo hora "07:00" o "07:00:00"
+    const partes = hora.split(':').map(Number);
+    const h = partes[0], m = partes[1], s = partes[2] || 0;
     if (isNaN(h) || isNaN(m)) return null;
-    const now = new Date();
-    now.setHours(h, m, s || 0, 0);
-    return now.toISOString();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `2000-01-01T${pad(h)}:${pad(m)}:${pad(s)}`;
   } catch {
     return null;
   }
@@ -112,17 +118,6 @@ async function cargarSesionesLocales(sede, edicion) {
     WHERE wp_id IS NOT NULL AND override = true AND activo = true
   `);
 
-  // Resolver nombres de speakers para overrides
-  const overrideSpeakerIds = overridesResult.rows.map(o => o.speakers?.[0]).filter(Boolean);
-  const speakerNombresMap = {};
-  if (overrideSpeakerIds.length > 0) {
-    const spRes = await pool.query(
-      `SELECT id, nombre FROM speakers WHERE id = ANY($1::uuid[])`,
-      [overrideSpeakerIds]
-    ).catch(() => ({ rows: [] }));
-    spRes.rows.forEach(sp => { speakerNombresMap[sp.id] = sp.nombre; });
-  }
-
   const overridesMap = {};
   overridesResult.rows.forEach((o) => {
     overridesMap[o.wp_id] = {
@@ -139,7 +134,7 @@ async function cargarSesionesLocales(sede, edicion) {
       sede: o.sede_final || o.sede,
       edicion: o.edicion_final || o.edicion,
       speakerId: o.speakers?.[0] ?? null,
-      speakerNombre: speakerNombresMap[o.speakers?.[0]] || '',
+      speakerNombre: '',
       qrSala: o.qrSala,
       slug: o.slug,
       source: 'wordpress-edited',
@@ -172,17 +167,6 @@ async function cargarSesionesLocales(sede, edicion) {
     ORDER BY start_at ASC NULLS LAST
   `);
 
-  // Añadir speakers de sesiones locales al mapa (puede haber nuevos no en overrides)
-  const localSpeakerIds = localResult.rows.map(s => s.speakers?.[0]).filter(Boolean);
-  const newIds = localSpeakerIds.filter(id => !speakerNombresMap[id]);
-  if (newIds.length > 0) {
-    const spRes2 = await pool.query(
-      `SELECT id, nombre FROM speakers WHERE id = ANY($1::uuid[])`,
-      [newIds]
-    ).catch(() => ({ rows: [] }));
-    spRes2.rows.forEach(sp => { speakerNombresMap[sp.id] = sp.nombre; });
-  }
-
   const localSessions = localResult.rows.map((s) => ({
     id: s.id,
     titulo: s.titulo,
@@ -196,7 +180,7 @@ async function cargarSesionesLocales(sede, edicion) {
     sede: s.sede_final || s.sede,
     edicion: s.edicion_final || s.edicion,
     speakerId: s.speakers?.[0] ?? null,
-    speakerNombre: speakerNombresMap[s.speakers?.[0]] || '',
+    speakerNombre: '',
     qrSala: s.qrSala,
     slug: s.slug,
     source: 'local',

@@ -586,9 +586,21 @@ export default function Networking() {
                   {/* Historial */}
                   {citasPasadas.length > 0 && (
                     <div>
-                      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                        Historial ({citasPasadas.length})
-                      </h3>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                          Historial ({citasPasadas.length})
+                        </h3>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('¿Limpiar el historial de citas canceladas y rechazadas?')) {
+                              setCitas(prev => prev.filter(ct => !['cancelada','rechazada'].includes(ct.status)));
+                            }
+                          }}
+                          className="text-xs text-red-400 hover:text-red-600 font-medium transition"
+                        >
+                          Limpiar historial
+                        </button>
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {citasPasadas.map(c => (
                           <CitaCard key={c.id} cita={c} vistaExpositor={vistaExpositor} />

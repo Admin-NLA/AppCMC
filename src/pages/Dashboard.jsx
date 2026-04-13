@@ -81,7 +81,7 @@ function QuickLink({ to, icon: Icon, label, color = "blue" }) {
 
 // ── DASHBOARD PRINCIPAL ──────────────────────────────────────
 export default function Dashboard() {
-  const { userProfile, permisos } = useAuth();
+  const { userProfile, permisos, previewRol, previewTipoPase } = useAuth();
   const { sedeActiva, edicionActiva, ready } = useEvent();
 
   const [stats,          setStats]          = useState(null);
@@ -92,9 +92,11 @@ export default function Dashboard() {
   const [misSesiones,    setMisSesiones]    = useState([]);
   const [loading,        setLoading]        = useState(true);
 
-  const rol = userProfile?.rol;
-  const esAdmin   = rol === "super_admin" || rol === "staff";
-  const esSpeaker = rol === "speaker";
+  // En modo preview, usar el rol simulado para adaptar el dashboard
+  const rolEfectivo = previewRol || userProfile?.rol;
+  const rol = rolEfectivo;
+  const esAdmin     = rol === "super_admin" || rol === "staff";
+  const esSpeaker   = rol === "speaker";
   const esExpositor = rol === "expositor";
   const esAsistente = !esAdmin && !esSpeaker && !esExpositor;
 
