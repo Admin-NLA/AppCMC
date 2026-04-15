@@ -22,3 +22,83 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* ── Dark mode global — variables CSS automáticas ─────────────────────────
+   Cuando la clase 'dark' está en <html>, todos los fondos blancos
+   y textos oscuros cambian automáticamente sin tocar cada componente.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Variables base (light) */
+:root {
+  --bg-page:       #f9fafb;
+  --bg-card:       #ffffff;
+  --bg-input:      #ffffff;
+  --text-primary:  #111827;
+  --text-secondary:#6b7280;
+  --border-color:  #e5e7eb;
+}
+
+/* Variables dark */
+.dark {
+  --bg-page:       #111827;
+  --bg-card:       #1f2937;
+  --bg-input:      #374151;
+  --text-primary:  #f9fafb;
+  --text-secondary:#9ca3af;
+  --border-color:  #374151;
+}
+
+/* Aplicar variables a elementos comunes */
+.dark body {
+  background-color: #111827;
+  color: #f9fafb;
+}
+
+/* Cards y contenedores sin dark: explícito */
+.dark .bg-white {
+  background-color: #1f2937 !important;
+  color: #f9fafb;
+}
+
+.dark .bg-gray-50 {
+  background-color: #111827 !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #1f2937 !important;
+}
+
+/* Textos */
+.dark .text-gray-900 { color: #f9fafb !important; }
+.dark .text-gray-800 { color: #f3f4f6 !important; }
+.dark .text-gray-700 { color: #e5e7eb !important; }
+.dark .text-gray-600 { color: #d1d5db !important; }
+.dark .text-gray-500 { color: #9ca3af !important; }
+
+/* Bordes */
+.dark .border-gray-100 { border-color: #374151 !important; }
+.dark .border-gray-200 { border-color: #374151 !important; }
+.dark .border-gray-300 { border-color: #4b5563 !important; }
+
+/* Inputs */
+.dark input:not([type="color"]),
+.dark textarea,
+.dark select {
+  background-color: #374151;
+  color: #f9fafb;
+  border-color: #4b5563;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #6b7280;
+}
+
+/* Hover states */
+.dark .hover\:bg-gray-50:hover { background-color: #1f2937 !important; }
+.dark .hover\:bg-gray-100:hover { background-color: #374151 !important; }
+
+/* Rounded cards específicos */
+.dark .rounded-xl,
+.dark .rounded-2xl {
+  --tw-shadow: 0 1px 3px 0 rgba(0,0,0,0.3);
+}

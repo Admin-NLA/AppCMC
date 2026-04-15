@@ -28,8 +28,8 @@ import API from "../services/api";
 import {
   Plus, Edit2, Trash2, Save, X, Bell, Users,
   FileUp, AlertCircle, CheckCircle, Loader2,
-  Calendar, Mic, Building2, Map, ExternalLink, ChevronDown,
-  RefreshCw, Wifi, WifiOff, Clock,
+  Calendar, Mic, Building2, ExternalLink, ChevronDown,
+  RefreshCw, Wifi, WifiOff, Clock, Map,
 } from "lucide-react";
 
 // ── Sedes del sistema ─────────────────────────────────────
@@ -67,263 +67,6 @@ const btnGhost   = "flex items-center gap-2 border border-gray-300 dark:border-g
 // ────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ────────────────────────────────────────────────────────────
-
-// ============================================================
-// Componente: Configuración visual del mapa de stands
-// ============================================================
-function MapaStandsAdmin({ expositores, sedeActiva, edicionActiva, flash, loadExpositores }) {
-  const [gridCols,  setGridCols]  = React.useState(20);
-  const [gridFilas, setGridFilas] = React.useState(15);
-  const [saving,    setSaving]    = React.useState(false);
-  const [editMode,  setEditMode]  = React.useState(false); // modo asignar posición
-
-  // Construir gridMap
-  const gridMap = {};
-  expositores.forEach(e => {
-    if (e.grid_col != null && e.grid_fila != null) {
-      for (let dc = 0; dc < (e.ancho_celdas||1); dc++) {
-        for (let df = 0; df < (e.alto_celdas||1); df++) {
-          gridMap[`${e.grid_col+dc}-${e.grid_fila+df}`] = { expo: e, isOrigin: dc===0 && df===0 };
-        }
-      }
-    }
-  });
-
-  const ESTADOS = {
-    libre:         { label:"Libre",          color:"#f0fdf4", border:"#86efac", text:"#16a34a" },
-    solicitado:    { label:"Solicitado",      color:"#fffbeb", border:"#fcd34d", text:"#d97706" },
-    ocupado:       { label:"Ocupado",         color:"#eff6ff", border:"#93c5fd", text:"#2563eb" },
-    no_disponible: { label:"No disponible",   color:"#f9fafb", border:"#d1d5db", text:"#6b7280" },
-  };
-
-  const cambiarEstado = async (expo, nuevoEstado) => {
-    try {
-      await API.patch(`/expositores/${expo.id}/estado`, { estado_stand: nuevoEstado });
-      flash(`✅ ${expo.nombre}: ${ESTADOS[nuevoEstado]?.label}`);
-      loadExpositores();
-    } catch { flash("Error al cambiar estado", true); }
-  };
-
-  const asignarPosicion = async (expo, col, fila) => {
-    try {
-      await API.patch(`/expositores/${expo.id}/posicion`, { grid_col: col, grid_fila: fila });
-      flash(`✅ ${expo.nombre} → posición (${col},${fila})`);
-      loadExpositores();
-    } catch { flash("Error al asignar posición", true); }
-  };
-
-  const sinPosicion = expositores.filter(e => e.grid_col == null || e.grid_fila == null);
-  const [standAcomodar, setStandAcomodar] = React.useState(null);
-
-  return (
-    <div className="space-y-5">
-      {/* Config del grid */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-        <h3 className="font-bold text-gray-900 dark:text-white mb-4">Dimensiones del área de exposición</h3>
-        <div className="grid grid-cols-2 gap-4 max-w-sm">
-          <div>
-            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 block">Columnas</label>
-            <input type="number" min="5" max="40" value={gridCols}
-              onChange={e => setGridCols(parseInt(e.target.value)||20)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 block">Filas</label>
-            <input type="number" min="5" max="40" value={gridFilas}
-              onChange={e => setGridFilas(parseInt(e.target.value)||15)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white" />
-          </div>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">
-          Grid {gridCols}×{gridFilas} = {gridCols*gridFilas} celdas totales
-        </p>
-      </div>
-
-      {/* Stands sin posición */}
-      {sinPosicion.length > 0 && (
-        <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-700 rounded-2xl p-4">
-          <p className="text-sm font-semibold text-orange-700 dark:text-orange-300 mb-3">
-            ⚠️ {sinPosicion.length} expositores sin posición en el mapa
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {sinPosicion.map(expo => (
-              <div key={expo.id}
-                className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl p-2.5 border border-orange-100 dark:border-orange-700">
-                {expo.logo_url && <img src={expo.logo_url} className="w-8 h-8 object-contain rounded" onError={e=>e.target.style.display='none'} />}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{expo.nombre}</p>
-                  <p className="text-xs text-gray-400">Stand: {expo.stand || "sin número"}</p>
-                </div>
-                <button
-                  onClick={() => setStandAcomodar(standAcomodar?.id === expo.id ? null : expo)}
-                  className={`text-xs px-2 py-1 rounded-lg font-semibold transition ${
-                    standAcomodar?.id === expo.id
-                      ? "bg-blue-600 text-white"
-                      : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 border border-blue-200"
-                  }`}>
-                  {standAcomodar?.id === expo.id ? "Cancelar" : "Ubicar →"}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {standAcomodar && (
-        <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-700 rounded-2xl p-4">
-          <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-1">
-            Ubicando: <strong>{standAcomodar.nombre}</strong>
-          </p>
-          <p className="text-xs text-blue-500 mb-3">Haz clic en una celda vacía del grid para posicionar el stand</p>
-        </div>
-      )}
-
-      {/* Grid visual de administración */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            Vista del plano ({gridCols}×{gridFilas})
-          </span>
-          <div className="flex gap-2">
-            {Object.entries(ESTADOS).map(([k,v]) => (
-              <span key={k} className="text-xs px-2 py-0.5 rounded-full font-semibold"
-                style={{ backgroundColor: v.color, color: v.text, border: `1px solid ${v.border}` }}>
-                {v.label}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="overflow-auto p-3" style={{ maxHeight: 480 }}>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
-            gap: "2px",
-            background: "#e2e8f0",
-            padding: "2px",
-            borderRadius: "8px",
-          }}>
-            {Array.from({ length: gridCols * gridFilas }, (_, i) => {
-              const col  = (i % gridCols) + 1;
-              const fila = Math.floor(i / gridCols) + 1;
-              const cell = gridMap[`${col}-${fila}`];
-              if (cell && !cell.isOrigin) return null;
-
-              const expo  = cell?.expo;
-              const estado = ESTADOS[expo?.estado_stand || "libre"];
-              const ancho  = expo?.ancho_celdas || 1;
-              const alto   = expo?.alto_celdas  || 1;
-
-              return (
-                <div key={`${col}-${fila}`}
-                  onClick={() => {
-                    if (standAcomodar && !expo) {
-                      asignarPosicion(standAcomodar, col, fila);
-                      setStandAcomodar(null);
-                    }
-                  }}
-                  style={{
-                    gridColumn: `span ${ancho}`,
-                    gridRow:    `span ${alto}`,
-                    backgroundColor: expo ? estado.color : (standAcomodar ? "#f0f9ff" : "#ffffff"),
-                    border: `2px solid ${expo ? estado.border : (standAcomodar ? "#7dd3fc" : "#f3f4f6")}`,
-                    borderRadius: "4px",
-                    minHeight: "44px",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "3px",
-                    cursor: expo ? "pointer" : (standAcomodar ? "crosshair" : "default"),
-                    position: "relative",
-                  }}
-                  title={expo ? expo.nombre : `Celda (${col},${fila}) — clic para ubicar`}
-                >
-                  {expo ? (
-                    <>
-                      {expo.logo_url
-                        ? <img src={expo.logo_url} style={{width:24,height:24}} className="object-contain" onError={e=>e.target.style.display='none'} />
-                        : <span style={{ fontSize:"0.6rem", color: estado.text, fontWeight: 700 }}>
-                            {expo.stand || expo.nombre?.charAt(0)}
-                          </span>
-                      }
-                      {/* Botón de estado en hover */}
-                      <div className="absolute inset-0 opacity-0 hover:opacity-100 bg-white/90 dark:bg-gray-800/90 rounded flex flex-col items-center justify-center gap-0.5 transition-opacity p-1">
-                        <span style={{ fontSize:"0.5rem", fontWeight:700, color:"#1e293b", textAlign:"center", lineHeight:1.2 }}>
-                          {expo.nombre?.split(" ")[0]}
-                        </span>
-                        <div className="flex gap-0.5">
-                          {Object.entries(ESTADOS).map(([k,v]) => (
-                            <button key={k}
-                              onClick={e => { e.stopPropagation(); cambiarEstado(expo, k); }}
-                              className="w-3 h-3 rounded-full border hover:scale-125 transition-transform"
-                              style={{ backgroundColor: v.color, borderColor: v.border }}
-                              title={v.label}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <span style={{ fontSize:"0.45rem", color:"#cbd5e1" }}>{col},{fila}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Tabla de expositores con estado */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Estado de todos los stands</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50 dark:bg-gray-700">
-              <tr>
-                <th className="px-4 py-2 text-left text-gray-500">Empresa</th>
-                <th className="px-3 py-2 text-left text-gray-500">Stand</th>
-                <th className="px-3 py-2 text-left text-gray-500">Posición</th>
-                <th className="px-3 py-2 text-left text-gray-500">Estado</th>
-                <th className="px-3 py-2 text-left text-gray-500">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {expositores.map(expo => {
-                const estado = ESTADOS[expo.estado_stand || "libre"];
-                return (
-                  <tr key={expo.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-4 py-2 font-medium text-gray-900 dark:text-white">{expo.nombre}</td>
-                    <td className="px-3 py-2 text-gray-500">{expo.stand || "—"}</td>
-                    <td className="px-3 py-2 text-gray-500">
-                      {expo.grid_col != null ? `(${expo.grid_col},${expo.grid_fila})` : <span className="text-orange-500">Sin posición</span>}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className="px-2 py-0.5 rounded-full font-semibold"
-                        style={{ backgroundColor: estado.color, color: estado.text, border: `1px solid ${estado.border}` }}>
-                        {estado.label}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <select
-                        value={expo.estado_stand || "libre"}
-                        onChange={e => cambiarEstado(expo, e.target.value)}
-                        className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
-                        {Object.entries(ESTADOS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function AdminPanel() {
   const { userProfile } = useAuth();
   const { sedeActiva, edicionActiva } = useEvent();
@@ -397,7 +140,6 @@ export default function AdminPanel() {
       nombre: "", descripcion: "", stand: "", logo_url: "",
       categoria: "", website_url: "",
       contact_email: "", contact_telefono: "", contact_nombre: "",
-      posicion_x: "", posicion_y: "",
       sede: sede || "colombia", edicion: edicion || 2026, activo: true,
     };
   }
@@ -429,6 +171,7 @@ export default function AdminPanel() {
 
     if (activeTab === "speakers")       loadSpeakers();
     if (activeTab === "expositores")    loadExpositores();
+    if (activeTab === "mapa_stands")    loadExpositores();
     if (activeTab === "notificaciones") loadUsers();
   }, [activeTab, userProfile]);
 
@@ -720,8 +463,6 @@ export default function AdminPanel() {
         categoria:   expositorForm.categoria,
         website_url: expositorForm.website_url,
         contact,
-        posicion_x:  expositorForm.posicion_x !== "" ? parseFloat(expositorForm.posicion_x) : null,
-        posicion_y:  expositorForm.posicion_y !== "" ? parseFloat(expositorForm.posicion_y) : null,
         sede:        expositorForm.sede,
         edicion:     parseInt(expositorForm.edicion) || edicionActiva || 2026,
         activo:      expositorForm.activo !== false,
@@ -760,8 +501,6 @@ export default function AdminPanel() {
       categoria:        ex.categoria   || "",
       website_url:      ex.website_url || "",
       contact_email:    c.email        || "",
-      posicion_x:       ex.posicion_x  != null ? String(ex.posicion_x) : "",
-      posicion_y:       ex.posicion_y  != null ? String(ex.posicion_y) : "",
       contact_telefono: c.telefono     || "",
       contact_nombre:   c.nombre       || "",
       sede:             ex.sede        || sedeForm,
@@ -849,7 +588,7 @@ export default function AdminPanel() {
     { id: "eventos",        label: "⏱ Minuto a Minuto",  icon: Clock     },
     { id: "speakers",       label: "🎤 Speakers",         icon: Mic       },
     { id: "expositores",    label: "🏢 Expositores",      icon: Building2 },
-    ...(isAdmin ? [{ id: "mapa_stands",    label: "🗺️ Mapa Stands",     icon: Map }] : []),
+    ...(isAdmin ? [{ id: "mapa_stands",    label: "🗺 Mapa Stands",    icon: Map  }] : []),
     ...(isAdmin ? [{ id: "notificaciones", label: "🔔 Notificaciones", icon: Bell }] : []),
   ];
 
@@ -1345,31 +1084,6 @@ export default function AdminPanel() {
                     <input className={inputCls} placeholder="A-01" value={expositorForm.stand}
                       onChange={e => setExpositorForm(p => ({...p, stand: e.target.value}))} />
                   </Field>
-                  <div className="col-span-2">
-                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-1">
-                      Posición en el Mapa de Expo <span className="text-gray-400 font-normal">(0–100 %)</span>
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-gray-500 mb-0.5 block">Posición X (horizontal %)</label>
-                        <input type="number" min="0" max="100" step="0.5" className={inputCls}
-                          placeholder="ej. 25.5"
-                          value={expositorForm.posicion_x}
-                          onChange={e => setExpositorForm(p => ({...p, posicion_x: e.target.value}))} />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-0.5 block">Posición Y (vertical %)</label>
-                        <input type="number" min="0" max="100" step="0.5" className={inputCls}
-                          placeholder="ej. 40.0"
-                          value={expositorForm.posicion_y}
-                          onChange={e => setExpositorForm(p => ({...p, posicion_y: e.target.value}))} />
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      💡 0,0 = esquina superior izquierda · 100,100 = esquina inferior derecha. 
-                      Ejemplo: stand en el centro = X:50, Y:50
-                    </p>
-                  </div>
                   <Field label="Website">
                     <input type="url" className={inputCls} placeholder="https://empresa.com" value={expositorForm.website_url}
                       onChange={e => setExpositorForm(p => ({...p, website_url: e.target.value}))} />
@@ -1449,11 +1163,13 @@ export default function AdminPanel() {
       {/* ═══════ TAB: MAPA DE STANDS ═══════ */}
       {activeTab === "mapa_stands" && (
         <div className="space-y-6">
-          <h2 className="text-xl font-bold dark:text-white">🗺️ Configuración del Mapa de Stands</h2>
+          <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+            <Map size={22} className="text-blue-600" />
+            Mapa de Stands
+          </h2>
           <MapaStandsAdmin
             expositores={expositores}
             sedeActiva={sedeForm}
-            edicionActiva={edicionActiva}
             flash={flash}
             loadExpositores={loadExpositores}
           />
@@ -1675,6 +1391,450 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// CONSTANTES GLOBALES DEL MAPA
+// ════════════════════════════════════════════════════════════
+const ESTADOS_STAND = {
+  libre:         { label: "Libre",          bg: "#f0fdf4", border: "#86efac", text: "#16a34a", dot: "#22c55e" },
+  solicitado:    { label: "Solicitado",     bg: "#fffbeb", border: "#fcd34d", text: "#d97706", dot: "#eab308" },
+  ocupado:       { label: "Ocupado",        bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", dot: "#3b82f6" },
+  no_disponible: { label: "No disponible",  bg: "#f9fafb", border: "#d1d5db", text: "#6b7280", dot: "#9ca3af" },
+};
+
+// Categorías y tamaños por sede (ancho_m x alto_m → celdas en grid de 3x3m base)
+const CATEGORIAS_POR_SEDE = {
+  colombia: [
+    { key:"diamante_plus", label:"Diamante Plus", ancho_m:6, alto_m:4, celdas_ancho:2, celdas_alto:1, color:"#7c3aed" },
+    { key:"diamante",      label:"Diamante",      ancho_m:6, alto_m:4, celdas_ancho:2, celdas_alto:1, color:"#db2777" },
+    { key:"esmeralda",     label:"Esmeralda",     ancho_m:6, alto_m:3, celdas_ancho:2, celdas_alto:1, color:"#059669" },
+    { key:"platino",       label:"Platino",       ancho_m:6, alto_m:6, celdas_ancho:2, celdas_alto:2, color:"#ca8a04" },
+    { key:"oro",           label:"Oro",           ancho_m:6, alto_m:3, celdas_ancho:2, celdas_alto:1, color:"#d97706" },
+    { key:"plata",         label:"Plata",         ancho_m:3, alto_m:3, celdas_ancho:1, celdas_alto:1, color:"#64748b" },
+  ],
+  mexico: [
+    { key:"platino", label:"Platino", ancho_m:6, alto_m:6, celdas_ancho:2, celdas_alto:2, color:"#ca8a04" },
+    { key:"oro",     label:"Oro",     ancho_m:6, alto_m:3, celdas_ancho:2, celdas_alto:1, color:"#d97706" },
+    { key:"plata",   label:"Plata",   ancho_m:3, alto_m:3, celdas_ancho:1, celdas_alto:1, color:"#64748b" },
+  ],
+  chile: [
+    { key:"platino", label:"Platino", ancho_m:5, alto_m:2, celdas_ancho:2, celdas_alto:1, color:"#ca8a04" },
+    { key:"oro",     label:"Oro",     ancho_m:3, alto_m:2, celdas_ancho:1, celdas_alto:1, color:"#d97706" },
+    { key:"plata",   label:"Plata",   ancho_m:3, alto_m:2, celdas_ancho:1, celdas_alto:1, color:"#64748b" },
+  ],
+};
+
+// ════════════════════════════════════════════════════════════
+// COMPONENTE PRINCIPAL
+// ════════════════════════════════════════════════════════════
+function MapaStandsAdmin({ expositores, sedeActiva, flash, loadExpositores }) {
+  const sede = (sedeActiva || "mexico").toLowerCase();
+  const categorias = CATEGORIAS_POR_SEDE[sede] || CATEGORIAS_POR_SEDE.mexico;
+
+  const [gridCols,      setGridCols]      = useState(46);
+  const [gridFilas,     setGridFilas]     = useState(22);
+  const [standAColocar, setStandAColocar] = useState(null);
+  const [savingId,      setSavingId]      = useState(null);
+  const [zoom,          setZoom]          = useState(1);
+
+  // Construir mapa de posiciones
+  const gridMap = {};
+  expositores.forEach(e => {
+    if (e.grid_col != null && e.grid_fila != null) {
+      const w = e.ancho_celdas || 1;
+      const h = e.alto_celdas  || 1;
+      for (let dc = 0; dc < w; dc++) {
+        for (let df = 0; df < h; df++) {
+          const key = `${e.grid_col + dc}-${e.grid_fila + df}`;
+          gridMap[key] = { expo: e, isOrigin: dc === 0 && df === 0 };
+        }
+      }
+    }
+  });
+
+  const sinPosicion  = expositores.filter(e => e.grid_col == null);
+  const conPosicion  = expositores.filter(e => e.grid_col != null);
+
+  // Cambiar estado
+  const cambiarEstado = async (expo, nuevoEstado) => {
+    setSavingId(expo.id);
+    try {
+      await API.patch(`/expositores/${expo.id}/estado`, { estado_stand: nuevoEstado });
+      flash(`✅ ${expo.nombre}: ${ESTADOS_STAND[nuevoEstado]?.label}`);
+      await loadExpositores();
+    } catch (err) {
+      flash(err.response?.data?.error || "Error al cambiar estado", true);
+    } finally { setSavingId(null); }
+  };
+
+  // Asignar posición en grid — celda vacía clickeada
+  const handleCeldaClick = async (col, fila, celdaOcupada) => {
+    if (!standAColocar) return;
+    if (celdaOcupada) { flash("⚠️ Celda ocupada, elige otra", true); return; }
+    try {
+      const cat = categorias.find(c => c.key === (standAColocar.categoria||"").toLowerCase());
+      const ancho = cat?.celdas_ancho || 1;
+      const alto  = cat?.celdas_alto  || 1;
+      await API.patch(`/expositores/${standAColocar.id}/posicion`, {
+        grid_col: col, grid_fila: fila,
+        ancho_celdas: ancho, alto_celdas: alto,
+      });
+      flash(`✅ ${standAColocar.nombre} → columna ${col}, fila ${fila} (${ancho}×${alto} celdas)`);
+      setStandAColocar(null);
+      await loadExpositores();
+    } catch { flash("Error al posicionar", true); }
+  };
+
+  // Quitar posición
+  const quitarPosicion = async (expo) => {
+    try {
+      await API.patch(`/expositores/${expo.id}/posicion`, { grid_col: null, grid_fila: null });
+      flash(`Posición de ${expo.nombre} eliminada`);
+      await loadExpositores();
+    } catch { flash("Error", true); }
+  };
+
+  const inputCls = "px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white";
+
+  return (
+    <div className="space-y-6">
+
+      {/* Referencia de categorías para esta sede */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+        <h3 className="font-bold text-gray-900 dark:text-white mb-3 text-sm uppercase tracking-wide">
+          Tipos de stand — {sede.charAt(0).toUpperCase() + sede.slice(1)}
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          {categorias.map(cat => (
+            <div key={cat.key} className="rounded-xl p-3 border-2 text-center"
+              style={{ backgroundColor: cat.color + "18", borderColor: cat.color }}>
+              <p className="font-bold text-xs" style={{ color: cat.color }}>{cat.label}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{cat.ancho_m}×{cat.alto_m} m</p>
+              <p className="text-xs text-gray-400">{cat.celdas_ancho}×{cat.celdas_alto} celdas</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Config del grid */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+        <h3 className="font-bold text-gray-900 dark:text-white mb-4 text-sm">
+          Dimensiones del área ({sede})
+        </h3>
+        <div className="flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Columnas</label>
+            <input type="number" min="10" max="80" value={gridCols}
+              onChange={e => setGridCols(Math.max(10, parseInt(e.target.value)||46))}
+              className={inputCls} style={{ width: 90 }} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Filas</label>
+            <input type="number" min="5" max="50" value={gridFilas}
+              onChange={e => setGridFilas(Math.max(5, parseInt(e.target.value)||22))}
+              className={inputCls} style={{ width: 90 }} />
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setZoom(z => Math.max(z-0.1, 0.3))}
+              className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">−</button>
+            <span className="text-xs text-gray-500 w-12 text-center">{Math.round(zoom*100)}%</span>
+            <button onClick={() => setZoom(z => Math.min(z+0.1, 2))}
+              className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">+</button>
+            <button onClick={() => setZoom(1)}
+              className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-400 hover:bg-gray-50">↺</button>
+          </div>
+          <p className="text-xs text-gray-400 ml-2">
+            {conPosicion.length}/{expositores.length} posicionados
+          </p>
+        </div>
+      </div>
+
+      {/* Stands sin posición */}
+      {sinPosicion.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700 rounded-2xl p-4">
+          <p className="text-sm font-bold text-amber-700 dark:text-amber-300 mb-3">
+            ⚠️ {sinPosicion.length} expositor(es) sin posición
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {sinPosicion.map(expo => {
+              const cat = categorias.find(c => c.key === (expo.categoria||"").toLowerCase());
+              return (
+                <div key={expo.id}
+                  className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl p-2.5 border border-amber-100">
+                  {expo.logo_url && (
+                    <img src={expo.logo_url} className="w-7 h-7 object-contain rounded"
+                      onError={e => e.target.style.display='none'} />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{expo.nombre}</p>
+                    <p className="text-xs text-gray-400">
+                      {expo.stand ? `Stand ${expo.stand}` : "Sin #"}
+                      {cat ? ` · ${cat.label} (${cat.ancho_m}×${cat.alto_m}m)` : ""}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setStandAColocar(standAColocar?.id === expo.id ? null : expo)}
+                    className={`shrink-0 text-xs px-2.5 py-1.5 rounded-xl font-semibold transition ${
+                      standAColocar?.id === expo.id
+                        ? "bg-blue-600 text-white"
+                        : "bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100"
+                    }`}
+                  >
+                    {standAColocar?.id === expo.id ? "✕ Cancelar" : "📌 Ubicar"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Banner modo ubicar */}
+      {standAColocar && (() => {
+        const cat = categorias.find(c => c.key === (standAColocar.categoria||"").toLowerCase());
+        return (
+          <div className="bg-blue-50 dark:bg-blue-900/10 border-2 border-blue-400 rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white text-lg shrink-0">📌</div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                Posicionando: <strong>{standAColocar.nombre}</strong>
+                {cat && <span className="font-normal text-blue-500 ml-2">({cat.label} · {cat.ancho_m}×{cat.alto_m}m · {cat.celdas_ancho}×{cat.celdas_alto} celdas)</span>}
+              </p>
+              <p className="text-xs text-blue-500 mt-0.5">
+                Haz clic en la celda del grid donde estará el <strong>borde superior-izquierdo</strong> del stand
+              </p>
+            </div>
+            <button onClick={() => setStandAColocar(null)} className="text-blue-400 hover:text-blue-600 shrink-0">
+              <X size={20} />
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Grid visual */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center gap-3">
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Plano {gridCols}×{gridFilas} — {sede}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(ESTADOS_STAND).map(([k, v]) => (
+              <span key={k} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
+                style={{ backgroundColor: v.bg, color: v.text, border: `1px solid ${v.border}` }}>
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: v.dot }} />
+                {v.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="overflow-auto p-3 bg-gray-50 dark:bg-gray-900" style={{ maxHeight: 520 }}>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${gridCols}, minmax(40px, 1fr))`,
+            gap: "2px",
+            transform: `scale(${zoom})`,
+            transformOrigin: "top left",
+            transition: "transform 0.2s",
+            width: `${100/zoom}%`,
+          }}>
+            {Array.from({ length: gridCols * gridFilas }, (_, i) => {
+              const col  = (i % gridCols) + 1;
+              const fila = Math.floor(i / gridCols) + 1;
+              const cell = gridMap[`${col}-${fila}`];
+              if (cell && !cell.isOrigin) return null;
+
+              const expo   = cell?.expo;
+              const estado = ESTADOS_STAND[expo?.estado_stand || "libre"];
+              const ancho  = expo?.ancho_celdas || 1;
+              const alto   = expo?.alto_celdas  || 1;
+              const isSaving = expo && savingId === expo.id;
+
+              return (
+                <div
+                  key={`${col}-${fila}`}
+                  onClick={() => handleCeldaClick(col, fila, !!expo)}
+                  title={expo
+                    ? `${expo.nombre}${expo.stand ? " · Stand "+expo.stand : ""} · ${estado.label}`
+                    : standAColocar
+                      ? `Colocar aquí: (${col},${fila})`
+                      : `Vacío (${col},${fila})`
+                  }
+                  style={{
+                    gridColumn: `span ${ancho}`,
+                    gridRow:    `span ${alto}`,
+                    backgroundColor: expo
+                      ? estado.bg
+                      : standAColocar ? "#e0f2fe" : "#ffffff",
+                    border: `2px solid ${expo
+                      ? estado.border
+                      : standAColocar ? "#38bdf8" : "#e2e8f0"}`,
+                    borderRadius: "5px",
+                    minHeight: "48px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "3px",
+                    cursor: expo ? "default" : (standAColocar ? "crosshair" : "default"),
+                    position: "relative",
+                    transition: "all 0.1s",
+                  }}
+                >
+                  {expo ? (
+                    <>
+                      {expo.logo_url
+                        ? <img src={expo.logo_url} style={{ width:26, height:26 }}
+                            className="object-contain"
+                            onError={e => e.target.style.display='none'} />
+                        : <Building2 size={14} style={{ color: estado.text }} />
+                      }
+                      <span style={{
+                        fontSize: "0.5rem", fontWeight: 700, color: estado.text,
+                        textAlign: "center", lineHeight: 1.2, marginTop: 2,
+                        maxWidth: "100%", overflow: "hidden",
+                      }}>
+                        {expo.stand || expo.nombre?.split(" ")[0]}
+                      </span>
+                      {/* Dot de estado */}
+                      <span style={{
+                        position:"absolute", top:3, right:3,
+                        width:8, height:8, borderRadius:"50%",
+                        backgroundColor: estado.dot,
+                      }} />
+                      {/* Hover: acciones */}
+                      <div className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity"
+                        style={{ backgroundColor:"rgba(255,255,255,0.95)", borderRadius:"3px",
+                          display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, padding:4 }}>
+                        {isSaving
+                          ? <Loader2 size={12} className="animate-spin text-blue-500" />
+                          : <>
+                              <span style={{ fontSize:"0.5rem", fontWeight:700, color:"#1e293b", textAlign:"center", lineHeight:1.2 }}>
+                                {expo.nombre?.split(" ").slice(0,2).join(" ")}
+                              </span>
+                              <span style={{ fontSize:"0.44rem", color:"#64748b" }}>
+                                {expo.stand ? `Stand ${expo.stand}` : ""}
+                              </span>
+                              <div style={{ display:"flex", gap:3 }}>
+                                {Object.entries(ESTADOS_STAND).map(([k, v]) => (
+                                  <button key={k}
+                                    onClick={e => { e.stopPropagation(); cambiarEstado(expo, k); }}
+                                    title={v.label}
+                                    style={{
+                                      width:12, height:12, borderRadius:"50%",
+                                      backgroundColor: v.bg,
+                                      border: `2px solid ${v.border}`,
+                                      cursor: "pointer",
+                                      outline: (expo.estado_stand||"libre") === k ? "2px solid #2563eb" : "none",
+                                      outlineOffset: 1,
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                              <button
+                                onClick={e => { e.stopPropagation(); quitarPosicion(expo); }}
+                                style={{ fontSize:"0.42rem", color:"#ef4444", cursor:"pointer", marginTop:1 }}>
+                                quitar posición
+                              </button>
+                            </>
+                        }
+                      </div>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: "0.42rem", color: standAColocar ? "#0ea5e9" : "#d1d5db" }}>
+                      {standAColocar ? "＋" : `${col},${fila}`}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabla de gestión de estados */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Estado de todos los stands ({expositores.length})
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                {["Empresa", "Stand", "Categoría", "Posición en grid", "Estado actual", "Cambiar a"].map(h => (
+                  <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              {expositores.map(expo => {
+                const estado = ESTADOS_STAND[expo.estado_stand || "libre"];
+                const cat    = categorias.find(c => c.key === (expo.categoria||"").toLowerCase());
+                return (
+                  <tr key={expo.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        {expo.logo_url && (
+                          <img src={expo.logo_url} className="w-6 h-6 object-contain rounded"
+                            onError={e => e.target.style.display='none'} />
+                        )}
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">{expo.nombre}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-sm text-gray-500">{expo.stand || "—"}</td>
+                    <td className="px-3 py-2.5">
+                      {cat
+                        ? <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                            style={{ backgroundColor: cat.color + "18", color: cat.color, border:`1px solid ${cat.color}` }}>
+                            {cat.label}
+                          </span>
+                        : <span className="text-xs text-gray-400">{expo.categoria || "—"}</span>
+                      }
+                    </td>
+                    <td className="px-3 py-2.5 text-sm">
+                      {expo.grid_col != null
+                        ? <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+                            ({expo.grid_col},{expo.grid_fila})
+                            {(expo.ancho_celdas > 1 || expo.alto_celdas > 1)
+                              ? ` ${expo.ancho_celdas}×${expo.alto_celdas}`
+                              : ""}
+                          </code>
+                        : <button
+                            onClick={() => setStandAColocar(standAColocar?.id === expo.id ? null : expo)}
+                            className="text-xs text-amber-600 hover:text-amber-700 font-medium underline">
+                            Asignar →
+                          </button>
+                      }
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold"
+                        style={{ backgroundColor:estado.bg, color:estado.text, border:`1px solid ${estado.border}` }}>
+                        {estado.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <select
+                        value={expo.estado_stand || "libre"}
+                        onChange={e => cambiarEstado(expo, e.target.value)}
+                        disabled={savingId === expo.id}
+                        className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white disabled:opacity-50"
+                      >
+                        {Object.entries(ESTADOS_STAND).map(([k, v]) => (
+                          <option key={k} value={k}>{v.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,560 +1,574 @@
 // src/pages/MapaExpo.jsx
-// Mapa de exposición interactivo CMC
-// Muestra un grid configurable con stands posicionados
-// Admin puede cambiar estado de cada stand desde el panel
+// Mapa de exposición CMC
+//
+// FUNCIONALIDAD:
+//   • Muestra la imagen del plano del salón (tabla `mapa` → url_publica)
+//   • Lista lateral de expositores con stand, logo y categoría
+//   • Click en un expositor → resalta su posición si tiene coordenadas
+//   • Super admin / staff → puede actualizar la URL del mapa
+//
+// ROLES:
+//   Todos con verMapa=true pueden ver.
+//   Solo super_admin y staff pueden cambiar la imagen del mapa.
 
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth }  from "../contexts/AuthContext.jsx";
 import { useEvent } from "../contexts/EventContext.jsx";
-import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import {
-  Map, Building2, Search, ZoomIn, ZoomOut, RefreshCw,
-  X, Star, Navigation, Coffee, CheckCircle2, Clock,
-  AlertCircle, Loader2, Upload, Info, Eye
+  Map, Building2, Search, ZoomIn, ZoomOut,
+  RefreshCw, Edit2, Save, X, AlertCircle,
+  ExternalLink, ChevronRight, Loader2
 } from "lucide-react";
 
 const ROLES_ADMIN = ["super_admin", "staff"];
 
-// ── Estados del stand ──────────────────────────────────────
-const ESTADOS = {
-  libre:          { label: "Libre",         color: "#f0fdf4", border: "#86efac", text: "#16a34a", dot: "bg-green-400" },
-  solicitado:     { label: "Solicitado",    color: "#fffbeb", border: "#fcd34d", text: "#d97706", dot: "bg-yellow-400" },
-  ocupado:        { label: "Ocupado",       color: "#eff6ff", border: "#93c5fd", text: "#2563eb", dot: "bg-blue-500"   },
-  no_disponible:  { label: "No disponible", color: "#f9fafb", border: "#d1d5db", text: "#6b7280", dot: "bg-gray-400"   },
-};
-
-// ── Colores por categoría ──────────────────────────────────
-const CAT_COLORS = {
-  platinum: { bg: "#fefce8", border: "#ca8a04", text: "#854d0e" },
-  gold:     { bg: "#fff7ed", border: "#f97316", text: "#9a3412" },
-  silver:   { bg: "#f1f5f9", border: "#64748b", text: "#1e293b" },
-  bronze:   { bg: "#fef2f2", border: "#ef4444", text: "#991b1b" },
-  default:  { bg: "#eff6ff", border: "#3b82f6", text: "#1d4ed8" },
-};
-const catColor = (c) => CAT_COLORS[(c||"").toLowerCase()] || CAT_COLORS.default;
-
 export default function MapaExpo() {
   const { userProfile } = useAuth();
   const { sedeActiva, edicionActiva } = useEvent();
+
+  const [mapa,         setMapa]         = useState(null);   // { url_publica, uploaded_at }
+  const [expositores,  setExpositores]  = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
+  const [search,       setSearch]       = useState("");
+  const [selected,     setSelected]     = useState(null);   // expositor seleccionado
+  const [zoom,         setZoom]         = useState(1);
+  const [editingUrl,   setEditingUrl]   = useState(false);
+  const [newUrl,       setNewUrl]       = useState("");
+  const [saving,       setSaving]       = useState(false);
+  const [saveMsg,      setSaveMsg]      = useState(null);
+
+  const imgRef = useRef(null);
+  const esAdmin = ROLES_ADMIN.includes(userProfile?.rol);
   const navigate = useNavigate();
 
-  const [expositores,  setExpositores]  = useState([]);
-  const [mapa,         setMapa]         = useState(null);    // imagen de fondo
-  const [gridConfig,   setGridConfig]   = useState({ grid_cols: 20, grid_filas: 15 });
-  const [selected,     setSelected]     = useState(null);    // stand seleccionado
-  const [loading,      setLoading]      = useState(true);
-  const [search,       setSearch]       = useState("");
-  const [filterEstado, setFilterEstado] = useState("todos");
-  const [zoom,         setZoom]         = useState(1);
-  const [imgError,     setImgError]     = useState(false);
-  const [vista,        setVista]        = useState("mapa");  // mapa | lista
+  // Estado de grid interactivo
+  const [gridConfig,   setGridConfig]   = useState({ grid_cols: 46, grid_filas: 22 });
   const [actionMsg,    setActionMsg]    = useState(null);
+  const [imgFailed,    setImgFailed]    = useState(false);
 
-  const esAdmin = ROLES_ADMIN.includes(userProfile?.rol);
-  const containerRef = useRef(null);
+  const flash = (msg) => { setActionMsg(msg); setTimeout(() => setActionMsg(null), 3000); };
 
-  useEffect(() => { load(); }, [sedeActiva, edicionActiva]);
+  const registrarAccion = async (tipo) => {
+    if (!selected) return;
+    try {
+      await API.post(`/expositores/${selected.id}/visita`, { tipo });
+      flash(tipo === 'visita' ? '✅ Visita registrada' : '⭐ Interés registrado');
+    } catch { flash('No se pudo registrar'); }
+  };
+
+  // ── Carga inicial ────────────────────────────────────────
+  useEffect(() => {
+    load();
+  }, [sedeActiva, edicionActiva]);
 
   const load = async () => {
-    setLoading(true);
     try {
-      const [expoRes, mapaRes, cfgRes] = await Promise.all([
+      setLoading(true); setError(null);
+      const [mapaRes, expoRes] = await Promise.all([
+        API.get("/mapa"),
         API.get(`/expositores${sedeActiva ? `?sede=${sedeActiva}` : ""}`),
-        API.get("/mapa").catch(() => ({ data: { mapa: null } })),
-        API.get(`/expositores/mapa-config/${sedeActiva || "mexico"}?edicion=${edicionActiva || 2026}`)
-          .catch(() => ({ data: { config: { grid_cols: 20, grid_filas: 15 } } })),
       ]);
-      const list = Array.isArray(expoRes.data) ? expoRes.data
-        : Array.isArray(expoRes.data?.expositores) ? expoRes.data.expositores : [];
-      setExpositores(list);
-      setMapa(mapaRes.data?.mapa || null);
-      setGridConfig(cfgRes.data?.config || { grid_cols: 20, grid_filas: 15 });
-      setImgError(false);
+
+      setMapa(mapaRes.data.mapa || null);
+      setImgFailed(false);
+
+      // Cargar config del grid
+      try {
+        const cfgRes = await API.get(`/expositores/mapa-config/${sedeActiva || "mexico"}?edicion=${edicionActiva || 2026}`);
+        if (cfgRes.data?.config) setGridConfig(cfgRes.data.config);
+      } catch { /* usar defaults */ }
+
+      const list = Array.isArray(expoRes.data)
+        ? expoRes.data
+        : Array.isArray(expoRes.data.expositores)
+        ? expoRes.data.expositores
+        : [];
+      setExpositores(list.filter(e => e.activo !== false));
     } catch (err) {
-      console.error("Error cargando mapa:", err);
+      setError("No se pudo cargar el mapa de exposición");
     } finally {
       setLoading(false);
     }
   };
 
-  const flash = (msg, isError = false) => {
-    setActionMsg({ msg, isError });
-    setTimeout(() => setActionMsg(null), 3000);
-  };
-
-  // Cambiar estado de un stand (solo admin)
-  const cambiarEstado = async (expo, nuevoEstado) => {
+  // ── Guardar nueva URL del mapa ───────────────────────────
+  const handleSaveUrl = async () => {
+    if (!newUrl.trim()) return;
     try {
-      await API.patch(`/expositores/${expo.id}/estado`, { estado_stand: nuevoEstado });
-      setExpositores(prev => prev.map(e => e.id === expo.id ? { ...e, estado_stand: nuevoEstado } : e));
-      if (selected?.id === expo.id) setSelected(s => ({ ...s, estado_stand: nuevoEstado }));
-      flash(`Estado actualizado: ${ESTADOS[nuevoEstado]?.label}`);
-    } catch { flash("Error al cambiar estado", true); }
+      setSaving(true);
+      const res = await API.put("/mapa", { url_publica: newUrl.trim() });
+      setMapa(res.data.mapa);
+      setEditingUrl(false);
+      setNewUrl("");
+      setSaveMsg("Mapa actualizado correctamente");
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch (err) {
+      setSaveMsg("Error al guardar: " + (err.response?.data?.error || err.message));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Registrar visita o interés
-  const registrarAccion = async (expo, tipo) => {
-    try {
-      await API.post(`/expositores/${expo.id}/visita`, { tipo });
-      flash(tipo === 'visita' ? "✅ Visita registrada" : "⭐ Interés registrado");
-    } catch { flash("Error al registrar", true); }
-  };
-
-  // Filtrar expositores
-  const filtrados = expositores.filter(e => {
+  // ── Filtro de expositores ────────────────────────────────
+  const filtered = expositores.filter(e => {
+    if (!search) return true;
     const q = search.toLowerCase();
-    const matchSearch = !search ||
+    return (
       e.nombre?.toLowerCase().includes(q) ||
       e.stand?.toLowerCase().includes(q) ||
-      e.categoria?.toLowerCase().includes(q);
-    const matchEstado = filterEstado === "todos" || (e.estado_stand || "libre") === filterEstado;
-    return matchSearch && matchEstado;
+      e.categoria?.toLowerCase().includes(q)
+    );
   });
 
-  // Construir mapa de grid — clave "col-fila" → expositor
-  const gridMap = {};
-  expositores.forEach(e => {
-    if (e.grid_col != null && e.grid_fila != null) {
-      for (let dc = 0; dc < (e.ancho_celdas || 1); dc++) {
-        for (let df = 0; df < (e.alto_celdas || 1); df++) {
-          gridMap[`${e.grid_col + dc}-${e.grid_fila + df}`] = { expo: e, isOrigin: dc === 0 && df === 0 };
-        }
-      }
-    }
-  });
+  // ── Zoom ────────────────────────────────────────────────
+  const zoomIn  = () => setZoom(z => Math.min(z + 0.25, 3));
+  const zoomOut = () => setZoom(z => Math.max(z - 0.25, 0.5));
 
-  const sinPosicion = expositores.filter(e => e.grid_col == null || e.grid_fila == null);
-  const conPosicion = expositores.filter(e => e.grid_col != null && e.grid_fila != null);
-
-  if (loading) return (
-    <div className="flex justify-center py-20">
-      <Loader2 className="animate-spin text-blue-600" size={32} />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-blue-600" size={32} />
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4">
+    <div className="max-w-7xl mx-auto space-y-5">
 
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <Map className="text-blue-600" size={26} /> Mapa de Exposición
+            <Map className="text-blue-600" size={26} />
+            Mapa de Exposición
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {conPosicion.length} stands posicionados · {expositores.length} expositores totales
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            {expositores.length} expositores
+            {sedeActiva && <span> · <span className="capitalize font-medium">{sedeActiva}</span></span>}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setVista(v => v === "mapa" ? "lista" : "mapa")}
-            className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-            {vista === "mapa" ? "Ver lista" : "Ver mapa"}
-          </button>
-          <button onClick={load} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl">
+        <div className="flex gap-2">
+          <button onClick={load} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition">
             <RefreshCw size={18} />
           </button>
+          {esAdmin && !editingUrl && (
+            <button
+              onClick={() => { setEditingUrl(true); setNewUrl(mapa?.url_publica || ""); }}
+              className="flex items-center gap-2 text-sm border border-gray-300 dark:border-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+            >
+              <Edit2 size={15} /> Cambiar imagen del mapa
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Mensaje de acción */}
+      {/* Alerta de éxito/error al guardar */}
+      {/* Mensaje flash de acciones */}
       {actionMsg && (
-        <div className={`px-4 py-3 rounded-xl text-sm font-medium ${actionMsg.isError ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
-          {actionMsg.msg}
+        <div className="px-4 py-3 bg-green-50 text-green-700 rounded-xl text-sm font-medium border border-green-200">
+          {actionMsg}
         </div>
       )}
 
-      {/* Leyenda de estados */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(ESTADOS).map(([k, v]) => (
-          <span key={k} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border"
-            style={{ backgroundColor: v.color, borderColor: v.border, color: v.text }}>
-            <span className={`w-2 h-2 rounded-full ${v.dot}`} />
-            {v.label} ({expositores.filter(e => (e.estado_stand||"libre") === k).length})
-          </span>
-        ))}
-      </div>
-
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-48">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar stand o empresa..."
-            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 dark:text-white" />
-        </div>
-        <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 dark:text-white">
-          <option value="todos">Todos los estados</option>
-          {Object.entries(ESTADOS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
-        <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-600 rounded-xl px-2">
-          <button onClick={() => setZoom(z => Math.max(z-0.2, 0.3))} className="p-1.5 text-gray-500 hover:text-gray-700">
-            <ZoomOut size={15} />
-          </button>
-          <span className="text-xs text-gray-400 w-10 text-center">{Math.round(zoom*100)}%</span>
-          <button onClick={() => setZoom(z => Math.min(z+0.2, 3))} className="p-1.5 text-gray-500 hover:text-gray-700">
-            <ZoomIn size={15} />
-          </button>
+      {/* Simbología de estados */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Simbología</p>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { label:"Libre",          dot:"#22c55e", bg:"#f0fdf4", border:"#86efac", text:"#16a34a" },
+            { label:"Solicitado",     dot:"#eab308", bg:"#fffbeb", border:"#fcd34d", text:"#d97706" },
+            { label:"Ocupado",        dot:"#3b82f6", bg:"#eff6ff", border:"#93c5fd", text:"#1d4ed8" },
+            { label:"No disponible",  dot:"#9ca3af", bg:"#f9fafb", border:"#d1d5db", text:"#6b7280" },
+          ].map(s => (
+            <span key={s.label} className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
+              style={{ backgroundColor:s.bg, borderColor:s.border, color:s.text }}>
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor:s.dot }} />
+              {s.label}
+            </span>
+          ))}
         </div>
       </div>
 
-      {/* VISTA MAPA */}
-      {vista === "mapa" && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      {saveMsg && (
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm border
+          ${saveMsg.startsWith("Error")
+            ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700 text-red-700 dark:text-red-300"
+            : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 text-green-700 dark:text-green-300"}`}>
+          {saveMsg.startsWith("Error") ? <AlertCircle size={14} /> : "✅"} {saveMsg}
+        </div>
+      )}
 
-          {/* Grid interactivo */}
-          <div className="lg:col-span-3">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="overflow-auto" style={{ maxHeight: 600 }}>
-                <div ref={containerRef}
-                  style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.2s" }}>
+      {/* Editor URL del mapa (solo admin) */}
+      {editingUrl && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">URL de la imagen del mapa</p>
+          <p className="text-xs text-gray-400">Sube la imagen a Google Drive, Dropbox o cualquier CDN y pega la URL pública aquí.</p>
+          <div className="flex gap-2">
+            <input
+              value={newUrl}
+              onChange={e => setNewUrl(e.target.value)}
+              placeholder="https://drive.google.com/... o https://..."
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button onClick={handleSaveUrl} disabled={saving || !newUrl.trim()}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+              Guardar
+            </button>
+            <button onClick={() => setEditingUrl(false)}
+              className="p-2 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
 
-                  {/* Imagen de fondo si existe */}
-                  {mapa?.url_publica && !imgError ? (
-                    <div className="relative" style={{ minHeight: 400 }}>
-                      <img
-                        src={mapa.url_publica}
-                        alt="Plano"
-                        className="w-full"
-                        onError={() => setImgError(true)}
-                      />
-                      {/* Pins sobre imagen */}
-                      {expositores.map(expo => {
-                        if (expo.posicion_x == null || expo.posicion_y == null) return null;
-                        const estado = ESTADOS[expo.estado_stand || "libre"];
-                        const isSelected = selected?.id === expo.id;
-                        return (
-                          <div key={expo.id}
-                            onClick={() => setSelected(isSelected ? null : expo)}
-                            className="absolute cursor-pointer transition-all"
-                            style={{
-                              left: `${expo.posicion_x}%`, top: `${expo.posicion_y}%`,
-                              transform: `translate(-50%,-50%) ${isSelected ? "scale(1.3)" : "scale(1)"}`,
-                              zIndex: isSelected ? 20 : 10,
-                            }}>
-                            <div className="flex flex-col items-center justify-center rounded-xl border-2 px-2 py-1.5 shadow-lg min-w-[60px] text-center"
-                              style={{ backgroundColor: estado.color, borderColor: isSelected ? "#1d4ed8" : estado.border }}>
-                              {expo.logo_url
-                                ? <img src={expo.logo_url} className="w-8 h-8 object-contain" onError={e=>e.target.style.display='none'} />
-                                : <Building2 size={16} style={{ color: estado.text }} />
-                              }
-                              <span className="font-bold leading-tight mt-0.5" style={{ color: estado.text, fontSize:"0.6rem" }}>
-                                {expo.stand || expo.nombre?.split(" ")[0]}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    /* Grid generado */
-                    <GridMapa
-                      gridConfig={gridConfig}
-                      gridMap={gridMap}
-                      filtrados={filtrados}
-                      selected={selected}
-                      onSelect={setSelected}
-                      esAdmin={esAdmin}
-                      onCambiarEstado={cambiarEstado}
-                    />
-                  )}
-                </div>
+      {/* Layout: Mapa + Lista */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        {/* ── Imagen del mapa ── */}
+        <div className="lg:col-span-2">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Controles de zoom */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Plano del salón
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">{Math.round(zoom * 100)}%</span>
+                <button onClick={zoomOut} disabled={zoom <= 0.5}
+                  className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 transition">
+                  <ZoomOut size={16} />
+                </button>
+                <button onClick={zoomIn} disabled={zoom >= 3}
+                  className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 transition">
+                  <ZoomIn size={16} />
+                </button>
+                <button onClick={() => setZoom(1)}
+                  className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                  Restablecer
+                </button>
               </div>
             </div>
 
-            {/* Info de stands sin posición */}
-            {esAdmin && sinPosicion.length > 0 && (
-              <div className="mt-2 flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400 px-1">
-                <Info size={13} />
-                {sinPosicion.length} expositor(es) sin posición en el grid. Edítalos en Admin → Expositores.
+            {/* Imagen */}
+            <div className="overflow-auto bg-gray-50 dark:bg-gray-900" style={{ maxHeight: "520px" }}>
+              {mapa?.url_publica ? (
+                <div className="relative inline-block min-w-full" style={{ transformOrigin: "top left" }}>
+                  <img
+                    ref={imgRef}
+                    src={mapa.url_publica}
+                    alt="Mapa de exposición CMC"
+                    style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.2s" }}
+                    className="block max-w-none"
+                    onError={() => setImgFailed(true)}
+                  />
+                  {/* Pins de expositores con coordenadas */}
+                  {selected && selected.posicion_x && selected.posicion_y && (
+                    <div
+                      className="absolute w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg -translate-x-1/2 -translate-y-1/2 flex items-center justify-center animate-bounce"
+                      style={{
+                        left:  `${selected.posicion_x}%`,
+                        top:   `${selected.posicion_y}%`,
+                        transform: `scale(${1/zoom}) translate(-50%, -50%)`,
+                      }}
+                      title={selected.nombre}
+                    >
+                      <span className="text-white text-xs font-bold">★</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <MapaGrid
+                  expositores={expositores}
+                  gridConfig={gridConfig}
+                  selected={selected}
+                  onSelect={setSelected}
+                  esAdmin={esAdmin}
+                />
+              )}
+            </div>
+
+            {/* Nota al pie */}
+            {mapa?.uploaded_at && (
+              <div className="px-4 py-2 text-xs text-gray-400 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <span>Última actualización: {new Date(mapa.uploaded_at).toLocaleDateString("es", { day:"numeric", month:"short", year:"numeric" })}</span>
+                {mapa.url_publica && (
+                  <a href={mapa.url_publica} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-blue-500 hover:text-blue-700">
+                    Abrir imagen <ExternalLink size={12} />
+                  </a>
+                )}
               </div>
             )}
           </div>
+        </div>
 
-          {/* Panel lateral — detalle del stand seleccionado */}
-          <div className="lg:col-span-1">
-            {selected ? (
-              <StandDetail
-                expo={selected}
-                userProfile={userProfile}
-                esAdmin={esAdmin}
-                onClose={() => setSelected(null)}
-                onCambiarEstado={cambiarEstado}
-                onRegistrarAccion={registrarAccion}
-                onNavigate={navigate}
-              />
-            ) : (
-              <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 text-center">
-                <Map size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Selecciona un stand</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                  Haz clic en cualquier celda del mapa para ver información del expositor
-                </p>
-              </div>
-            )}
+        {/* ── Lista de expositores ── */}
+        <div className="flex flex-col gap-3">
+          {/* Buscador */}
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar expositor o stand..."
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
 
-            {/* Lista de expositores filtrados */}
-            <div className="mt-3 space-y-1.5 max-h-72 overflow-y-auto">
-              {filtrados.slice(0,20).map(expo => {
-                const estado = ESTADOS[expo.estado_stand || "libre"];
-                return (
-                  <button key={expo.id}
-                    onClick={() => setSelected(expo)}
-                    className={`w-full text-left px-3 py-2 rounded-xl border-2 transition flex items-center gap-2 text-xs ${
-                      selected?.id === expo.id ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300"
-                    }`}>
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${estado.dot}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 dark:text-white truncate">{expo.nombre}</p>
-                      <p className="text-gray-400">
-                        {expo.stand ? `Stand ${expo.stand}` : "Sin asignar"} · {estado.label}
-                      </p>
+          {/* Lista */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Expositores ({filtered.length})
+              </p>
+              {selected && (
+                <button onClick={() => setSelected(null)}
+                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                  <X size={12} /> Limpiar
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-y-auto" style={{ maxHeight: "460px" }}>
+              {filtered.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">
+                  <Building2 size={32} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">{search ? "Sin resultados" : "No hay expositores"}</p>
+                </div>
+              ) : (
+                filtered.map(expo => (
+                  <button
+                    key={expo.id}
+                    onClick={() => setSelected(selected?.id === expo.id ? null : expo)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b last:border-0 dark:border-gray-700 transition
+                      ${selected?.id === expo.id
+                        ? "bg-blue-50 dark:bg-blue-900/20"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-700/50"}`}
+                  >
+                    {/* Logo o inicial */}
+                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 shrink-0 flex items-center justify-center">
+                      {expo.logo_url ? (
+                        <img src={expo.logo_url} alt={expo.nombre}
+                          className="w-full h-full object-contain p-1"
+                          onError={e => { e.target.style.display="none"; e.target.parentNode.innerHTML = `<span class="text-lg font-bold text-gray-400">${expo.nombre?.charAt(0)}</span>`; }} />
+                      ) : (
+                        <span className="text-lg font-bold text-gray-400">
+                          {expo.nombre?.charAt(0)?.toUpperCase()}
+                        </span>
+                      )}
                     </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold truncate ${selected?.id === expo.id ? "text-blue-700 dark:text-blue-300" : "text-gray-900 dark:text-white"}`}>
+                        {expo.nombre}
+                      </p>
+                      <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
+                        {expo.stand && <span className="font-medium">Stand {expo.stand}</span>}
+                        {expo.categoria && <span>· {expo.categoria}</span>}
+                      </div>
+                    </div>
+
+                    <ChevronRight size={16} className={`shrink-0 transition ${selected?.id === expo.id ? "text-blue-500 rotate-90" : "text-gray-300"}`} />
                   </button>
-                );
-              })}
-              {filtrados.length > 20 && (
-                <p className="text-center text-xs text-gray-400 py-2">+{filtrados.length-20} más</p>
+                ))
               )}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* VISTA LISTA */}
-      {vista === "lista" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtrados.map(expo => {
-            const estado = ESTADOS[expo.estado_stand || "libre"];
-            const col = catColor(expo.categoria);
-            return (
-              <div key={expo.id}
-                onClick={() => { setSelected(expo); setVista("mapa"); }}
-                className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition cursor-pointer">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl shrink-0 flex items-center justify-center overflow-hidden"
-                    style={{ backgroundColor: col.bg, border: `2px solid ${col.border}` }}>
-                    {expo.logo_url
-                      ? <img src={expo.logo_url} className="w-full h-full object-contain p-1" onError={e=>e.target.style.display='none'} />
-                      : <Building2 size={20} style={{ color: col.text }} />
-                    }
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-900 dark:text-white truncate">{expo.nombre}</p>
-                    <p className="text-xs text-gray-500">{expo.stand ? `Stand ${expo.stand}` : ""}{expo.categoria ? ` · ${expo.categoria}` : ""}</p>
-                    <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
-                      style={{ backgroundColor: estado.color, color: estado.text, border: `1px solid ${estado.border}` }}>
-                      {estado.label}
-                    </span>
-                  </div>
+          {/* Detalle del expositor seleccionado */}
+          {selected && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-blue-200 dark:border-blue-700 p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                {selected.logo_url && (
+                  <img src={selected.logo_url} alt={selected.nombre}
+                    className="w-14 h-14 rounded-xl object-contain bg-gray-50 dark:bg-gray-700 p-1 border dark:border-gray-600 shrink-0"
+                    onError={e => e.target.style.display="none"} />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 dark:text-white">{selected.nombre}</p>
+                  {selected.stand && <p className="text-sm text-blue-600 dark:text-blue-400 font-semibold">Stand {selected.stand}</p>}
+                  {selected.categoria && <p className="text-xs text-gray-500 dark:text-gray-400">{selected.categoria}</p>}
                 </div>
               </div>
-            );
-          })}
+
+              {selected.descripcion && (
+                <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">{selected.descripcion}</p>
+              )}
+
+              <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                {selected.contact?.email && (
+                  <a href={`mailto:${selected.contact.email}`}
+                    className="flex items-center gap-1.5 hover:text-blue-600 transition">
+                    ✉️ {selected.contact.email}
+                  </a>
+                )}
+                {selected.contact?.telefono && (
+                  <a href={`tel:${selected.contact.telefono}`}
+                    className="flex items-center gap-1.5 hover:text-blue-600 transition">
+                    📞 {selected.contact.telefono}
+                  </a>
+                )}
+                {selected.website_url && (
+                  <a href={selected.website_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 hover:text-blue-600 transition">
+                    🌐 {selected.website_url.replace(/^https?:\/\//, "")}
+                  </a>
+                )}
+              </div>
+
+              {selected.posicion_x && selected.posicion_y && (
+                <p className="text-xs text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
+                  📍 Ubicado en el mapa — mira el pin rojo
+                </p>
+              )}
+
+              {/* Estado del stand */}
+              {(() => {
+                const ESTADOS_VIS2 = {
+                  libre:         { label:"Libre",         dot:"#22c55e", bg:"#f0fdf4", border:"#86efac", text:"#16a34a" },
+                  solicitado:    { label:"Solicitado",    dot:"#eab308", bg:"#fffbeb", border:"#fcd34d", text:"#d97706" },
+                  ocupado:       { label:"Ocupado",       dot:"#3b82f6", bg:"#eff6ff", border:"#93c5fd", text:"#1d4ed8" },
+                  no_disponible: { label:"No disponible", dot:"#9ca3af", bg:"#f9fafb", border:"#d1d5db", text:"#6b7280" },
+                };
+                const st = ESTADOS_VIS2[selected.estado_stand || "libre"];
+                return (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+                    style={{ backgroundColor:st.bg, color:st.text, border:`1px solid ${st.border}` }}>
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor:st.dot }} />
+                    {st.label}
+                  </span>
+                );
+              })()}
+
+              {/* Botones de acción — solo asistentes (no admin) */}
+              {!esAdmin && (
+                <div className="space-y-2 pt-1">
+                  <button onClick={() => registrarAccion("visita")}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 border border-green-200 rounded-xl text-sm font-semibold hover:bg-green-100 transition">
+                    ✅ Visité este stand
+                  </button>
+                  <button onClick={() => registrarAccion("interes")}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-xl text-sm font-semibold hover:bg-yellow-100 transition">
+                    ⭐ Me interesa
+                  </button>
+                  {(selected.estado_stand === "ocupado") && (
+                    <button onClick={() => navigate("/networking")}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition">
+                      📅 Agendar cita
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm">
+          <AlertCircle size={16} /> {error}
         </div>
       )}
     </div>
   );
 }
 
-// ── Grid generado con celdas ───────────────────────────────
-function GridMapa({ gridConfig, gridMap, filtrados, selected, onSelect, esAdmin, onCambiarEstado }) {
-  const { grid_cols = 20, grid_filas = 15 } = gridConfig;
-  const filtradosIds = new Set(filtrados.map(e => e.id));
+// ── Grid generado cuando no hay imagen ───────────────────────
+const ESTADOS_VIS = {
+  libre:         { bg:"#f0fdf4", border:"#86efac", text:"#16a34a", dot:"#22c55e" },
+  solicitado:    { bg:"#fffbeb", border:"#fcd34d", text:"#d97706", dot:"#eab308" },
+  ocupado:       { bg:"#eff6ff", border:"#93c5fd", text:"#1d4ed8", dot:"#3b82f6" },
+  no_disponible: { bg:"#f9fafb", border:"#d1d5db", text:"#6b7280", dot:"#9ca3af" },
+};
+
+function MapaGrid({ expositores, gridConfig, selected, onSelect, esAdmin }) {
+  const { grid_cols = 46, grid_filas = 22 } = gridConfig || {};
+
+  const gridMap = {};
+  expositores.forEach(e => {
+    if (e.grid_col == null) return;
+    const w = e.ancho_celdas || 1, h = e.alto_celdas || 1;
+    for (let dc = 0; dc < w; dc++)
+      for (let df = 0; df < h; df++)
+        gridMap[`${e.grid_col+dc}-${e.grid_fila+df}`] = { expo: e, isOrigin: dc===0&&df===0 };
+  });
+
+  const conPos = expositores.filter(e => e.grid_col != null);
+
+  if (conPos.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+        <Map size={48} className="mb-3 opacity-20" />
+        <p className="font-semibold">Sin stands posicionados</p>
+        <p className="text-sm mt-1 text-center max-w-xs">
+          El administrador puede configurar las posiciones en Admin Panel → Mapa Stands
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-3 bg-gray-50 dark:bg-gray-900" style={{ minHeight: 400 }}>
-      {/* Grid SVG de fondo */}
-      <div
-        className="relative rounded-xl overflow-hidden"
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${grid_cols}, minmax(0, 1fr))`,
-          gap: "2px",
-          background: "#e2e8f0",
-          padding: "2px",
-        }}
-      >
+    <div className="p-3 overflow-auto bg-gray-50" style={{ maxHeight: 480 }}>
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:`repeat(${grid_cols}, minmax(0,1fr))`,
+        gap:"2px", minWidth: 600,
+      }}>
         {Array.from({ length: grid_cols * grid_filas }, (_, i) => {
-          const col = (i % grid_cols) + 1;
+          const col  = (i % grid_cols) + 1;
           const fila = Math.floor(i / grid_cols) + 1;
           const cell = gridMap[`${col}-${fila}`];
-          if (cell && !cell.isOrigin) return null; // ocupada por stand multi-celda
-
-          const expo = cell?.expo;
-          const isFiltered = expo ? filtradosIds.has(expo.id) : true;
-          const isSelected = expo && selected?.id === expo.id;
-          const estado = ESTADOS[expo?.estado_stand || "libre"];
-          const col_cat = expo ? catColor(expo.categoria) : null;
-
-          const ancho = expo ? (expo.ancho_celdas || 1) : 1;
-          const alto  = expo ? (expo.alto_celdas  || 1) : 1;
+          if (cell && !cell.isOrigin) return null;
+          const expo   = cell?.expo;
+          const estado = ESTADOS_VIS[expo?.estado_stand || "libre"];
+          const isSel  = expo && selected?.id === expo.id;
+          const ancho  = expo?.ancho_celdas || 1;
+          const alto   = expo?.alto_celdas  || 1;
 
           return (
             <div key={`${col}-${fila}`}
-              onClick={() => expo ? onSelect(isSelected ? null : expo) : null}
+              onClick={() => expo ? onSelect(isSel ? null : expo) : null}
+              title={expo ? `${expo.nombre}${expo.stand?" · Stand "+expo.stand:""}` : ""}
               style={{
-                gridColumn: `span ${ancho}`,
-                gridRow:    `span ${alto}`,
-                backgroundColor: expo ? (isSelected ? "#dbeafe" : (isFiltered ? estado.color : "#f9fafb")) : "#ffffff",
-                border: `2px solid ${expo ? (isSelected ? "#2563eb" : (isFiltered ? estado.border : "#e5e7eb")) : "#f3f4f6"}`,
-                opacity: expo && !isFiltered ? 0.4 : 1,
+                gridColumn:`span ${ancho}`, gridRow:`span ${alto}`,
+                backgroundColor: expo ? estado.bg : "#f8fafc",
+                border:`2px solid ${expo ? (isSel?"#2563eb":estado.border) : "#e2e8f0"}`,
+                borderRadius:5, minHeight:48,
+                display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                padding:3, position:"relative",
                 cursor: expo ? "pointer" : "default",
-                borderRadius: "6px",
-                minHeight: "52px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "4px",
-                position: "relative",
-                transition: "all 0.15s",
-                transform: isSelected ? "scale(0.97)" : "scale(1)",
-              }}
-              title={expo ? `${expo.nombre}${expo.stand ? " · Stand "+expo.stand : ""}` : `Celda libre (${col},${fila})`}
-            >
+                boxShadow: isSel ? "0 0 0 3px #93c5fd" : "none",
+                transition:"all 0.12s",
+              }}>
               {expo ? (
                 <>
                   {expo.logo_url
-                    ? <img src={expo.logo_url} alt="" className="object-contain" style={{width:32, height:32}} onError={e=>e.target.style.display='none'} />
-                    : <Building2 size={16} style={{ color: estado.text }} />
+                    ? <img src={expo.logo_url} style={{width:24,height:24}} className="object-contain"
+                        onError={e => e.target.style.display='none'} />
+                    : <Building2 size={13} style={{ color:estado.text }} />
                   }
-                  <span className="font-bold truncate w-full text-center leading-tight mt-0.5"
-                    style={{ color: estado.text, fontSize: "0.55rem" }}>
+                  <span style={{ fontSize:"0.5rem", fontWeight:700, color:estado.text,
+                    textAlign:"center", lineHeight:1.2, marginTop:2, maxWidth:"100%", overflow:"hidden" }}>
                     {expo.stand || expo.nombre?.split(" ")[0]}
                   </span>
-                  <span className={`absolute top-1 right-1 w-2 h-2 rounded-full ${estado.dot}`} />
+                  <span style={{ position:"absolute", top:3, right:3, width:7, height:7,
+                    borderRadius:"50%", backgroundColor:estado.dot }} />
                 </>
               ) : (
-                <span className="text-gray-200 dark:text-gray-700" style={{ fontSize: "0.5rem" }}>
-                  {col},{fila}
-                </span>
+                <span style={{ fontSize:"0.4rem", color:"#e2e8f0" }}>{col},{fila}</span>
               )}
             </div>
           );
         })}
       </div>
-
-      {/* Leyenda de coordenadas */}
-      <p className="text-xs text-gray-400 mt-2 text-center">
-        Grid {grid_cols}×{grid_filas} · Haz clic en un stand para ver detalles
+      <p className="text-xs text-gray-400 text-center mt-2">
+        {conPos.length} stands · Grid {grid_cols}×{grid_filas} · Haz clic para ver info
       </p>
-    </div>
-  );
-}
-
-// ── Detalle del stand seleccionado ─────────────────────────
-function StandDetail({ expo, userProfile, esAdmin, onClose, onCambiarEstado, onRegistrarAccion, onNavigate }) {
-  const estado = ESTADOS[expo.estado_stand || "libre"];
-  const col    = catColor(expo.categoria);
-  const contact = expo.contact || {};
-
-  const estaOcupado = expo.estado_stand === "ocupado";
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border-2 border-blue-200 dark:border-blue-700 overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-3 flex items-start justify-between"
-        style={{ backgroundColor: estaOcupado ? col.bg : estado.color, borderBottom: `2px solid ${estaOcupado ? col.border : estado.border}` }}>
-        <div className="flex-1 min-w-0">
-          {expo.logo_url && (
-            <img src={expo.logo_url} alt="" className="h-8 object-contain mb-2 max-w-full"
-              onError={e=>e.target.style.display='none'} />
-          )}
-          <p className="font-bold text-gray-900 dark:text-white text-sm leading-tight">{expo.nombre}</p>
-          {expo.stand && <p className="text-xs font-semibold" style={{ color: col.text }}>Stand {expo.stand}</p>}
-          {expo.categoria && <p className="text-xs text-gray-500 capitalize">{expo.categoria}</p>}
-        </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-2 shrink-0">
-          <X size={18} />
-        </button>
-      </div>
-
-      <div className="p-4 space-y-3">
-        {/* Estado */}
-        <div className="flex items-center justify-between">
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold"
-            style={{ backgroundColor: estado.color, color: estado.text, border: `1px solid ${estado.border}` }}>
-            {estado.label}
-          </span>
-          {expo.grid_col && expo.grid_fila && (
-            <span className="text-xs text-gray-400">
-              Posición: {expo.grid_col},{expo.grid_fila}
-              {expo.ancho_celdas > 1 || expo.alto_celdas > 1
-                ? ` (${expo.ancho_celdas}×${expo.alto_celdas})`
-                : ""}
-            </span>
-          )}
-        </div>
-
-        {/* Descripción */}
-        {expo.descripcion && (
-          <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-3">
-            {expo.descripcion}
-          </p>
-        )}
-
-        {/* Contacto */}
-        {(contact.nombre || contact.email || contact.telefono) && (
-          <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-3 space-y-1">
-            <p className="text-xs font-semibold text-gray-500 uppercase">Contacto</p>
-            {contact.nombre    && <p className="text-xs font-medium text-gray-800 dark:text-white">{contact.nombre}</p>}
-            {contact.email     && <a href={`mailto:${contact.email}`} className="text-xs text-blue-600 hover:underline block">{contact.email}</a>}
-            {contact.telefono  && <a href={`tel:${contact.telefono}`} className="text-xs text-blue-600 hover:underline block">{contact.telefono}</a>}
-          </div>
-        )}
-
-        {/* Website */}
-        {expo.website_url && (
-          <a href={expo.website_url} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 text-xs text-blue-600 hover:underline">
-            🌐 {expo.website_url.replace(/^https?:\/\//, '')}
-          </a>
-        )}
-
-        {/* Acciones del asistente */}
-        {!esAdmin && (
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <button
-              onClick={() => onRegistrarAccion(expo, 'visita')}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700 rounded-xl text-xs font-semibold hover:bg-green-100 transition">
-              <CheckCircle2 size={13} /> Visité este stand
-            </button>
-            <button
-              onClick={() => onRegistrarAccion(expo, 'interes')}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-700 rounded-xl text-xs font-semibold hover:bg-yellow-100 transition">
-              <Star size={13} /> Me interesa
-            </button>
-            {expo.estado_stand === "ocupado" && (
-              <button
-                onClick={() => onNavigate('/networking')}
-                className="col-span-2 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition">
-                <Navigation size={13} /> Agendar cita de networking
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Acciones del admin */}
-        {esAdmin && (
-          <div className="space-y-2 pt-1">
-            <p className="text-xs font-semibold text-gray-500 uppercase">Cambiar estado</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {Object.entries(ESTADOS).map(([k, v]) => (
-                <button key={k}
-                  onClick={() => onCambiarEstado(expo, k)}
-                  className={`px-2 py-1.5 rounded-xl text-xs font-semibold border-2 transition ${
-                    (expo.estado_stand||"libre") === k ? "ring-2 ring-blue-400" : "hover:opacity-80"
-                  }`}
-                  style={{ backgroundColor: v.color, borderColor: v.border, color: v.text }}>
-                  {v.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
