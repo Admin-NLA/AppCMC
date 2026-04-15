@@ -15,6 +15,7 @@ import usersRoutes         from "./routes/users.routes.js";
 import statsRoutes         from "./routes/stats.js";
 import uploadRoutes        from "./routes/upload.js";
 import staffRoutes         from "./routes/staff.js";
+import { authRequired }    from "./utils/authMiddleware.js";
 import qrRoutes            from "./routes/qr.js";
 import misRegistrosRoutes  from "./routes/mis-registros.js";
 import networkingRoutes    from "./routes/networking.js";
@@ -90,6 +91,76 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth",           authRoutes);
 app.use("/api/agenda",         agendaRoutes);
 app.use("/api/speakers",       speakersRoutes);
+// ── Endpoints críticos expositores (inline para garantizar deploy) ──
+app.patch("/api/expositores/:id/estado", authRequired, async (req, res) => {
+  try {
+    const rol = req.user?.rol;
+    if (!["super_admin","staff"].includes(rol))
+      return res.status(403).json({ error: "Sin permisos" });
+    const { id } = req.params;
+    const { estado_stand } = req.body;
+    const valid = ["libre","solicitado","ocupado","no_disponible"];
+    if (!valid.includes(estado_stand))
+      return res.status(400).json({ error: `Estado inválido. Usa: ${valid.join(", ")}` });
+    const r = await pool.query(
+      `UPDATE expositores SET estado_stand=$1 WHERE id=$2 RETURNING id, nombre, estado_stand`,
+      [estado_stand, id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: "No encontrado" });
+    console.log(`[Expo] Estado actualizado: ${r.rows[0].nombre} → ${estado_stand}`);
+    res.json({ ok: true, expositor: r.rows[0] });
+  } catch (err) {
+    console.error("[Expo] Error PATCH estado:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/api/expositores/:id/posicion", authRequired, async (req, res) => {
+  try {
+    const rol = req.user?.rol;
+    if (!["super_admin","staff"].includes(rol))
+      return res.status(403).json({ error: "Sin permisos" });
+    const { id } = req.params;
+    const { grid_col, grid_fila, ancho_celdas, alto_celdas } = req.body;
+    const r = await pool.query(
+      `UPDATE expositores SET
+        grid_col     = $1,
+        grid_fila    = $2,
+        ancho_celdas = COALESCE($3, 1),
+        alto_celdas  = COALESCE($4, 1)
+       WHERE id = $5
+       RETURNING id, nombre, grid_col, grid_fila, ancho_celdas, alto_celdas`,
+      [
+        grid_col  != null ? parseInt(grid_col)  : null,
+        grid_fila != null ? parseInt(grid_fila) : null,
+        ancho_celdas ? parseInt(ancho_celdas) : null,
+        alto_celdas  ? parseInt(alto_celdas)  : null,
+        id,
+      ]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: "No encontrado" });
+    console.log(`[Expo] Posición actualizada: ${r.rows[0].nombre} → (${grid_col},${grid_fila})`);
+    res.json({ ok: true, expositor: r.rows[0] });
+  } catch (err) {
+    console.error("[Expo] Error PATCH posicion:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/expositores/:id/visita", authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tipo = "visita" } = req.body;
+    await pool.query(
+      `INSERT INTO expositores_metrica (expositor_id, user_id, tipo) VALUES ($1,$2,$3)`,
+      [id, req.user.id, tipo]
+    ).catch(() => {});
+    res.json({ ok: true, message: `${tipo} registrado` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use("/api/expositores",    expositoresRoutes);
 app.use("/api/dashboard",      dashboardRoutes);
 app.use("/api/notificaciones", notificacionesRoutes);
