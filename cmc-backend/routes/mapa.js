@@ -34,10 +34,13 @@ router.put('/', authRequired, async (req, res) => {
       return res.status(403).json({ ok: false, error: 'Solo super_admin puede actualizar el mapa' });
     }
     const { url_publica } = req.body;
-    if (!url_publica) return res.status(400).json({ ok: false, error: 'url_publica requerida' });
+    // url_publica puede ser "" para quitar la imagen — solo rechazar undefined/null
+    if (url_publica === undefined || url_publica === null) {
+      return res.status(400).json({ ok: false, error: 'url_publica requerida (puede ser cadena vacía para quitar)' });
+    }
 
     // Validar tamaño si es base64 (máx ~5MB)
-    if (url_publica.startsWith('data:image') && url_publica.length > 7 * 1024 * 1024) {
+    if (url_publica && url_publica.startsWith('data:image') && url_publica.length > 7 * 1024 * 1024) {
       return res.status(400).json({ ok: false, error: 'La imagen es demasiado grande (máx 5MB)' });
     }
 
@@ -55,6 +58,7 @@ router.put('/', authRequired, async (req, res) => {
         [url_publica, req.user.id]
       );
     }
+    console.log(`[Mapa] URL actualizada: "${url_publica ? url_publica.slice(0,60)+'...' : '(vacía — imagen quitada)'}"`);
     res.json({ ok: true, mapa: r.rows[0] });
   } catch (err) {
     console.error('❌ PUT /mapa:', err.message);
