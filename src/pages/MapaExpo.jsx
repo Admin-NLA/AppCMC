@@ -155,12 +155,30 @@ export default function MapaExpo() {
             <RefreshCw size={18} />
           </button>
           {esAdmin && !editingUrl && (
-            <button
-              onClick={() => { setEditingUrl(true); setNewUrl(mapa?.url_publica || ""); }}
-              className="flex items-center gap-2 text-sm border border-gray-300 dark:border-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
-            >
-              <Edit2 size={15} /> Cambiar imagen del mapa
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setEditingUrl(true); setNewUrl(mapa?.url_publica || ""); }}
+                className="flex items-center gap-2 text-sm border border-gray-300 dark:border-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+              >
+                <Edit2 size={15} /> Cambiar imagen del mapa
+              </button>
+              {mapa?.url_publica && (
+                <button
+                  onClick={async () => {
+                    if (!confirm("¿Quitar la imagen de fondo del mapa?")) return;
+                    try {
+                      await API.put("/mapa", { url_publica: "" });
+                      setSaveMsg("Imagen quitada correctamente");
+                      setImgFailed(false);
+                      load();
+                    } catch { setSaveMsg("Error al quitar la imagen"); }
+                  }}
+                  className="flex items-center gap-2 text-sm border border-red-200 dark:border-red-700 px-4 py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 dark:text-red-400 transition"
+                >
+                  <X size={15} /> Quitar imagen
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -254,42 +272,18 @@ export default function MapaExpo() {
               </div>
             </div>
 
-            {/* Imagen */}
+            {/* Plano del salón — siempre muestra el grid con posiciones */}
             <div className="overflow-auto bg-gray-50 dark:bg-gray-900" style={{ maxHeight: "520px" }}>
-              {mapa?.url_publica ? (
-                <div className="relative inline-block min-w-full" style={{ transformOrigin: "top left" }}>
-                  <img
-                    ref={imgRef}
-                    src={mapa.url_publica}
-                    alt="Mapa de exposición CMC"
-                    style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.2s" }}
-                    className="block max-w-none"
-                    onError={() => setImgFailed(true)}
-                  />
-                  {/* Pins de expositores con coordenadas */}
-                  {selected && selected.posicion_x && selected.posicion_y && (
-                    <div
-                      className="absolute w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg -translate-x-1/2 -translate-y-1/2 flex items-center justify-center animate-bounce"
-                      style={{
-                        left:  `${selected.posicion_x}%`,
-                        top:   `${selected.posicion_y}%`,
-                        transform: `scale(${1/zoom}) translate(-50%, -50%)`,
-                      }}
-                      title={selected.nombre}
-                    >
-                      <span className="text-white text-xs font-bold">★</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <MapaGrid
-                  expositores={expositores}
-                  gridConfig={gridConfig}
-                  selected={selected}
-                  onSelect={setSelected}
-                  esAdmin={esAdmin}
-                />
-              )}
+              <MapaGrid
+                expositores={expositores}
+                gridConfig={gridConfig}
+                selected={selected}
+                onSelect={setSelected}
+                esAdmin={esAdmin}
+                imagenFondo={(!imgFailed && mapa?.url_publica) ? mapa.url_publica : null}
+                zoom={zoom}
+                onImgError={() => setImgFailed(true)}
+              />
             </div>
 
             {/* Nota al pie */}
@@ -306,79 +300,6 @@ export default function MapaExpo() {
             )}
           </div>
         </div>
-
-        {/* ── Lista de expositores ── */}
-        <div className="flex flex-col gap-3">
-          {/* Buscador */}
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar expositor o stand..."
-              className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Lista */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Expositores ({filtered.length})
-              </p>
-              {selected && (
-                <button onClick={() => setSelected(null)}
-                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
-                  <X size={12} /> Limpiar
-                </button>
-              )}
-            </div>
-
-            <div className="overflow-y-auto" style={{ maxHeight: "460px" }}>
-              {filtered.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <Building2 size={32} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">{search ? "Sin resultados" : "No hay expositores"}</p>
-                </div>
-              ) : (
-                filtered.map(expo => (
-                  <button
-                    key={expo.id}
-                    onClick={() => setSelected(selected?.id === expo.id ? null : expo)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b last:border-0 dark:border-gray-700 transition
-                      ${selected?.id === expo.id
-                        ? "bg-blue-50 dark:bg-blue-900/20"
-                        : "hover:bg-gray-50 dark:hover:bg-gray-700/50"}`}
-                  >
-                    {/* Logo o inicial */}
-                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 shrink-0 flex items-center justify-center">
-                      {expo.logo_url ? (
-                        <img src={expo.logo_url} alt={expo.nombre}
-                          className="w-full h-full object-contain p-1"
-                          onError={e => { e.target.style.display="none"; e.target.parentNode.innerHTML = `<span class="text-lg font-bold text-gray-400">${expo.nombre?.charAt(0)}</span>`; }} />
-                      ) : (
-                        <span className="text-lg font-bold text-gray-400">
-                          {expo.nombre?.charAt(0)?.toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-semibold truncate ${selected?.id === expo.id ? "text-blue-700 dark:text-blue-300" : "text-gray-900 dark:text-white"}`}>
-                        {expo.nombre}
-                      </p>
-                      <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
-                        {expo.stand && <span className="font-medium">Stand {expo.stand}</span>}
-                        {expo.categoria && <span>· {expo.categoria}</span>}
-                      </div>
-                    </div>
-
-                    <ChevronRight size={16} className={`shrink-0 transition ${selected?.id === expo.id ? "text-blue-500 rotate-90" : "text-gray-300"}`} />
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
 
           {/* Detalle del expositor seleccionado */}
           {selected && (
@@ -466,6 +387,80 @@ export default function MapaExpo() {
               )}
             </div>
           )}
+
+                  {/* ── Lista de expositores ── */}
+        <div className="flex flex-col gap-3">
+          {/* Buscador */}
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar expositor o stand..."
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Lista */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Expositores ({filtered.length})
+              </p>
+              {selected && (
+                <button onClick={() => setSelected(null)}
+                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                  <X size={12} /> Limpiar
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-y-auto" style={{ maxHeight: "460px" }}>
+              {filtered.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">
+                  <Building2 size={32} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">{search ? "Sin resultados" : "No hay expositores"}</p>
+                </div>
+              ) : (
+                filtered.map(expo => (
+                  <button
+                    key={expo.id}
+                    onClick={() => setSelected(selected?.id === expo.id ? null : expo)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b last:border-0 dark:border-gray-700 transition
+                      ${selected?.id === expo.id
+                        ? "bg-blue-50 dark:bg-blue-900/20"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-700/50"}`}
+                  >
+                    {/* Logo o inicial */}
+                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 shrink-0 flex items-center justify-center">
+                      {expo.logo_url ? (
+                        <img src={expo.logo_url} alt={expo.nombre}
+                          className="w-full h-full object-contain p-1"
+                          onError={e => { e.target.style.display="none"; e.target.parentNode.innerHTML = `<span class="text-lg font-bold text-gray-400">${expo.nombre?.charAt(0)}</span>`; }} />
+                      ) : (
+                        <span className="text-lg font-bold text-gray-400">
+                          {expo.nombre?.charAt(0)?.toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold truncate ${selected?.id === expo.id ? "text-blue-700 dark:text-blue-300" : "text-gray-900 dark:text-white"}`}>
+                        {expo.nombre}
+                      </p>
+                      <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
+                        {expo.stand && <span className="font-medium">Stand {expo.stand}</span>}
+                        {expo.categoria && <span>· {expo.categoria}</span>}
+                      </div>
+                    </div>
+
+                    <ChevronRight size={16} className={`shrink-0 transition ${selected?.id === expo.id ? "text-blue-500 rotate-90" : "text-gray-300"}`} />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -486,7 +481,7 @@ const ESTADOS_VIS = {
   no_disponible: { bg:"#f9fafb", border:"#d1d5db", text:"#6b7280", dot:"#9ca3af" },
 };
 
-function MapaGrid({ expositores, gridConfig, selected, onSelect, esAdmin }) {
+function MapaGrid({ expositores, gridConfig, selected, onSelect, esAdmin, imagenFondo, zoom = 1, onImgError }) {
   const { grid_cols = 46, grid_filas = 22 } = gridConfig || {};
 
   const gridMap = {};
@@ -495,79 +490,136 @@ function MapaGrid({ expositores, gridConfig, selected, onSelect, esAdmin }) {
     const w = e.ancho_celdas || 1, h = e.alto_celdas || 1;
     for (let dc = 0; dc < w; dc++)
       for (let df = 0; df < h; df++)
-        gridMap[`${e.grid_col+dc}-${e.grid_fila+df}`] = { expo: e, isOrigin: dc===0&&df===0 };
+        gridMap[`${e.grid_col+dc}-${e.grid_fila+df}`] = { expo: e, isOrigin: dc===0 && df===0 };
   });
 
   const conPos = expositores.filter(e => e.grid_col != null);
 
-  if (conPos.length === 0) {
+  const ESTADOS_G = {
+    libre:         { bg:"#f0fdf4", border:"#86efac", text:"#16a34a", dot:"#22c55e" },
+    solicitado:    { bg:"#fffbeb", border:"#fcd34d", text:"#d97706", dot:"#eab308" },
+    ocupado:       { bg:"#eff6ff", border:"#93c5fd", text:"#1d4ed8", dot:"#3b82f6" },
+    no_disponible: { bg:"#f9fafb", border:"#d1d5db", text:"#6b7280", dot:"#9ca3af" },
+  };
+
+  if (conPos.length === 0 && !imagenFondo) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-gray-400">
         <Map size={48} className="mb-3 opacity-20" />
-        <p className="font-semibold">Sin stands posicionados</p>
-        <p className="text-sm mt-1 text-center max-w-xs">
-          El administrador puede configurar las posiciones en Admin Panel → Mapa Stands
+        <p className="font-semibold">Plano en configuración</p>
+        <p className="text-sm mt-1 text-center max-w-xs px-4">
+          El administrador está configurando las posiciones en Admin Panel → Mapa Stands
         </p>
       </div>
     );
   }
 
   return (
-    <div className="p-3 overflow-auto bg-gray-50" style={{ maxHeight: 480 }}>
-      <div style={{
-        display:"grid",
-        gridTemplateColumns:`repeat(${grid_cols}, minmax(0,1fr))`,
-        gap:"2px", minWidth: 600,
-      }}>
+    <div
+      style={{
+        position: "relative",
+        transform: `scale(${zoom})`,
+        transformOrigin: "top left",
+        transition: "transform 0.2s",
+        width: `${100/zoom}%`,
+      }}
+    >
+      {/* Imagen de fondo opcional */}
+      {imagenFondo && (
+        <img
+          src={imagenFondo}
+          alt="Plano de exposición"
+          className="w-full block"
+          style={{ position: "absolute", inset: 0, width: "100%", opacity: 0.25, pointerEvents: "none" }}
+          onError={onImgError}
+        />
+      )}
+
+      {/* Grid de stands */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${grid_cols}, minmax(0,1fr))`,
+          gap: "2px",
+          position: "relative",
+          minWidth: grid_cols * 36,
+        }}
+      >
         {Array.from({ length: grid_cols * grid_filas }, (_, i) => {
           const col  = (i % grid_cols) + 1;
           const fila = Math.floor(i / grid_cols) + 1;
           const cell = gridMap[`${col}-${fila}`];
           if (cell && !cell.isOrigin) return null;
+
           const expo   = cell?.expo;
-          const estado = ESTADOS_VIS[expo?.estado_stand || "libre"];
+          const estado = ESTADOS_G[expo?.estado_stand || "libre"];
           const isSel  = expo && selected?.id === expo.id;
           const ancho  = expo?.ancho_celdas || 1;
           const alto   = expo?.alto_celdas  || 1;
 
           return (
-            <div key={`${col}-${fila}`}
-              onClick={() => expo ? onSelect(isSel ? null : expo) : null}
-              title={expo ? `${expo.nombre}${expo.stand?" · Stand "+expo.stand:""}` : ""}
+            <div
+              key={`${col}-${fila}`}
+              onClick={() => expo && onSelect(isSel ? null : expo)}
+              title={expo ? `${expo.nombre}${expo.stand ? " · Stand "+expo.stand : ""}` : ""}
               style={{
-                gridColumn:`span ${ancho}`, gridRow:`span ${alto}`,
-                backgroundColor: expo ? estado.bg : "#f8fafc",
-                border:`2px solid ${expo ? (isSel?"#2563eb":estado.border) : "#e2e8f0"}`,
-                borderRadius:5, minHeight:48,
-                display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-                padding:3, position:"relative",
+                gridColumn: `span ${ancho}`,
+                gridRow:    `span ${alto}`,
+                backgroundColor: expo
+                  ? (isSel ? "#dbeafe" : estado.bg)
+                  : "rgba(248,250,252,0.5)",
+                border: `2px solid ${expo
+                  ? (isSel ? "#2563eb" : estado.border)
+                  : "rgba(226,232,240,0.6)"}`,
+                borderRadius: 5,
+                minHeight: 44,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 3,
+                position: "relative",
                 cursor: expo ? "pointer" : "default",
                 boxShadow: isSel ? "0 0 0 3px #93c5fd" : "none",
-                transition:"all 0.12s",
-              }}>
+                transition: "all 0.12s",
+                transform: isSel ? "scale(0.97)" : "scale(1)",
+              }}
+            >
               {expo ? (
                 <>
                   {expo.logo_url
-                    ? <img src={expo.logo_url} style={{width:24,height:24}} className="object-contain"
-                        onError={e => e.target.style.display='none'} />
-                    : <Building2 size={13} style={{ color:estado.text }} />
+                    ? <img src={expo.logo_url} style={{width:22,height:22}}
+                        className="object-contain"
+                        onError={e => e.target.style.display="none"} />
+                    : <Building2 size={12} style={{ color: estado.text }} />
                   }
-                  <span style={{ fontSize:"0.5rem", fontWeight:700, color:estado.text,
-                    textAlign:"center", lineHeight:1.2, marginTop:2, maxWidth:"100%", overflow:"hidden" }}>
+                  <span style={{
+                    fontSize: "0.5rem", fontWeight: 700, color: estado.text,
+                    textAlign: "center", lineHeight: 1.2, marginTop: 2,
+                    maxWidth: "100%", overflow: "hidden",
+                  }}>
                     {expo.stand || expo.nombre?.split(" ")[0]}
                   </span>
-                  <span style={{ position:"absolute", top:3, right:3, width:7, height:7,
-                    borderRadius:"50%", backgroundColor:estado.dot }} />
+                  <span style={{
+                    position: "absolute", top: 3, right: 3,
+                    width: 7, height: 7, borderRadius: "50%",
+                    backgroundColor: estado.dot,
+                  }} />
                 </>
               ) : (
-                <span style={{ fontSize:"0.4rem", color:"#e2e8f0" }}>{col},{fila}</span>
+                <span style={{ fontSize: "0.38rem", color: "rgba(203,213,225,0.5)" }}>
+                  {col},{fila}
+                </span>
               )}
             </div>
           );
         })}
       </div>
-      <p className="text-xs text-gray-400 text-center mt-2">
-        {conPos.length} stands · Grid {grid_cols}×{grid_filas} · Haz clic para ver info
+
+      <p className="text-xs text-gray-400 text-center mt-2 pb-1">
+        {conPos.length} stands posicionados · Grid {grid_cols}×{grid_filas}
+        {imagenFondo ? " · Imagen como referencia" : ""}
+        {" · Toca un stand para ver info"}
       </p>
     </div>
   );

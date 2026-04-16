@@ -161,6 +161,27 @@ app.post("/api/expositores/:id/visita", authRequired, async (req, res) => {
   }
 });
 
+app.put("/api/expositores/mapa-config/:sede", authRequired, async (req, res) => {
+  try {
+    if (!["super_admin","staff"].includes(req.user?.rol))
+      return res.status(403).json({ error: "Sin permisos" });
+    const { sede } = req.params;
+    const { edicion = 2026, grid_cols, grid_filas } = req.body;
+    await pool.query(
+      `INSERT INTO mapa_config (sede, edicion, grid_cols, grid_filas)
+       VALUES (LOWER($1), $2, $3, $4)
+       ON CONFLICT (sede, edicion)
+       DO UPDATE SET grid_cols=$3, grid_filas=$4, updated_at=NOW()`,
+      [sede, parseInt(edicion), parseInt(grid_cols)||46, parseInt(grid_filas)||22]
+    );
+    console.log(`[MapaConfig] Guardado: ${sede} → ${grid_cols}×${grid_filas}`);
+    res.json({ ok: true, config: { sede, edicion, grid_cols, grid_filas } });
+  } catch (err) {
+    console.error("[MapaConfig] Error PUT:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use("/api/expositores",    expositoresRoutes);
 app.use("/api/dashboard",      dashboardRoutes);
 app.use("/api/notificaciones", notificacionesRoutes);

@@ -67,6 +67,37 @@ const btnGhost   = "flex items-center gap-2 border border-gray-300 dark:border-g
 // ────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ────────────────────────────────────────────────────────────
+
+// ════════════════════════════════════════════════════════════
+const ESTADOS_STAND = {
+  libre:         { label: "Libre",          bg: "#f0fdf4", border: "#86efac", text: "#16a34a", dot: "#22c55e" },
+  solicitado:    { label: "Solicitado",     bg: "#fffbeb", border: "#fcd34d", text: "#d97706", dot: "#eab308" },
+  ocupado:       { label: "Ocupado",        bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", dot: "#3b82f6" },
+  no_disponible: { label: "No disponible",  bg: "#f9fafb", border: "#d1d5db", text: "#6b7280", dot: "#9ca3af" },
+};
+
+// Categorías y tamaños por sede (ancho_m x alto_m → celdas en grid de 3x3m base)
+const CATEGORIAS_POR_SEDE = {
+  colombia: [
+    { key:"diamante_plus", label:"Diamante Plus", ancho_m:6, alto_m:4, celdas_ancho:2, celdas_alto:2, color:"#7c3aed" },
+    { key:"diamante",      label:"Diamante",      ancho_m:6, alto_m:4, celdas_ancho:2, celdas_alto:2, color:"#db2777" },
+    { key:"esmeralda",     label:"Esmeralda",     ancho_m:6, alto_m:3, celdas_ancho:2, celdas_alto:1, color:"#059669" },
+    { key:"platino",       label:"Platino",       ancho_m:6, alto_m:6, celdas_ancho:2, celdas_alto:2, color:"#ca8a04" },
+    { key:"oro",           label:"Oro",           ancho_m:6, alto_m:3, celdas_ancho:2, celdas_alto:1, color:"#d97706" },
+    { key:"plata",         label:"Plata",         ancho_m:3, alto_m:3, celdas_ancho:1, celdas_alto:1, color:"#64748b" },
+  ],
+  mexico: [
+    { key:"platino", label:"Platino", ancho_m:6, alto_m:6, celdas_ancho:2, celdas_alto:2, color:"#ca8a04" },
+    { key:"oro",     label:"Oro",     ancho_m:6, alto_m:3, celdas_ancho:2, celdas_alto:1, color:"#d97706" },
+    { key:"plata",   label:"Plata",   ancho_m:3, alto_m:3, celdas_ancho:1, celdas_alto:1, color:"#64748b" },
+  ],
+  chile: [
+    { key:"platino", label:"Platino", ancho_m:5, alto_m:2, celdas_ancho:2, celdas_alto:1, color:"#ca8a04" },
+    { key:"oro",     label:"Oro",     ancho_m:3, alto_m:2, celdas_ancho:1, celdas_alto:1, color:"#d97706" },
+    { key:"plata",   label:"Plata",   ancho_m:3, alto_m:2, celdas_ancho:1, celdas_alto:1, color:"#64748b" },
+  ],
+};
+
 export default function AdminPanel() {
   const { userProfile } = useAuth();
   const { sedeActiva, edicionActiva } = useEvent();
@@ -1076,9 +1107,28 @@ export default function AdminPanel() {
                     <input className={inputCls} placeholder="Nombre de la empresa" value={expositorForm.nombre}
                       onChange={e => setExpositorForm(p => ({...p, nombre: e.target.value}))} required />
                   </Field>
-                  <Field label="Categoría">
-                    <input className={inputCls} placeholder="Tecnología / Servicios..." value={expositorForm.categoria}
-                      onChange={e => setExpositorForm(p => ({...p, categoria: e.target.value}))} />
+                  <Field label="Tipo de Stand / Categoría">
+                    <select className={inputCls} value={expositorForm.categoria}
+                      onChange={e => setExpositorForm(p => ({...p, categoria: e.target.value}))}>
+                      <option value="">— Seleccionar tipo —</option>
+                      {(CATEGORIAS_POR_SEDE[(expositorForm.sede || sedeForm || "colombia").toLowerCase()]
+                        || CATEGORIAS_POR_SEDE.colombia
+                      ).map(cat => (
+                        <option key={cat.key} value={cat.key}>
+                          {cat.label} — {cat.ancho_m}×{cat.alto_m}m ({cat.celdas_ancho}×{cat.celdas_alto} celdas)
+                        </option>
+                      ))}
+                    </select>
+                    {expositorForm.categoria && (() => {
+                      const cats = CATEGORIAS_POR_SEDE[(expositorForm.sede || sedeForm || "colombia").toLowerCase()]
+                        || CATEGORIAS_POR_SEDE.colombia;
+                      const cat = cats.find(c => c.key === expositorForm.categoria);
+                      return cat ? (
+                        <p className="text-xs mt-1 font-semibold" style={{ color: cat.color }}>
+                          ● {cat.label} · {cat.ancho_m}×{cat.alto_m}m · ocupa {cat.celdas_ancho}×{cat.celdas_alto} celdas en el mapa
+                        </p>
+                      ) : null;
+                    })()}
                   </Field>
                   <Field label="Stand #">
                     <input className={inputCls} placeholder="A-01" value={expositorForm.stand}
@@ -1398,36 +1448,6 @@ export default function AdminPanel() {
 // ════════════════════════════════════════════════════════════
 // CONSTANTES GLOBALES DEL MAPA
 // ════════════════════════════════════════════════════════════
-const ESTADOS_STAND = {
-  libre:         { label: "Libre",          bg: "#f0fdf4", border: "#86efac", text: "#16a34a", dot: "#22c55e" },
-  solicitado:    { label: "Solicitado",     bg: "#fffbeb", border: "#fcd34d", text: "#d97706", dot: "#eab308" },
-  ocupado:       { label: "Ocupado",        bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", dot: "#3b82f6" },
-  no_disponible: { label: "No disponible",  bg: "#f9fafb", border: "#d1d5db", text: "#6b7280", dot: "#9ca3af" },
-};
-
-// Categorías y tamaños por sede (ancho_m x alto_m → celdas en grid de 3x3m base)
-const CATEGORIAS_POR_SEDE = {
-  colombia: [
-    { key:"diamante_plus", label:"Diamante Plus", ancho_m:6, alto_m:4, celdas_ancho:2, celdas_alto:1, color:"#7c3aed" },
-    { key:"diamante",      label:"Diamante",      ancho_m:6, alto_m:4, celdas_ancho:2, celdas_alto:1, color:"#db2777" },
-    { key:"esmeralda",     label:"Esmeralda",     ancho_m:6, alto_m:3, celdas_ancho:2, celdas_alto:1, color:"#059669" },
-    { key:"platino",       label:"Platino",       ancho_m:6, alto_m:6, celdas_ancho:2, celdas_alto:2, color:"#ca8a04" },
-    { key:"oro",           label:"Oro",           ancho_m:6, alto_m:3, celdas_ancho:2, celdas_alto:1, color:"#d97706" },
-    { key:"plata",         label:"Plata",         ancho_m:3, alto_m:3, celdas_ancho:1, celdas_alto:1, color:"#64748b" },
-  ],
-  mexico: [
-    { key:"platino", label:"Platino", ancho_m:6, alto_m:6, celdas_ancho:2, celdas_alto:2, color:"#ca8a04" },
-    { key:"oro",     label:"Oro",     ancho_m:6, alto_m:3, celdas_ancho:2, celdas_alto:1, color:"#d97706" },
-    { key:"plata",   label:"Plata",   ancho_m:3, alto_m:3, celdas_ancho:1, celdas_alto:1, color:"#64748b" },
-  ],
-  chile: [
-    { key:"platino", label:"Platino", ancho_m:5, alto_m:2, celdas_ancho:2, celdas_alto:1, color:"#ca8a04" },
-    { key:"oro",     label:"Oro",     ancho_m:3, alto_m:2, celdas_ancho:1, celdas_alto:1, color:"#d97706" },
-    { key:"plata",   label:"Plata",   ancho_m:3, alto_m:2, celdas_ancho:1, celdas_alto:1, color:"#64748b" },
-  ],
-};
-
-// ════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ════════════════════════════════════════════════════════════
 function MapaStandsAdmin({ expositores, sedeActiva, flash, loadExpositores }) {
@@ -1437,8 +1457,41 @@ function MapaStandsAdmin({ expositores, sedeActiva, flash, loadExpositores }) {
   const [gridCols,      setGridCols]      = useState(46);
   const [gridFilas,     setGridFilas]     = useState(22);
   const [standAColocar, setStandAColocar] = useState(null);
+  const [hoverCell,     setHoverCell]     = useState(null); // preview de celdas
   const [savingId,      setSavingId]      = useState(null);
   const [zoom,          setZoom]          = useState(1);
+  const [savingConfig,  setSavingConfig]  = useState(false);
+
+  // Cargar config del grid al montar
+  useEffect(() => {
+    const lsKey = `mapa_config_${sede}`;
+    // 1. Intentar desde localStorage (instantáneo)
+    try {
+      const cached = JSON.parse(localStorage.getItem(lsKey) || 'null');
+      if (cached?.grid_cols) { setGridCols(cached.grid_cols); setGridFilas(cached.grid_filas); }
+    } catch {}
+    // 2. Cargar desde DB (autoritativo)
+    API.get(`/expositores/mapa-config/${sede}`)
+      .then(r => {
+        if (r.data?.config?.grid_cols) {
+          setGridCols(r.data.config.grid_cols);
+          setGridFilas(r.data.config.grid_filas || 22);
+          localStorage.setItem(lsKey, JSON.stringify(r.data.config));
+        }
+      })
+      .catch(() => {});
+  }, [sede]);
+
+  // Guardar config en DB + localStorage
+  const guardarConfig = async (cols, filas) => {
+    const lsKey = `mapa_config_${sede}`;
+    localStorage.setItem(lsKey, JSON.stringify({ grid_cols: cols, grid_filas: filas }));
+    setSavingConfig(true);
+    try {
+      await API.put(`/expositores/mapa-config/${sede}`, { grid_cols: cols, grid_filas: filas, edicion: 2026 });
+    } catch { /* silencioso — localStorage ya guardó */ }
+    finally { setSavingConfig(false); }
+  };
 
   // Construir mapa de posiciones
   const gridMap = {};
@@ -1458,6 +1511,27 @@ function MapaStandsAdmin({ expositores, sedeActiva, flash, loadExpositores }) {
   const sinPosicion  = expositores.filter(e => e.grid_col == null);
   const conPosicion  = expositores.filter(e => e.grid_col != null);
 
+  // Calcula las celdas que ocuparía el stand en (col,fila) y si puede colocarse
+  const getPreviewCells = (col, fila) => {
+    if (!standAColocar) return { cells: new Set(), canPlace: true };
+    const cat   = categorias.find(c => c.key === (standAColocar.categoria||"").toLowerCase());
+    const w     = cat?.celdas_ancho || 1;
+    const h     = cat?.celdas_alto  || 1;
+    const cells = new Set();
+    let canPlace = true;
+    for (let dc = 0; dc < w; dc++) {
+      for (let df = 0; df < h; df++) {
+        const key = `${col+dc}-${fila+df}`;
+        cells.add(key);
+        if (gridMap[key]) canPlace = false;        // celda ocupada
+        if (col+dc > gridCols || fila+df > gridFilas) canPlace = false; // fuera del grid
+      }
+    }
+    return { cells, canPlace };
+  };
+
+  const preview = hoverCell ? getPreviewCells(hoverCell.col, hoverCell.fila) : null;
+
   // Cambiar estado
   const cambiarEstado = async (expo, nuevoEstado) => {
     setSavingId(expo.id);
@@ -1471,19 +1545,32 @@ function MapaStandsAdmin({ expositores, sedeActiva, flash, loadExpositores }) {
   };
 
   // Asignar posición en grid — celda vacía clickeada
-  const handleCeldaClick = async (col, fila, celdaOcupada) => {
+  const handleCeldaClick = async (col, fila) => {
     if (!standAColocar) return;
-    if (celdaOcupada) { flash("⚠️ Celda ocupada, elige otra", true); return; }
+    const cat     = categorias.find(c => c.key === (standAColocar.categoria||"").toLowerCase());
+    const ancho   = cat?.celdas_ancho || 1;
+    const alto    = cat?.celdas_alto  || 1;
+    // Verificar que todas las celdas que ocupará están libres
+    for (let dc = 0; dc < ancho; dc++) {
+      for (let df = 0; df < alto; df++) {
+        if (gridMap[`${col+dc}-${fila+df}`]) {
+          flash(`⚠️ Celda (${col+dc},${fila+df}) está ocupada. Elige otra posición.`, true);
+          return;
+        }
+        if (col+dc > gridCols || fila+df > gridFilas) {
+          flash("⚠️ El stand no cabe (se sale del área). Elige otra posición.", true);
+          return;
+        }
+      }
+    }
     try {
-      const cat = categorias.find(c => c.key === (standAColocar.categoria||"").toLowerCase());
-      const ancho = cat?.celdas_ancho || 1;
-      const alto  = cat?.celdas_alto  || 1;
       await API.patch(`/expositores/${standAColocar.id}/posicion`, {
         grid_col: col, grid_fila: fila,
         ancho_celdas: ancho, alto_celdas: alto,
       });
-      flash(`✅ ${standAColocar.nombre} → columna ${col}, fila ${fila} (${ancho}×${alto} celdas)`);
+      flash(`✅ ${standAColocar.nombre} → (${col},${fila}) — ${ancho}×${alto} celdas`);
       setStandAColocar(null);
+      setHoverCell(null);
       await loadExpositores();
     } catch { flash("Error al posicionar", true); }
   };
@@ -1529,12 +1616,14 @@ function MapaStandsAdmin({ expositores, sedeActiva, flash, loadExpositores }) {
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Columnas</label>
             <input type="number" min="10" max="80" value={gridCols}
               onChange={e => setGridCols(Math.max(10, parseInt(e.target.value)||46))}
+              onBlur={e => guardarConfig(Math.max(10, parseInt(e.target.value)||46), gridFilas)}
               className={inputCls} style={{ width: 90 }} />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Filas</label>
             <input type="number" min="5" max="50" value={gridFilas}
               onChange={e => setGridFilas(Math.max(5, parseInt(e.target.value)||22))}
+              onBlur={e => guardarConfig(gridCols, Math.max(5, parseInt(e.target.value)||22))}
               className={inputCls} style={{ width: 90 }} />
           </div>
           <div className="flex items-center gap-2">
@@ -1546,7 +1635,14 @@ function MapaStandsAdmin({ expositores, sedeActiva, flash, loadExpositores }) {
             <button onClick={() => setZoom(1)}
               className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-400 hover:bg-gray-50">↺</button>
           </div>
-          <p className="text-xs text-gray-400 ml-2">
+          <button
+            onClick={() => guardarConfig(gridCols, gridFilas)}
+            disabled={savingConfig}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition">
+            {savingConfig ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+            {savingConfig ? "Guardando..." : "Guardar dimensiones"}
+          </button>
+          <p className="text-xs text-gray-400">
             {conPosicion.length}/{expositores.length} posicionados
           </p>
         </div>
@@ -1594,20 +1690,28 @@ function MapaStandsAdmin({ expositores, sedeActiva, flash, loadExpositores }) {
 
       {/* Banner modo ubicar */}
       {standAColocar && (() => {
-        const cat = categorias.find(c => c.key === (standAColocar.categoria||"").toLowerCase());
+        const cat      = categorias.find(ct => ct.key === (standAColocar.categoria||"").toLowerCase());
+        const canPlace = preview?.canPlace ?? true;
         return (
-          <div className="bg-blue-50 dark:bg-blue-900/10 border-2 border-blue-400 rounded-2xl p-4 flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white text-lg shrink-0">📌</div>
+          <div className={`border-2 rounded-2xl p-4 flex items-center gap-3 transition-colors ${
+            canPlace ? "bg-blue-50 dark:bg-blue-900/10 border-blue-400" : "bg-red-50 dark:bg-red-900/10 border-red-400"
+          }`}>
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-lg shrink-0 ${canPlace ? "bg-blue-600" : "bg-red-500"}`}>
+              {canPlace ? "📌" : "⛔"}
+            </div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-blue-700 dark:text-blue-300">
+              <p className={`text-sm font-bold ${canPlace ? "text-blue-700 dark:text-blue-300" : "text-red-700 dark:text-red-300"}`}>
                 Posicionando: <strong>{standAColocar.nombre}</strong>
-                {cat && <span className="font-normal text-blue-500 ml-2">({cat.label} · {cat.ancho_m}×{cat.alto_m}m · {cat.celdas_ancho}×{cat.celdas_alto} celdas)</span>}
+                {cat && <span className="font-normal text-xs ml-2 opacity-70">({cat.label} · {cat.ancho_m}×{cat.alto_m}m · {cat.celdas_ancho}×{cat.celdas_alto} celdas)</span>}
               </p>
-              <p className="text-xs text-blue-500 mt-0.5">
-                Haz clic en la celda del grid donde estará el <strong>borde superior-izquierdo</strong> del stand
+              <p className={`text-xs mt-0.5 ${canPlace ? "text-blue-500" : "text-red-500"}`}>
+                {canPlace
+                  ? "Mueve el cursor sobre el grid — el área azul muestra dónde quedará. Clic para confirmar."
+                  : "Posición no válida: celdas ocupadas o fuera del área. Mueve el cursor."}
               </p>
             </div>
-            <button onClick={() => setStandAColocar(null)} className="text-blue-400 hover:text-blue-600 shrink-0">
+            <button onClick={() => { setStandAColocar(null); setHoverCell(null); }}
+              className="text-gray-400 hover:text-gray-600 shrink-0">
               <X size={20} />
             </button>
           </div>
@@ -1652,25 +1756,32 @@ function MapaStandsAdmin({ expositores, sedeActiva, flash, loadExpositores }) {
               const alto   = expo?.alto_celdas  || 1;
               const isSaving = expo && savingId === expo.id;
 
+              const inPreview = preview?.cells.has(`${col}-${fila}`);
+              const canDrop   = preview?.canPlace ?? true;
+
               return (
                 <div
                   key={`${col}-${fila}`}
-                  onClick={() => handleCeldaClick(col, fila, !!expo)}
+                  onClick={() => !expo && handleCeldaClick(col, fila)}
+                  onMouseEnter={() => standAColocar && !expo && setHoverCell({ col, fila })}
+                  onMouseLeave={() => standAColocar && setHoverCell(null)}
                   title={expo
                     ? `${expo.nombre}${expo.stand ? " · Stand "+expo.stand : ""} · ${estado.label}`
                     : standAColocar
-                      ? `Colocar aquí: (${col},${fila})`
+                      ? `Colocar aquí: columna ${col}, fila ${fila}`
                       : `Vacío (${col},${fila})`
                   }
                   style={{
                     gridColumn: `span ${ancho}`,
                     gridRow:    `span ${alto}`,
-                    backgroundColor: expo
-                      ? estado.bg
-                      : standAColocar ? "#e0f2fe" : "#ffffff",
-                    border: `2px solid ${expo
-                      ? estado.border
-                      : standAColocar ? "#38bdf8" : "#e2e8f0"}`,
+                    backgroundColor: inPreview
+                      ? (canDrop ? "#dbeafe" : "#fee2e2")
+                      : expo ? estado.bg : (standAColocar ? "#f0f9ff" : "#ffffff"),
+                    border: `2px solid ${inPreview
+                      ? (canDrop ? "#2563eb" : "#dc2626")
+                      : expo ? estado.border : (standAColocar ? "#bae6fd" : "#e2e8f0")}`,
+                    outline: inPreview && canDrop ? "2px solid #93c5fd" : "none",
+                    outlineOffset: 1,
                     borderRadius: "5px",
                     minHeight: "48px",
                     display: "flex",

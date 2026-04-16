@@ -80,6 +80,38 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ── GET /expositores/mapa-config/:sede ───────────────────────
+router.get('/mapa-config/:sede', async (req, res) => {
+  try {
+    const { sede } = req.params;
+    const { edicion = 2026 } = req.query;
+    const r = await pool.query(
+      `SELECT * FROM mapa_config WHERE LOWER(sede)=LOWER($1) AND edicion=$2`,
+      [sede, parseInt(edicion)]
+    ).catch(() => ({ rows: [] }));
+    res.json({ ok: true, config: r.rows[0] || { grid_cols: 46, grid_filas: 22 } });
+  } catch { res.json({ ok: true, config: { grid_cols: 46, grid_filas: 22 } }); }
+});
+
+
+// ── PUT /expositores/mapa-config/:sede ── guardar config del grid ──
+router.put('/mapa-config/:sede', authRequired, async (req, res) => {
+  try {
+    if (!['super_admin','staff'].includes(req.user?.rol))
+      return res.status(403).json({ error: 'Sin permisos' });
+    const { sede } = req.params;
+    const { edicion = 2026, grid_cols, grid_filas } = req.body;
+    await pool.query(
+      `INSERT INTO mapa_config (sede, edicion, grid_cols, grid_filas)
+       VALUES (LOWER($1), $2, $3, $4)
+       ON CONFLICT (sede, edicion)
+       DO UPDATE SET grid_cols=$3, grid_filas=$4, updated_at=NOW()`,
+      [sede, parseInt(edicion), parseInt(grid_cols)||46, parseInt(grid_filas)||22]
+    );
+    res.json({ ok: true, config: { sede, edicion, grid_cols, grid_filas } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ========================================================
 // GET /expositores/:id - Obtener expositor específico
 // ========================================================
@@ -383,19 +415,6 @@ router.post('/:id/visita', authRequired, async (req, res) => {
     ).catch(() => {});
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── GET /expositores/mapa-config/:sede ───────────────────────
-router.get('/mapa-config/:sede', async (req, res) => {
-  try {
-    const { sede } = req.params;
-    const { edicion = 2026 } = req.query;
-    const r = await pool.query(
-      `SELECT * FROM mapa_config WHERE LOWER(sede)=LOWER($1) AND edicion=$2`,
-      [sede, parseInt(edicion)]
-    ).catch(() => ({ rows: [] }));
-    res.json({ ok: true, config: r.rows[0] || { grid_cols: 46, grid_filas: 22 } });
-  } catch { res.json({ ok: true, config: { grid_cols: 46, grid_filas: 22 } }); }
 });
 
 export default router;
