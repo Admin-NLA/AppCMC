@@ -25,6 +25,7 @@ import encuestasRoutes     from "./routes/encuestas.js";
 import brandingRoutes      from "./routes/branding.js";
 import scanRoutes          from "./routes/scan.js";
 import mapaRoutes          from "./routes/mapa.js";
+import eventosRoutes       from "./routes/eventos.routes.js";
 
 import { sendSSE }                          from "./routes/notificaciones.js";
 import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js";
@@ -199,6 +200,7 @@ app.use("/api/encuestas",      encuestasRoutes);
 app.use("/api/branding",       brandingRoutes);
 app.use("/api/scan",           scanRoutes);
 app.use("/api/mapa",           mapaRoutes);
+app.use("/api/eventos",        eventosRoutes);
 
 // ============================================================
 // CRON — Notificaciones programadas (cada 30 segundos)

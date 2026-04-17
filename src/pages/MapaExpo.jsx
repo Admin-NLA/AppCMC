@@ -301,6 +301,8 @@ export default function MapaExpo() {
           </div>
         </div>
 
+        {/* ── Lista de expositores ── */}
+        <div className="flex flex-col gap-3">
           {/* Detalle del expositor seleccionado */}
           {selected && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-blue-200 dark:border-blue-700 p-4 space-y-3">
@@ -388,8 +390,6 @@ export default function MapaExpo() {
             </div>
           )}
 
-                  {/* ── Lista de expositores ── */}
-        <div className="flex flex-col gap-3">
           {/* Buscador */}
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -460,7 +460,6 @@ export default function MapaExpo() {
               )}
             </div>
           </div>
-
         </div>
       </div>
 
