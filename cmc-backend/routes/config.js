@@ -12,7 +12,7 @@
 // ------------------------------------------------------------------------------------------
 
 import express from 'express';
-import pool    from '../db.js';
+import pool from '../db.js';
 import { authRequired } from '../utils/authMiddleware.js';
 
 const router = express.Router();
@@ -70,7 +70,7 @@ const handleGet = async (req, res) => {
   }
 };
 
-router.get('/',              authRequired, handleGet);
+router.get('/', authRequired, handleGet);
 router.get('/evento-activo', authRequired, handleGet);
 
 // ============================================================
@@ -97,7 +97,7 @@ const handlePut = async (req, res) => {
   }
 };
 
-router.put('/',              authRequired, handlePut);
+router.put('/', authRequired, handlePut);
 router.put('/evento-activo', authRequired, handlePut);
 
 // ============================================================
@@ -172,10 +172,10 @@ router.get('/wp-config', authRequired, async (req, res) => {
     }
     // Defaults (lo que está en el .env del servidor actualmente)
     const defaults = {
-      wp_api_url:      process.env.WP_API_URL      || 'https://cmc-latam.com/wp-json/wp/v2',
-      wp_username:     process.env.WP_USERNAME      || '',
-      wp_app_password: process.env.WP_APP_PASSWORD  ? '***' : '',
-      ultima_sync_wp:  null,
+      wp_api_url: process.env.WP_API_URL || 'https://cmc-latam.com/wp-json/wp/v2',
+      wp_username: process.env.WP_USERNAME || '',
+      wp_app_password: process.env.WP_APP_PASSWORD ? '***' : '',
+      ultima_sync_wp: null,
     };
     // Obtener ultima sync
     const syncRes = await pool.query(
@@ -206,7 +206,7 @@ router.put('/wp-config', authRequired, async (req, res) => {
     if (!wp_api_url) return res.status(400).json({ error: 'wp_api_url es requerido' });
 
     const wpConfig = { wp_api_url };
-    if (wp_username)     wpConfig.wp_username     = wp_username;
+    if (wp_username) wpConfig.wp_username = wp_username;
     if (wp_app_password && wp_app_password !== '***') wpConfig.wp_app_password = wp_app_password;
 
     // Leer tipos_activos actual para no perder datos
@@ -235,8 +235,8 @@ router.put('/wp-config', authRequired, async (req, res) => {
     // Actualizar las variables de entorno en memoria para que el próximo request use las nuevas creds
     // NOTA: Esto funciona para el proceso actual. Render reinicia automáticamente con env vars en el .env,
     //       pero para cambios en caliente necesitamos actualizar el módulo de wordpress.js
-    if (wp_api_url)      process.env.WP_API_URL       = wp_api_url;
-    if (wp_username)     process.env.WP_USERNAME       = wp_username;
+    if (wp_api_url) process.env.WP_API_URL = wp_api_url;
+    if (wp_username) process.env.WP_USERNAME = wp_username;
     if (wp_app_password && wp_app_password !== '***') process.env.WP_APP_PASSWORD = wp_app_password;
 
     res.json({ ok: true, message: 'Configuración de WordPress actualizada. Activa hasta el próximo reinicio del servidor.' });
@@ -255,7 +255,7 @@ router.post('/test-wp', authRequired, async (req, res) => {
     }
     const axios = (await import('axios')).default;
     const baseUrl = req.body.wp_api_url || process.env.WP_API_URL || 'https://cmc-latam.com/wp-json/wp/v2';
-    const auth    = req.body.wp_username && req.body.wp_app_password
+    const auth = req.body.wp_username && req.body.wp_app_password
       ? { username: req.body.wp_username, password: req.body.wp_app_password }
       : undefined;
 
@@ -275,6 +275,72 @@ router.post('/test-wp', authRequired, async (req, res) => {
       mensaje: `Error al conectar: ${err.message}`,
       sugerencia: 'Verifica que la URL sea correcta y que el sitio sea accesible.',
     });
+  }
+});
+
+
+// ══════════════════════════════════════════════════════════
+// PUT /api/config/tipos-activos — guardar funciones activas
+// No requiere sede/edicion — solo actualiza tipos_activos en
+// configuracion_evento sin tocar otros campos
+// ══════════════════════════════════════════════════════════
+router.put('/tipos-activos', authRequired, async (req, res) => {
+  try {
+    if (req.user.rol !== 'super_admin') {
+      return res.status(403).json({ error: 'Solo super_admin puede modificar esto' });
+    }
+
+    const { tipos_activos } = req.body;
+    if (tipos_activos === undefined || tipos_activos === null) {
+      return res.status(400).json({ error: 'tipos_activos es requerido' });
+    }
+
+    // Leer fila actual
+    const r = await pool.query(
+      `SELECT id, tipos_activos FROM configuracion_evento ORDER BY id DESC LIMIT 1`
+    );
+
+    if (r.rows.length === 0) {
+      // Crear si no existe (con defaults)
+      await pool.query(
+        `INSERT INTO configuracion_evento
+           (sede_activa, edicion_activa, tipos_activos, updated_at, updated_by)
+         VALUES ('colombia', 2026, $1, NOW(), $2)`,
+        [JSON.stringify(tipos_activos), req.user.id]
+      );
+    } else {
+      // Merge: preservar valores existentes, solo sobreescribir __funciones
+      const row = r.rows[0];
+      const existing = (row.tipos_activos && !Array.isArray(row.tipos_activos))
+        ? row.tipos_activos
+        : {};
+      const merged = { ...existing, ...tipos_activos };
+      await pool.query(
+        `UPDATE configuracion_evento
+         SET tipos_activos = $1, updated_at = NOW(), updated_by = $2
+         WHERE id = $3`,
+        [JSON.stringify(merged), req.user.id, row.id]
+      );
+    }
+
+    console.log('[Config] tipos_activos actualizado por', req.user.id);
+    res.json({ ok: true, message: 'Configuración de funciones guardada' });
+  } catch (err) {
+    console.error('[Config] Error PUT /tipos-activos:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/config/tipos-activos — leer funciones activas
+router.get('/tipos-activos', authRequired, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT tipos_activos FROM configuracion_evento ORDER BY id DESC LIMIT 1`
+    );
+    const ta = r.rows[0]?.tipos_activos || {};
+    res.json({ ok: true, tipos_activos: Array.isArray(ta) ? {} : ta });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

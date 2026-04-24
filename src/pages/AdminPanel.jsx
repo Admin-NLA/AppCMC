@@ -289,22 +289,14 @@ export default function AdminPanel() {
   const [controlFunciones, setControlFunciones] = useState({});
   const loadControlFunciones = async () => {
     try {
-      const r = await API.get("/config/evento-activo");
+      const r = await API.get("/config/tipos-activos");
       const ta = r.data?.tipos_activos || {};
-      const cfg = (Array.isArray(ta) || typeof ta !== "object") ? {} : ta;
-      setControlFunciones(cfg.__funciones || {});
+      setControlFunciones(ta.__funciones || {});
     } catch { setControlFunciones({}); }
   };
   const saveControlFunciones = async (nuevas) => {
     try {
-      // Leer tipos_activos actual para no pisar otros valores
-      const r = await API.get("/config/evento-activo");
-      const ta = r.data?.tipos_activos || {};
-      const existing = (Array.isArray(ta) || typeof ta !== "object") ? {} : ta;
-      // Guardar en el campo tipos_activos preservando los valores existentes
-      await API.put("/config/evento-activo", {
-        tipos_activos: { ...existing, __funciones: nuevas }
-      });
+      await API.put("/config/tipos-activos", { tipos_activos: { __funciones: nuevas } });
       flash("✅ Control de funciones guardado"); setControlFunciones(nuevas);
     } catch (err) { flash(err.response?.data?.error || "No se pudo guardar", true); }
   };
