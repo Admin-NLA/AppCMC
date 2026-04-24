@@ -124,11 +124,11 @@ router.post('/', authRequired, async (req, res) => {
     // FIX: INSERT usa password_hash y movil (columnas reales de la tabla)
     const result = await pool.query(
       `INSERT INTO users
-        (email, password_hash, nombre, rol, tipo_pase, sede, empresa, movil, activo, edicion, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, NOW(), NOW())
-       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, edicion, created_at`,
+        (email, password_hash, nombre, rol, tipo_pase, sede, empresa, movil, activo, edicion, multi_sedes, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, NOW())
+       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, edicion, multi_sedes, created_at`,
       [email.toLowerCase().trim(), password_hash, nombre, rol, tipo_pase, sedePrincipal,
-        empresa, telefono, parseInt(edicion) || 2026]
+        empresa, telefono, parseInt(edicion) || 2026, JSON.stringify(sedesParsed)]
     );
 
     console.log(`[Users] ✅ Usuario creado: ${email} (${rol})`);
@@ -193,6 +193,7 @@ router.put('/:id', authRequired, async (req, res) => {
         rol, tipo_pase,
         sede: sedePrincipal || sede,
         edicion: edicion ? parseInt(edicion) : undefined,
+        multi_sedes: sedesParsed ? JSON.stringify(sedesParsed) : undefined,
         permisos_extra: permisos_extra !== undefined ? JSON.stringify(permisos_extra) : undefined,
       } : {}),  // solo admin cambia estos
       empresa,
@@ -254,18 +255,143 @@ router.delete('/:id', authRequired, async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE users SET activo = false
+      `UPDATE users SET activo = false, fecha_eliminado = NOW()
        WHERE id = $1
        RETURNING id, email, nombre`,
       [id]
-    );
+    ).catch(async () => {
+      // Si fecha_eliminado no existe aún, solo marcar activo=false
+      return pool.query(
+        `UPDATE users SET activo = false WHERE id = $1 RETURNING id, email, nombre`,
+        [id]
+      );
+    });
 
-    console.log(`[Users] 🗑️ Usuario desactivado: ${result.rows[0].email}`);
-
-    res.json({ ok: true, message: 'Usuario eliminado', user: result.rows[0] });
+    console.log(`[Users] 🗑️ Usuario enviado a papelera: ${result.rows[0].email}`);
+    res.json({ ok: true, message: 'Usuario enviado a papelera', user: result.rows[0] });
   } catch (error) {
     console.error('❌ Error en DELETE /users/:id:', error.message);
     res.status(500).json({ error: 'Error al eliminar usuario', details: error.message });
+  }
+});
+
+
+// ════════════════════════════════════════════════════════════
+// PAPELERA DE USUARIOS
+// ════════════════════════════════════════════════════════════
+
+// GET /users/papelera — usuarios inactivos (papelera)
+router.get('/papelera', authRequired, async (req, res) => {
+  try {
+    if (req.user.rol !== 'super_admin')
+      return res.status(403).json({ error: 'Solo super_admin' });
+
+    const r = await pool.query(`
+      SELECT id, nombre, email, rol, tipo_pase, sede, empresa, activo,
+             created_at,
+             COALESCE(fecha_eliminado, created_at) as fecha_eliminado
+      FROM users
+      WHERE activo = false
+      ORDER BY COALESCE(fecha_eliminado, created_at) DESC
+    `);
+    res.json({ ok: true, usuarios: r.rows, total: r.rows.length });
+  } catch (err) {
+    // Si fecha_eliminado no existe como columna, consulta sin ella
+    try {
+      const r = await pool.query(`
+        SELECT id, nombre, email, rol, tipo_pase, sede, empresa, activo, created_at
+        FROM users WHERE activo = false ORDER BY created_at DESC
+      `);
+      res.json({ ok: true, usuarios: r.rows, total: r.rows.length });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  }
+});
+
+// POST /users/:id/restaurar — recuperar usuario de la papelera
+router.post('/:id/restaurar', authRequired, async (req, res) => {
+  try {
+    if (req.user.rol !== 'super_admin')
+      return res.status(403).json({ error: 'Solo super_admin' });
+
+    const { id } = req.params;
+    const r = await pool.query(
+      `UPDATE users
+       SET activo = true, fecha_eliminado = NULL
+       WHERE id = $1 AND activo = false
+       RETURNING id, nombre, email, rol`,
+      [id]
+    ).catch(() =>
+      pool.query(
+        `UPDATE users SET activo = true WHERE id = $1 AND activo = false RETURNING id, nombre, email, rol`,
+        [id]
+      )
+    );
+
+    if (!r.rows.length)
+      return res.status(404).json({ error: 'Usuario no encontrado en papelera' });
+
+    console.log(`[Users] ♻️ Usuario restaurado: ${r.rows[0].email}`);
+    res.json({ ok: true, message: 'Usuario restaurado', user: r.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /users/:id/permanente — eliminar definitivamente (hard delete)
+router.delete('/:id/permanente', authRequired, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    if (req.user.rol !== 'super_admin')
+      return res.status(403).json({ error: 'Solo super_admin' });
+
+    const { id } = req.params;
+    if (req.user.id === id)
+      return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
+
+    const check = await client.query(
+      'SELECT email, nombre FROM users WHERE id=$1', [id]
+    );
+    if (!check.rows.length)
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    await client.query('BEGIN');
+
+    // Limpiar todas las tablas relacionadas
+    const tablas = [
+      'user_sedes',
+      'favoritos',
+      'asistencias_sesion',
+      'asistencias_curso',
+      'notificaciones_vistas',
+      'stand_visitas',
+      'respuestas_encuesta',
+      'entradas',
+    ];
+    for (const tabla of tablas) {
+      await client.query(
+        `DELETE FROM ${tabla} WHERE user_id = $1`, [id]
+      ).catch(() => { }); // ignorar si la tabla no tiene esa columna
+    }
+
+    // Networking: usa solicitante_id
+    await client.query(
+      `DELETE FROM networking WHERE solicitante_id = $1`, [id]
+    ).catch(() => { });
+
+    // Eliminar el usuario
+    await client.query('DELETE FROM users WHERE id = $1', [id]);
+    await client.query('COMMIT');
+
+    console.log(`[Users] 💀 Usuario eliminado permanentemente: ${check.rows[0].email}`);
+    res.json({ ok: true, message: `${check.rows[0].nombre} eliminado permanentemente` });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Users] Error hard delete:', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

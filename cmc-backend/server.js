@@ -4,35 +4,35 @@ import dotenv from "dotenv";
 import pool from "./db.js";
 
 // Rutas
-import authRoutes          from "./routes/auth.js";
-import agendaRoutes        from "./routes/agenda.js";
-import speakersRoutes      from "./routes/speakers.routes.js";
-import expositoresRoutes   from "./routes/expositores.routes.js";
-import dashboardRoutes     from "./routes/dashboard.js";
+import authRoutes from "./routes/auth.js";
+import agendaRoutes from "./routes/agenda.js";
+import speakersRoutes from "./routes/speakers.routes.js";
+import expositoresRoutes from "./routes/expositores.routes.js";
+import dashboardRoutes from "./routes/dashboard.js";
 import notificacionesRoutes from "./routes/notificaciones.js";
-import configRoutes        from "./routes/config.js";
-import usersRoutes         from "./routes/users.routes.js";
-import statsRoutes         from "./routes/stats.js";
-import uploadRoutes        from "./routes/upload.js";
-import staffRoutes         from "./routes/staff.js";
-import { authRequired }    from "./utils/authMiddleware.js";
-import qrRoutes            from "./routes/qr.js";
-import misRegistrosRoutes  from "./routes/mis-registros.js";
-import networkingRoutes    from "./routes/networking.js";
-import miMarcaRoutes       from "./routes/mi-marca.js";
-import miSesionRoutes      from "./routes/mi-sesion.js";
-import encuestasRoutes     from "./routes/encuestas.js";
-import brandingRoutes      from "./routes/branding.js";
-import scanRoutes          from "./routes/scan.js";
-import mapaRoutes          from "./routes/mapa.js";
-import eventosRoutes       from "./routes/eventos.routes.js";
+import configRoutes from "./routes/config.js";
+import usersRoutes from "./routes/users.routes.js";
+import statsRoutes from "./routes/stats.js";
+import uploadRoutes from "./routes/upload.js";
+import staffRoutes from "./routes/staff.js";
+import { authRequired } from "./utils/authMiddleware.js";
+import qrRoutes from "./routes/qr.js";
+import misRegistrosRoutes from "./routes/mis-registros.js";
+import networkingRoutes from "./routes/networking.js";
+import miMarcaRoutes from "./routes/mi-marca.js";
+import miSesionRoutes from "./routes/mi-sesion.js";
+import encuestasRoutes from "./routes/encuestas.js";
+import brandingRoutes from "./routes/branding.js";
+import scanRoutes from "./routes/scan.js";
+import mapaRoutes from "./routes/mapa.js";
+import eventosRoutes from "./routes/eventos.routes.js";
 
-import { sendSSE }                          from "./routes/notificaciones.js";
+import { sendSSE } from "./routes/notificaciones.js";
 import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js";
 
 dotenv.config();
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ============================================================
@@ -89,18 +89,18 @@ app.get("/api/health", (req, res) => {
 // ============================================================
 // Rutas API
 // ============================================================
-app.use("/api/auth",           authRoutes);
-app.use("/api/agenda",         agendaRoutes);
-app.use("/api/speakers",       speakersRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/agenda", agendaRoutes);
+app.use("/api/speakers", speakersRoutes);
 // ── Endpoints críticos expositores (inline para garantizar deploy) ──
 app.patch("/api/expositores/:id/estado", authRequired, async (req, res) => {
   try {
     const rol = req.user?.rol;
-    if (!["super_admin","staff"].includes(rol))
+    if (!["super_admin", "staff"].includes(rol))
       return res.status(403).json({ error: "Sin permisos" });
     const { id } = req.params;
     const { estado_stand } = req.body;
-    const valid = ["libre","solicitado","ocupado","no_disponible"];
+    const valid = ["libre", "solicitado", "ocupado", "no_disponible"];
     if (!valid.includes(estado_stand))
       return res.status(400).json({ error: `Estado inválido. Usa: ${valid.join(", ")}` });
     const r = await pool.query(
@@ -119,7 +119,7 @@ app.patch("/api/expositores/:id/estado", authRequired, async (req, res) => {
 app.patch("/api/expositores/:id/posicion", authRequired, async (req, res) => {
   try {
     const rol = req.user?.rol;
-    if (!["super_admin","staff"].includes(rol))
+    if (!["super_admin", "staff"].includes(rol))
       return res.status(403).json({ error: "Sin permisos" });
     const { id } = req.params;
     const { grid_col, grid_fila, ancho_celdas, alto_celdas } = req.body;
@@ -132,10 +132,10 @@ app.patch("/api/expositores/:id/posicion", authRequired, async (req, res) => {
        WHERE id = $5
        RETURNING id, nombre, grid_col, grid_fila, ancho_celdas, alto_celdas`,
       [
-        grid_col  != null ? parseInt(grid_col)  : null,
+        grid_col != null ? parseInt(grid_col) : null,
         grid_fila != null ? parseInt(grid_fila) : null,
         ancho_celdas ? parseInt(ancho_celdas) : null,
-        alto_celdas  ? parseInt(alto_celdas)  : null,
+        alto_celdas ? parseInt(alto_celdas) : null,
         id,
       ]
     );
@@ -155,7 +155,7 @@ app.post("/api/expositores/:id/visita", authRequired, async (req, res) => {
     await pool.query(
       `INSERT INTO expositores_metrica (expositor_id, user_id, tipo) VALUES ($1,$2,$3)`,
       [id, req.user.id, tipo]
-    ).catch(() => {});
+    ).catch(() => { });
     res.json({ ok: true, message: `${tipo} registrado` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -164,7 +164,7 @@ app.post("/api/expositores/:id/visita", authRequired, async (req, res) => {
 
 app.put("/api/expositores/mapa-config/:sede", authRequired, async (req, res) => {
   try {
-    if (!["super_admin","staff"].includes(req.user?.rol))
+    if (!["super_admin", "staff"].includes(req.user?.rol))
       return res.status(403).json({ error: "Sin permisos" });
     const { sede } = req.params;
     const { edicion = 2026, grid_cols, grid_filas } = req.body;
@@ -173,7 +173,7 @@ app.put("/api/expositores/mapa-config/:sede", authRequired, async (req, res) => 
        VALUES (LOWER($1), $2, $3, $4)
        ON CONFLICT (sede, edicion)
        DO UPDATE SET grid_cols=$3, grid_filas=$4, updated_at=NOW()`,
-      [sede, parseInt(edicion), parseInt(grid_cols)||46, parseInt(grid_filas)||22]
+      [sede, parseInt(edicion), parseInt(grid_cols) || 46, parseInt(grid_filas) || 22]
     );
     console.log(`[MapaConfig] Guardado: ${sede} → ${grid_cols}×${grid_filas}`);
     res.json({ ok: true, config: { sede, edicion, grid_cols, grid_filas } });
@@ -183,24 +183,24 @@ app.put("/api/expositores/mapa-config/:sede", authRequired, async (req, res) => 
   }
 });
 
-app.use("/api/expositores",    expositoresRoutes);
-app.use("/api/dashboard",      dashboardRoutes);
+app.use("/api/expositores", expositoresRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/notificaciones", notificacionesRoutes);
-app.use("/api/config",         configRoutes);
-app.use("/api/users",          usersRoutes);
-app.use("/api/stats",          statsRoutes);
-app.use("/api/upload",         uploadRoutes);
-app.use("/api/staff",          staffRoutes);
-app.use("/api/qr",             qrRoutes);
-app.use("/api/mis-registros",  misRegistrosRoutes);
-app.use("/api/networking",     networkingRoutes);
-app.use("/api/mi-marca",       miMarcaRoutes);
-app.use("/api/mi-sesion",      miSesionRoutes);
-app.use("/api/encuestas",      encuestasRoutes);
-app.use("/api/branding",       brandingRoutes);
-app.use("/api/scan",           scanRoutes);
-app.use("/api/mapa",           mapaRoutes);
-app.use("/api/eventos",        eventosRoutes);
+app.use("/api/config", configRoutes);
+app.use("/api/users", usersRoutes);
+app.use("/api/stats", statsRoutes);
+app.use("/api/upload", uploadRoutes);
+app.use("/api/staff", staffRoutes);
+app.use("/api/qr", qrRoutes);
+app.use("/api/mis-registros", misRegistrosRoutes);
+app.use("/api/networking", networkingRoutes);
+app.use("/api/mi-marca", miMarcaRoutes);
+app.use("/api/mi-sesion", miSesionRoutes);
+app.use("/api/encuestas", encuestasRoutes);
+app.use("/api/branding", brandingRoutes);
+app.use("/api/scan", scanRoutes);
+app.use("/api/mapa", mapaRoutes);
+app.use("/api/eventos", eventosRoutes);
 
 // ============================================================
 // CRON — Notificaciones programadas (cada 30 segundos)
@@ -268,6 +268,41 @@ app.use((err, req, res, next) => {
 // ============================================================
 // Arranque
 // ============================================================
+
+// ════════════════════════════════════════════════════════════
+// CRON: Limpieza automática de papelera cada 24 horas
+// Elimina permanentemente usuarios con activo=false por >30 días
+// ════════════════════════════════════════════════════════════
+const limpiarPapelera = async () => {
+  try {
+    // Intentar con fecha_eliminado primero
+    const r = await pool.query(`
+      DELETE FROM users
+      WHERE activo = false
+        AND fecha_eliminado IS NOT NULL
+        AND fecha_eliminado < NOW() - INTERVAL '30 days'
+      RETURNING id, email
+    `).catch(() =>
+      // Si fecha_eliminado no existe, usar created_at como fallback
+      pool.query(`
+        DELETE FROM users
+        WHERE activo = false
+          AND created_at < NOW() - INTERVAL '30 days'
+        RETURNING id, email
+      `)
+    );
+    if (r.rows.length > 0) {
+      console.log(`[Cron] 🗑️ Papelera: ${r.rows.length} usuario(s) eliminados permanentemente`);
+    }
+  } catch (err) {
+    console.error('[Cron] Error en limpieza de papelera:', err.message);
+  }
+};
+
+// Ejecutar al iniciar y luego cada 24 horas
+limpiarPapelera();
+setInterval(limpiarPapelera, 24 * 60 * 60 * 1000);
+
 app.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════╗

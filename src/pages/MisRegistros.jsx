@@ -164,7 +164,6 @@ export default function MisRegistros() {
   if (loading) {
     return (
       <div>
-        <Header />
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
             <div className="animate-spin h-12 w-12 border-b-2 border-blue-600 rounded-full mx-auto mb-4"></div>
@@ -178,7 +177,6 @@ export default function MisRegistros() {
   if (accessDenied) {
     return (
       <div>
-        <Header />
         <div className="p-6">
           <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
             <div className="flex items-start gap-3">
@@ -198,7 +196,6 @@ export default function MisRegistros() {
 
   return (
     <div>
-      <Header />
       <div className="p-6 max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-6">
