@@ -54,6 +54,7 @@ const MENU_MAP = {
 
 export default function Layout() {
   const { logout, userProfile, permisos, previewRol, isPreviewMode, setPreviewRol, clearPreview } = useAuth();
+  const { isSupported, isSubscribed, permission, requestPermission } = usePush();
   const location = useLocation();
 
   const [open, setOpen] = useState(false);

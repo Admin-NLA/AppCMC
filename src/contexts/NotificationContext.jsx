@@ -132,7 +132,7 @@ export function NotificationProvider({ children }) {
     }
 
     const token = localStorage.getItem("token");
-    const baseURL = import.meta.env.VITE_API_URL || "https://cmc-app.onrender.com/api";
+    const baseURL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
     // Pasar token como query param para SSE (EventSource no soporta headers)
     const URL = `${baseURL}/notificaciones/events?token=${token}&userId=${userProfile.id}`;
 
