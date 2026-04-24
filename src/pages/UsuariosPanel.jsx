@@ -82,6 +82,11 @@ export default function UsuariosPanel() {
   const [deletingUser, setDeletingUser] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Papelera
+  const [papelera, setPapelera] = useState([]);
+  const [showPapelera, setShowPapelera] = useState(false);
+  const [loadingPapelera, setLoadingPapelera] = useState(false);
+
   // --------------------------------------------------------
   useEffect(() => { loadUsers(); }, []);
 

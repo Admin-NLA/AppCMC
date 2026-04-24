@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useEvent } from "../contexts/EventContext.jsx";
 import API from "../services/api";
 import {
   Search,
@@ -14,7 +15,8 @@ import {
 } from "lucide-react";
 
 export default function Speakers() {
-  const { userProfile, permisos } = useAuth(); // ← AGREGADO: permisos
+  const { userProfile, permisos } = useAuth();
+  const { sedeActiva, edicionActiva } = useEvent();
 
   const [speakers, setSpeakers] = useState([]);
   const [filteredSpeakers, setFilteredSpeakers] = useState([]);
