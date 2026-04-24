@@ -2189,26 +2189,67 @@ function StatsInline({ flash, isAdmin }) {
 // ════════════════════════════════════════════════════════════
 
 const FUNCIONES_APP = [
-  // Sección: Informativo / General
-  { key: "verAgenda", label: "Ver Agenda del evento", seccion: "General", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "speaker", "staff"] },
-  { key: "verSpeakers", label: "Ver Speakers del evento", seccion: "General", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "expositor", "speaker", "staff"] },
-  { key: "verExpositores", label: "Ver Expositores / Expo", seccion: "General", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "speaker", "staff"] },
-  { key: "verMapa", label: "Ver Mapa de Exposición", seccion: "General", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "staff"] },
-  { key: "verNetworking", label: "Networking / Citas", seccion: "General", roles: ["asistente_combo", "expositor", "speaker"] },
-  { key: "verEncuestas", label: "Ver y responder Encuestas", seccion: "General", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "speaker", "staff"] },
-  { key: "verNotificaciones", label: "Recibir Notificaciones", seccion: "General", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "speaker", "staff"] },
-  // Sección: Usuario
-  { key: "verPerfil", label: "Ver y editar Perfil propio", seccion: "Usuario", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "speaker"] },
-  { key: "verQR", label: "Mi QR de acceso", seccion: "Usuario", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso"] },
-  { key: "verMisRegistros", label: "Mis Registros y asistencias", seccion: "Usuario", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor"] },
-  // Sección: Roles especiales
-  { key: "verMiMarca", label: "Mi Marca (Expositor)", seccion: "Especial", roles: ["expositor"] },
-  { key: "verMiSesion", label: "Mi Sesión (Speaker)", seccion: "Especial", roles: ["speaker"] },
-  { key: "verStaffPanel", label: "Panel Estadístico (Staff)", seccion: "Especial", roles: ["staff"] },
-  { key: "verScanner", label: "Scanner QR de acceso", seccion: "Especial", roles: ["staff"] },
-  // Sección: Admin
-  { key: "verAdminPanel", label: "Panel de Administración", seccion: "Admin", roles: ["staff"] },
-  { key: "verUsuarios", label: "Gestión de Usuarios", seccion: "Admin", roles: ["staff"] },
+  // ── SECCIÓN: Agenda ───────────────────────────────────────
+  // A. General: SIN agenda (bloqueado)
+  // A. Curso: Agenda D1-D2 solo cursos
+  // A. Sesiones: Agenda D3-D4 solo sesiones
+  // A. Combo: Agenda completa D1-D4
+  // Expositor: Agenda solo lectura (sin favoritos)
+  // Speaker: Agenda completa lectura
+  // Staff: Agenda lectura
+  { key: "verAgendaCursos", label: "Agenda — Cursos (D1-D2)", seccion: "Agenda", roles: ["asistente_curso", "asistente_combo"] },
+  { key: "verAgendaSesiones", label: "Agenda — Sesiones (D3-D4)", seccion: "Agenda", roles: ["asistente_sesiones", "asistente_combo"] },
+  { key: "verAgendaCompleta", label: "Agenda — Completa (lectura)", seccion: "Agenda", roles: ["expositor", "speaker", "staff"] },
+  { key: "inscripcionCursos", label: "Inscripción a Cursos", seccion: "Agenda", roles: ["asistente_curso", "asistente_combo"] },
+  { key: "marcarFavoritos", label: "Marcar Sesiones Favoritas", seccion: "Agenda", roles: ["asistente_sesiones", "asistente_combo"] },
+
+  // ── SECCIÓN: Expo ─────────────────────────────────────────
+  // A. Curso: SIN expositores ni mapa
+  // A. General/Sesiones/Combo/Expositor/Speaker/Staff: SÍ
+  { key: "verExpositores", label: "Ver Expositores / Lista Expo", seccion: "Expo", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "expositor", "speaker", "staff"] },
+  { key: "verMapa", label: "Ver Mapa de Exposición", seccion: "Expo", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "expositor", "speaker", "staff"] },
+
+  // ── SECCIÓN: Speakers ─────────────────────────────────────
+  // A. General y Curso: SIN speakers
+  // A. Sesiones/Combo/Expositor/Speaker/Staff: SÍ
+  { key: "verSpeakers", label: "Ver Speakers del evento", seccion: "Speakers", roles: ["asistente_sesiones", "asistente_combo", "expositor", "speaker", "staff"] },
+
+  // ── SECCIÓN: Networking ───────────────────────────────────
+  // A. General: SÍ (networking básico)
+  // A. Sesiones: SÍ
+  // A. Combo: SÍ
+  // Speaker: NO
+  // Expositor: SÍ (además puede editar disponibilidad)
+  { key: "verNetworking", label: "Networking / Ver y solicitar citas", seccion: "Networking", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "expositor"] },
+  { key: "editarDisponibilidadNet", label: "Editar disponibilidad (Networking)", seccion: "Networking", roles: ["expositor"] },
+
+  // ── SECCIÓN: Encuestas y Notificaciones ──────────────────
+  { key: "verEncuestas", label: "Ver y responder Encuestas", seccion: "Comunicación", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "speaker", "staff"] },
+  { key: "verNotificaciones", label: "Recibir Notificaciones", seccion: "Comunicación", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "speaker", "staff"] },
+
+  // ── SECCIÓN: Perfil y Acceso Personal ────────────────────
+  { key: "editarPerfil", label: "Editar Perfil propio", seccion: "Personal", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "speaker", "staff"] },
+  { key: "verQR", label: "Mi QR de acceso (vCard)", seccion: "Personal", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor", "speaker"] },
+  { key: "verMisRegistros", label: "Mis Registros y asistencias", seccion: "Personal", roles: ["asistente_general", "asistente_sesiones", "asistente_combo", "asistente_curso", "expositor"] },
+
+  // ── SECCIÓN: Funciones Especiales por Rol ────────────────
+  { key: "verMiMarca", label: "Mi Marca — editar logo/descripción (Expositor)", seccion: "Especial", roles: ["expositor"] },
+  { key: "verMiSesion", label: "Mi Sesión — ver detalles y badge ⭐ (Speaker)", seccion: "Especial", roles: ["speaker"] },
+  { key: "editarBioSpeaker", label: "Editar Biografía y Foto propia (Speaker)", seccion: "Especial", roles: ["speaker"] },
+  { key: "verRegistroSesion", label: "Ver asistentes a su sesión (Speaker)", seccion: "Especial", roles: ["speaker"] },
+
+  // ── SECCIÓN: Staff ───────────────────────────────────────
+  { key: "verStaffPanel", label: "Staff Panel — Dashboard y estadísticas", seccion: "Staff", roles: ["staff"] },
+  { key: "verScanner", label: "Scanner QR (check-in / check-out)", seccion: "Staff", roles: ["staff"] },
+  { key: "verUsuariosSolo", label: "Ver Usuarios (solo lectura)", seccion: "Staff", roles: ["staff"] },
+  { key: "enviarNotificaciones", label: "Enviar Notificaciones a usuarios", seccion: "Staff", roles: ["staff"] },
+
+  // ── SECCIÓN: Admin (solo super_admin puede dar esto a Staff) ──
+  // Staff NO tiene Admin Panel por defecto — solo super_admin
+  { key: "verAdminPanel", label: "Acceso al Admin Panel completo", seccion: "Admin", roles: [] },
+  { key: "editarUsuarios", label: "Crear / Editar / Eliminar Usuarios", seccion: "Admin", roles: [] },
+  { key: "verDashboard", label: "Dashboard completo de administración", seccion: "Admin", roles: ["staff"] },
+  { key: "excelImport", label: "Importar Excel masivo", seccion: "Admin", roles: [] },
 ];
 
 const ROLES_DISPLAY = [
@@ -2319,18 +2360,26 @@ function ControlFunciones({ config, onSave, flash }) {
                         const active = isActive(func.key, r.id);
                         return (
                           <td key={r.id} className="px-3 py-2.5 text-center">
-                            {applicable ? (
-                              <button
-                                onClick={() => toggle(func.key, r.id)}
-                                className={`w-10 h-5 rounded-full transition-colors relative inline-flex ${active ? "" : "bg-gray-200 dark:bg-gray-600"}`}
-                                style={active ? { backgroundColor: r.color } : {}}
-                                title={active ? "Activo — clic para desactivar" : "Inactivo — clic para activar"}
-                              >
-                                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${active ? "translate-x-5" : "translate-x-0.5"}`} />
-                              </button>
-                            ) : (
-                              <span className="text-gray-200 dark:text-gray-700 text-lg">—</span>
-                            )}
+                            <button
+                              onClick={() => toggle(func.key, r.id)}
+                              className={`w-10 h-5 rounded-full transition-colors relative inline-flex ${active
+                                  ? ""
+                                  : applicable
+                                    ? "bg-gray-200 dark:bg-gray-600"
+                                    : "bg-gray-100 dark:bg-gray-700 border border-dashed border-gray-300 dark:border-gray-600"
+                                }`}
+                              style={active ? { backgroundColor: r.color } : {}}
+                              title={
+                                active
+                                  ? "Activo — clic para desactivar"
+                                  : applicable
+                                    ? "Inactivo (por definición) — clic para activar"
+                                    : "Sin permiso por defecto — clic para habilitar excepción"
+                              }
+                            >
+                              <span className={`absolute top-0.5 w-4 h-4 rounded-full shadow transition-transform ${active ? "bg-white translate-x-5" : applicable ? "bg-white translate-x-0.5" : "bg-gray-300 dark:bg-gray-500 translate-x-0.5"
+                                }`} />
+                            </button>
                           </td>
                         );
                       })}
