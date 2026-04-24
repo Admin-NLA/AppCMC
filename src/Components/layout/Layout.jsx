@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import API from "../../services/api";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext.jsx";
+import { usePush } from "../../hooks/usePush.js";
 
 import { useNotificaciones } from "../../contexts/NotificationContext.jsx";
 import NotificationsPanel from "../../Components/NotificationsPanel.jsx";
@@ -383,6 +384,20 @@ export default function Layout() {
             </Link>
           </div>
         </header>
+        {/* Banner Web Push — solo si soportado y no suscrito */}
+        {isSupported && !isSubscribed && permission === 'default' && userProfile && (
+          <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-blue-600 text-white text-sm">
+            <span className="flex items-center gap-2">
+              🔔 <span>Activa las notificaciones push para recibir alertas aunque la app esté cerrada</span>
+            </span>
+            <button
+              onClick={requestPermission}
+              className="shrink-0 bg-white text-blue-600 font-semibold px-3 py-1 rounded-lg text-xs hover:bg-blue-50 transition"
+            >
+              Activar ahora
+            </button>
+          </div>
+        )}
 
         {/* Banner modo vista previa */}
         {isPreviewMode && (

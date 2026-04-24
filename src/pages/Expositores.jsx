@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useEvent } from "../contexts/EventContext.jsx";
 import API from "../services/api";
 import {
   Search,
@@ -15,6 +16,7 @@ import {
 
 export default function Expositores() {
   const { userProfile, permisos } = useAuth(); // ← AGREGADO: permisos
+  const { sedeActiva, edicionActiva } = useEvent();
 
   const [expositores, setExpositores] = useState([]);
   const [filteredExpositores, setFilteredExpositores] = useState([]);
@@ -89,13 +91,16 @@ export default function Expositores() {
       const params = new URLSearchParams();
 
       // Aplicar filtro de sede si el usuario tiene filtraSede = true
-      if (permisos?.filtraSede && userProfile?.sede) {
-        params.append("sede", userProfile.sede);
+      // Usar sedeActiva del evento (no la sede del usuario) para filtrar
+      const sedeParaFiltro = sedeActiva || userProfile?.sede;
+      if (permisos?.filtraSede && sedeParaFiltro) {
+        params.append("sede", sedeParaFiltro);
       }
 
-      // Aplicar filtro de edición si el usuario tiene filtraEdicion = true
-      if (permisos?.filtraEdicion && userProfile?.edicion) {
-        params.append("edicion", userProfile.edicion);
+      // Usar edicionActiva del evento para filtrar
+      const edicionParaFiltro = edicionActiva || userProfile?.edicion;
+      if (permisos?.filtraEdicion && edicionParaFiltro) {
+        params.append("edicion", edicionParaFiltro);
       }
 
       if (selectedSede) params.append("sede", selectedSede);

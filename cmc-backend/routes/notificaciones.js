@@ -2,6 +2,7 @@
 // ✅ CONSOLIDADO: SSE + CRUD + Broadcast
 import { Router } from "express";
 import pool from "../db.js";
+import { sendPushToUser } from './push.js';
 import { authRequired } from "../utils/authMiddleware.js";
 
 const router = Router();
@@ -23,10 +24,12 @@ router.get("/events", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.flushHeaders();
 
+  // Identificar al usuario por userId en query param
+  const userId = req.query.userId || null;
   const clientId = Date.now();
-  clients.push({ id: clientId, res });
+  clients.push({ id: clientId, res, userId });
 
-  console.log(`🔔 [SSE] Cliente conectado: ${clientId}`);
+  console.log(`🔔 [SSE] Cliente conectado: ${clientId} userId:${userId}`);
 
   req.on("close", () => {
     console.log(`❌ [SSE] Cliente desconectado: ${clientId}`);
@@ -38,10 +41,12 @@ router.get("/events", (req, res) => {
  * Función interna para enviar SSE a todos los clientes conectados
  * @param {Object} data - Datos a enviar (automaticamente serializado a JSON)
  */
-function sendSSE(data) {
+function sendSSE(data, targetUserId = null) {
   const message = `data: ${JSON.stringify(data)}\n\n`;
   clients.forEach(client => {
     try {
+      // Si hay destinatario específico, filtrar por userId
+      if (targetUserId && client.userId && client.userId !== String(targetUserId)) return;
       client.res.write(message);
     } catch (err) {
       console.error(`❌ [SSE] Error enviando a cliente ${client.id}:`, err.message);
@@ -196,10 +201,23 @@ router.post("/", authRequired, async (req, res) => {
     // Enviar por SSE si NO es programada
     if (!programada_para) {
       console.log(`📡 [SSE] Enviando notificación en tiempo real`);
-      sendSSE({ 
-        tipo: "NEW_NOTIFICATION", 
-        data: notificacion 
+      sendSSE({
+        tipo: "NEW_NOTIFICATION",
+        data: notificacion
       });
+      // Web Push — si hay usuarios específicos, enviarles push
+      if (notificacion && tipo_usuario && !tipo_usuario.includes('todos')) {
+        try {
+          const usersRes = await pool.query(
+            `SELECT id FROM users WHERE rol = ANY($1::text[]) AND activo = true`,
+            [tipo_usuario]
+          );
+          const userIds = usersRes.rows.map(r => r.id);
+          await Promise.all(userIds.map(uid =>
+            sendPushToUser(uid, { titulo, mensaje, tipo, meta: {} }).catch(() => { })
+          ));
+        } catch (e) { /* silencioso */ }
+      }
     }
 
     console.log(`✅ [POST] Notificación creada: ${notificacion.id}`);
@@ -227,8 +245,8 @@ router.post("/broadcast", authRequired, async (req, res) => {
     const { usuarios, titulo, mensaje, tipo = "info" } = req.body;
 
     if (!usuarios || usuarios.length === 0 || !titulo || !mensaje) {
-      return res.status(400).json({ 
-        error: "Campos requeridos: usuarios[], titulo, mensaje" 
+      return res.status(400).json({
+        error: "Campos requeridos: usuarios[], titulo, mensaje"
       });
     }
 
@@ -250,9 +268,9 @@ router.post("/broadcast", authRequired, async (req, res) => {
     });
 
     console.log(`✅ [BROADCAST] ${usuarios.length} usuarios notificados`);
-    res.status(201).json({ 
-      ok: true, 
-      count: usuarios.length, 
+    res.status(201).json({
+      ok: true,
+      count: usuarios.length,
       message: `Notificación enviada a ${usuarios.length} usuarios`,
       id: result.rows[0].id
     });

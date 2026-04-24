@@ -92,6 +92,34 @@ export function NotificationProvider({ children }) {
   };
 
   // =========================
+  // 🔄 CARGA INICIAL desde API
+  // =========================
+  useEffect(() => {
+    if (!userProfile?.id) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000/api"}/notificaciones`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => {
+        const lista = Array.isArray(data) ? data : [];
+        setNotificaciones(lista.map(n => ({
+          id: n.id,
+          titulo: n.titulo,
+          mensaje: n.mensaje,
+          tipo: n.tipo || "info",
+          creadoEn: n.created_at,
+          meta: n.meta || {},
+          leida: n.leida || false,
+        })));
+        setUnreadCount(lista.filter(n => !n.leida).length);
+      })
+      .catch(() => { }); // silencioso si falla
+  }, [userProfile?.id]);
+
+  // =========================
   // SSE
   // =========================
   useEffect(() => {
@@ -103,9 +131,10 @@ export function NotificationProvider({ children }) {
       return;
     }
 
-    const URL =
-      import.meta.env.VITE_NOTIF_URL ||
-      "https://cmc-app.onrender.com/api/notificaciones/events";
+    const token = localStorage.getItem("token");
+    const baseURL = import.meta.env.VITE_API_URL || "https://cmc-app.onrender.com/api";
+    // Pasar token como query param para SSE (EventSource no soporta headers)
+    const URL = `${baseURL}/notificaciones/events?token=${token}&userId=${userProfile.id}`;
 
     function connect() {
       try {

@@ -22,6 +22,7 @@
 import express from 'express';
 import { emailCitaSolicitada, emailCitaConfirmada, emailCitaRechazada, emailCitaCancelada } from '../utils/email.js';
 import pool from '../db.js';
+import { sendPushToUser } from './push.js';
 import { authRequired } from '../utils/authMiddleware.js';
 
 const router = express.Router();
@@ -244,16 +245,25 @@ router.post('/', authRequired, async (req, res) => {
 
     const citaCreada = r.rows[0];
 
+    // Obtener datos del solicitante una sola vez (fuera de los if)
+    const sol = await getSolicitante(solicitante_id).catch(() => null);
+
     // Notificar al expositor (si tiene usuario vinculado)
     if (expo.user_id) {
-      const sol = await getSolicitante(solicitante_id);
       await crearNotificacion(pool, {
         userId: expo.user_id,
         titulo: '📅 Nueva solicitud de cita',
         mensaje: `${sol?.nombre || 'Un asistente'} quiere reunirse contigo el ${fecha} a las ${hora.slice(0, 5)}`,
         tipo: 'cita_solicitada',
         meta: { cita_id: citaCreada.id, solicitante_id, expositor_id },
-      });
+      }).catch(() => { });
+      // Web Push al expositor
+      await sendPushToUser(expo.user_id, {
+        titulo: '📅 Nueva solicitud de cita',
+        mensaje: `${sol?.nombre || 'Un asistente'} quiere reunirse contigo el ${fecha} a las ${hora.slice(0, 5)}`,
+        tipo: 'cita_solicitada',
+        url: '/networking',
+      }).catch(() => { });
     }
     // Notificar al solicitante (confirmación de envío)
     await crearNotificacion(pool, {
@@ -262,7 +272,14 @@ router.post('/', authRequired, async (req, res) => {
       mensaje: `Tu solicitud de cita con ${expo.nombre} para el ${fecha} a las ${hora.slice(0, 5)} fue enviada. Espera confirmación.`,
       tipo: 'cita_enviada',
       meta: { cita_id: citaCreada.id, expositor_id },
-    });
+    }).catch(() => { });
+    // Web Push al solicitante
+    await sendPushToUser(solicitante_id, {
+      titulo: '✅ Solicitud de cita enviada',
+      mensaje: `Tu solicitud con ${expo.nombre} para el ${fecha} fue enviada`,
+      tipo: 'cita_enviada',
+      url: '/networking',
+    }).catch(() => { });
 
     // Email al expositor (silencioso — no falla si no hay email)
     if (expo.user_email) {
