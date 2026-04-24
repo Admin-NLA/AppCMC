@@ -284,53 +284,54 @@ export default function Expositores() {
           />
         </div>
 
-        {/* Filtros Sede y Edición */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Filtro Sede */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sede</label>
-            <select
-              value={selectedSede}
-              onChange={(e) => setSelectedSede(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Todas las sedes</option>
-              {availableSedes.map((sede) => (
-                <option key={sede} value={sede}>
-                  {sede.charAt(0).toUpperCase() + sede.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Filtros Sede y Edición — solo si hay más de 1 sede/edición */}
+        {(availableSedes.length > 1 || availableEdiciones.length > 1) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Filtro Sede */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Sede</label>
+              <select
+                value={selectedSede}
+                onChange={(e) => setSelectedSede(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Todas las sedes</option>
+                {availableSedes.map((sede) => (
+                  <option key={sede} value={sede}>
+                    {sede.charAt(0).toUpperCase() + sede.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filtro Edición */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Edición</label>
-            <select
-              value={selectedEdicion}
-              onChange={(e) => setSelectedEdicion(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Todas las ediciones</option>
-              {availableEdiciones.map((edicion) => (
-                <option key={edicion} value={edicion}>
-                  {edicion}
-                </option>
-              ))}
-            </select>
+            {/* Filtro Edición */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Edición</label>
+              <select
+                value={selectedEdicion}
+                onChange={(e) => setSelectedEdicion(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Todas las ediciones</option>
+                {availableEdiciones.map((edicion) => (
+                  <option key={edicion} value={edicion}>
+                    {edicion}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Filtro por categoría - SOLO SI NO ES EXPOSITOR */}
         {userProfile?.rol !== "expositor" && categories.length > 0 && (
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setFilterCategory("todos")}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
-                filterCategory === "todos"
+              className={`px-4 py-2 rounded-lg font-medium transition ${filterCategory === "todos"
                   ? "bg-blue-600 text-white"
                   : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-100"
-              }`}
+                }`}
             >
               Todos ({expositores.length})
             </button>
@@ -338,11 +339,10 @@ export default function Expositores() {
               <button
                 key={cat}
                 onClick={() => setFilterCategory(cat)}
-                className={`px-4 py-2 rounded-lg font-medium transition ${
-                  filterCategory === cat
+                className={`px-4 py-2 rounded-lg font-medium transition ${filterCategory === cat
                     ? "bg-blue-600 text-white"
                     : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-100"
-                }`}
+                  }`}
               >
                 {cat} ({expositores.filter(e => e.categoria === cat).length})
               </button>
@@ -389,8 +389,8 @@ export default function Expositores() {
               {expositores.length === 0
                 ? "No hay expositores disponibles"
                 : userProfile?.rol === "expositor"
-                ? "Tu información de expositor no está disponible"
-                : `No se encontraron expositores para "${searchTerm || filterCategory || selectedSede || selectedEdicion}"`}
+                  ? "Tu información de expositor no está disponible"
+                  : `No se encontraron expositores para "${searchTerm || filterCategory || selectedSede || selectedEdicion}"`}
             </p>
             {expositores.length > 0 && (searchTerm || filterCategory !== "todos" || selectedSede || selectedEdicion) && (
               <button

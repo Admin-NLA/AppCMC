@@ -335,3 +335,169 @@ body {
 .dark .focus\:ring-blue-500:focus {
   --tw-ring-color: #3b82f6;
 }
+
+/* ════════════════════════════════════════════════════════
+   DARK MODE — Complementos para Layout y componentes
+   ════════════════════════════════════════════════════════ */
+
+/* Header top bar */
+.dark header {
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
+  border-bottom: 1px solid #374151;
+}
+
+.dark header button,
+.dark header span,
+.dark header p,
+.dark header a {
+  color: #f9fafb !important;
+}
+
+/* Iconos del header (campana, sol/luna) */
+.dark header svg {
+  color: #d1d5db !important;
+}
+
+/* Nombre de usuario en header */
+.dark header .text-gray-700 {
+  color: #e5e7eb !important;
+}
+
+.dark header .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+/* Dropdown "Ver como" */
+.dark .ver-como-btn,
+.dark [class*="ver-como"] {
+  background-color: #374151 !important;
+  color: #f9fafb !important;
+  border-color: #4b5563 !important;
+}
+
+/* Sidebar nav */
+.dark .cmc-sidebar {
+  background-color: #1f2937 !important;
+}
+
+/* Títulos de sección en sidebar */
+.dark .sidebar-section-title,
+.dark nav p.text-xs {
+  color: #6b7280 !important;
+}
+
+/* Links nav activos e inactivos */
+.dark nav a,
+.dark nav button {
+  color: #d1d5db;
+}
+
+/* Modales y overlays */
+.dark .modal-bg,
+.dark [class*="bg-white rounded-2xl"],
+.dark [class*="bg-white rounded-xl"],
+.dark [class*="bg-white rounded-lg"] {
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
+}
+
+/* Texto en fondos de color (alertas, badges) en dark */
+.dark .bg-blue-600 {
+  background-color: #2563eb !important;
+}
+
+.dark .bg-green-600 {
+  background-color: #16a34a !important;
+}
+
+.dark .bg-red-600 {
+  background-color: #dc2626 !important;
+}
+
+.dark .bg-purple-600 {
+  background-color: #9333ea !important;
+}
+
+/* Inputs dentro de modales */
+.dark input[type="text"],
+.dark input[type="email"],
+.dark input[type="password"],
+.dark input[type="number"],
+.dark input[type="date"],
+.dark input[type="datetime-local"],
+.dark input[type="tel"],
+.dark input[type="url"],
+.dark textarea,
+.dark select {
+  background-color: #374151 !important;
+  color: #f9fafb !important;
+  border-color: #4b5563 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Labels */
+.dark label {
+  color: #d1d5db !important;
+}
+
+/* Bordes de cards en colores */
+.dark .border-blue-500 {
+  border-color: #3b82f6 !important;
+}
+
+.dark .border-green-500 {
+  border-color: #22c55e !important;
+}
+
+.dark .border-red-500 {
+  border-color: #ef4444 !important;
+}
+
+.dark .border-purple-500 {
+  border-color: #a855f7 !important;
+}
+
+.dark .border-amber-500 {
+  border-color: #f59e0b !important;
+}
+
+/* Texto de placeholder para selects vacíos */
+.dark option {
+  background-color: #374151;
+  color: #f9fafb;
+}
+
+/* Botones outline en dark */
+.dark .btn-outline,
+.dark button[class*="border-gray-300"],
+.dark button[class*="border-gray-200"] {
+  border-color: #4b5563 !important;
+  color: #d1d5db !important;
+}
+
+.dark button[class*="border-gray-300"]:hover,
+.dark button[class*="border-gray-200"]:hover {
+  background-color: #374151 !important;
+}
+
+/* Código / monospace */
+.dark code,
+.dark pre {
+  background-color: #111827 !important;
+  color: #d1d5db !important;
+}
+
+/* Líneas divisoras */
+.dark hr {
+  border-color: #374151 !important;
+}
+
+/* Scrollbar global */
+.dark * {
+  scrollbar-color: #4b5563 #1f2937;
+}

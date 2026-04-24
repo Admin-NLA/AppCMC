@@ -89,11 +89,11 @@ router.post('/', authRequired, async (req, res) => {
       email,
       password,
       nombre,
-      rol       = 'asistente_general',
+      rol = 'asistente_general',
       tipo_pase = 'general',
-      sede      = 'colombia',
-      empresa   = '',
-      telefono  = '',   // se guarda en columna 'movil'
+      sede = 'colombia',
+      empresa = '',
+      telefono = '',   // se guarda en columna 'movil'
     } = req.body;
 
     // Validaciones básicas
@@ -124,10 +124,11 @@ router.post('/', authRequired, async (req, res) => {
     // FIX: INSERT usa password_hash y movil (columnas reales de la tabla)
     const result = await pool.query(
       `INSERT INTO users
-        (email, password_hash, nombre, rol, tipo_pase, sede, empresa, movil, activo, edicion, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 2025, NOW(), NOW())
-       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, created_at`,
-      [email.toLowerCase().trim(), password_hash, nombre, rol, tipo_pase, sede, empresa, telefono]
+        (email, password_hash, nombre, rol, tipo_pase, sede, empresa, movil, activo, edicion, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, NOW(), NOW())
+       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, edicion, created_at`,
+      [email.toLowerCase().trim(), password_hash, nombre, rol, tipo_pase, sedePrincipal,
+        empresa, telefono, parseInt(edicion) || 2026]
     );
 
     console.log(`[Users] ✅ Usuario creado: ${email} (${rol})`);
@@ -150,8 +151,8 @@ router.put('/:id', authRequired, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const esSuPerfil  = req.user.id === id;
-    const esAdmin     = req.user.rol === 'super_admin';
+    const esSuPerfil = req.user.id === id;
+    const esAdmin = req.user.rol === 'super_admin';
 
     if (!esSuPerfil && !esAdmin) {
       return res.status(403).json({ error: 'No autorizado para editar este perfil' });
@@ -159,9 +160,14 @@ router.put('/:id', authRequired, async (req, res) => {
 
     const {
       nombre, email, rol, tipo_pase, sede,
+      sedes, edicion,
       empresa, telefono,
       foto_url, avatar_url,
+      permisos_extra,
     } = req.body;
+    // multi-sede: calcular sede principal
+    const sedesParsed = Array.isArray(sedes) && sedes.length ? sedes : null;
+    const sedePrincipal = sedesParsed ? sedesParsed[0] : sede;
 
     const userExists = await pool.query('SELECT id FROM users WHERE id = $1', [id]);
     if (userExists.rows.length === 0) {
@@ -176,16 +182,21 @@ router.put('/:id', authRequired, async (req, res) => {
     }
 
     const updates = [];
-    const values  = [];
+    const values = [];
     let p = 1;
 
     // Si el usuario no es admin, no puede cambiar su rol, tipo_pase ni sede
     const fields = {
       nombre,
       email,
-      ...(esAdmin ? { rol, tipo_pase, sede } : {}),  // solo admin cambia estos
+      ...(esAdmin ? {
+        rol, tipo_pase,
+        sede: sedePrincipal || sede,
+        edicion: edicion ? parseInt(edicion) : undefined,
+        permisos_extra: permisos_extra !== undefined ? JSON.stringify(permisos_extra) : undefined,
+      } : {}),  // solo admin cambia estos
       empresa,
-      movil:      telefono,
+      movil: telefono,
       avatar_url: avatar_url || foto_url,
     };
 
@@ -206,7 +217,7 @@ router.put('/:id', authRequired, async (req, res) => {
 
     const result = await pool.query(
       `UPDATE users SET ${updates.join(', ')} WHERE id = $${p}
-       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo`,
+       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, edicion`,
       values
     );
 

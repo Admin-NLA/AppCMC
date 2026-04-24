@@ -21,7 +21,7 @@
 
 import express from 'express';
 import { emailCitaSolicitada, emailCitaConfirmada, emailCitaRechazada, emailCitaCancelada } from '../utils/email.js';
-import pool    from '../db.js';
+import pool from '../db.js';
 import { authRequired } from '../utils/authMiddleware.js';
 
 const router = express.Router();
@@ -30,7 +30,7 @@ const router = express.Router();
 // Guarda en la tabla notificaciones con meta.user_destino para filtrado
 async function crearNotificacion(pool, { userId, titulo, mensaje, tipo, meta }) {
   try {
-    const metaFinal = { ...( meta || {}), user_destino: userId };
+    const metaFinal = { ...(meta || {}), user_destino: userId };
     await pool.query(
       `INSERT INTO notificaciones
          (titulo, mensaje, tipo, meta, tipo_usuario, activa, enviada, sede, created_by)
@@ -128,8 +128,9 @@ router.get('/mis-citas', authRequired, async (req, res) => {
       FROM networking n
       JOIN users      us ON us.id = n.solicitante_id
       JOIN expositores e ON e.id  = n.expositor_id
-      WHERE n.solicitante_id = $1
-         OR ($2::uuid IS NOT NULL AND n.expositor_id = $2)
+      WHERE (n.solicitante_id = $1
+         OR ($2::uuid IS NOT NULL AND n.expositor_id = $2))
+         AND n.status != 'eliminada'
       ORDER BY n.fecha ASC, n.hora ASC
     `, [userId, expositorId]);
 
@@ -185,9 +186,9 @@ router.get('/admin', authRequired, async (req, res) => {
       WHERE 1=1
     `;
     const p = [];
-    if (sede)   { q += ` AND n.sede = $${p.length+1}`;    p.push(sede); }
-    if (fecha)  { q += ` AND n.fecha = $${p.length+1}`;   p.push(fecha); }
-    if (status) { q += ` AND n.status = $${p.length+1}`;  p.push(status); }
+    if (sede) { q += ` AND n.sede = $${p.length + 1}`; p.push(sede); }
+    if (fecha) { q += ` AND n.fecha = $${p.length + 1}`; p.push(fecha); }
+    if (status) { q += ` AND n.status = $${p.length + 1}`; p.push(status); }
     q += ' ORDER BY n.fecha ASC, n.hora ASC';
 
     const r = await pool.query(q, p);
@@ -249,7 +250,7 @@ router.post('/', authRequired, async (req, res) => {
       await crearNotificacion(pool, {
         userId: expo.user_id,
         titulo: '📅 Nueva solicitud de cita',
-        mensaje: `${sol?.nombre || 'Un asistente'} quiere reunirse contigo el ${fecha} a las ${hora.slice(0,5)}`,
+        mensaje: `${sol?.nombre || 'Un asistente'} quiere reunirse contigo el ${fecha} a las ${hora.slice(0, 5)}`,
         tipo: 'cita_solicitada',
         meta: { cita_id: citaCreada.id, solicitante_id, expositor_id },
       });
@@ -258,7 +259,7 @@ router.post('/', authRequired, async (req, res) => {
     await crearNotificacion(pool, {
       userId: solicitante_id,
       titulo: '✅ Solicitud enviada',
-      mensaje: `Tu solicitud de cita con ${expo.nombre} para el ${fecha} a las ${hora.slice(0,5)} fue enviada. Espera confirmación.`,
+      mensaje: `Tu solicitud de cita con ${expo.nombre} para el ${fecha} a las ${hora.slice(0, 5)} fue enviada. Espera confirmación.`,
       tipo: 'cita_enviada',
       meta: { cita_id: citaCreada.id, expositor_id },
     });
@@ -267,9 +268,9 @@ router.post('/', authRequired, async (req, res) => {
     if (expo.user_email) {
       emailCitaSolicitada({
         solicitante: { nombre: sol?.nombre || 'Un asistente', empresa: sol?.empresa },
-        expositor:   { nombre: expo.nombre, email: expo.user_email },
-        cita:        citaCreada,
-      }).catch(() => {});
+        expositor: { nombre: expo.nombre, email: expo.user_email },
+        cita: citaCreada,
+      }).catch(() => { });
     }
 
     res.status(201).json({ ok: true, cita: citaCreada, message: 'Cita solicitada correctamente' });
@@ -301,9 +302,9 @@ router.put('/:id', authRequired, async (req, res) => {
     }
     const cita = citaRes.rows[0];
 
-    const esSolicitante  = cita.solicitante_id === userId;
-    const esExpositor    = cita.expositor_user_id === userId;
-    const esAdmin        = ROLES_ADMIN.includes(req.user.rol);
+    const esSolicitante = cita.solicitante_id === userId;
+    const esExpositor = cita.expositor_user_id === userId;
+    const esAdmin = ROLES_ADMIN.includes(req.user.rol);
 
     if (!esSolicitante && !esExpositor && !esAdmin) {
       return res.status(403).json({ error: 'Sin permiso para modificar esta cita' });
@@ -315,7 +316,7 @@ router.put('/:id', authRequired, async (req, res) => {
         return res.status(400).json({ error: `Status inválido. Opciones: ${STATUS_VALIDOS.join(', ')}` });
       }
       // Solo el expositor o admin pueden confirmar/rechazar
-      if (['confirmada','rechazada'].includes(status) && !esExpositor && !esAdmin) {
+      if (['confirmada', 'rechazada'].includes(status) && !esExpositor && !esAdmin) {
         return res.status(403).json({ error: 'Solo el expositor puede confirmar o rechazar citas' });
       }
       // Solo el solicitante o admin pueden cancelar
@@ -343,7 +344,7 @@ router.put('/:id', authRequired, async (req, res) => {
         confirmada: {
           paraQuien: cita.solicitante_id,
           titulo: '✅ Cita confirmada',
-          mensaje: `Tu cita con ${cita.expositor_nombre || 'el expositor'} el ${cita.fecha} a las ${cita.hora?.slice(0,5)} fue confirmada.${ubicacion ? ` Ubicación: ${ubicacion}` : ''}`,
+          mensaje: `Tu cita con ${cita.expositor_nombre || 'el expositor'} el ${cita.fecha} a las ${cita.hora?.slice(0, 5)} fue confirmada.${ubicacion ? ` Ubicación: ${ubicacion}` : ''}`,
         },
         rechazada: {
           paraQuien: cita.solicitante_id,
@@ -353,7 +354,7 @@ router.put('/:id', authRequired, async (req, res) => {
         cancelada: {
           paraQuien: cita.expositor_user_id,
           titulo: '🚫 Cita cancelada',
-          mensaje: `${(await getSolicitante(cita.solicitante_id).catch(()=>({nombre:'El asistente'})))?.nombre} canceló la cita del ${cita.fecha} a las ${cita.hora?.slice(0,5)}.`,
+          mensaje: `${(await getSolicitante(cita.solicitante_id).catch(() => ({ nombre: 'El asistente' })))?.nombre} canceló la cita del ${cita.fecha} a las ${cita.hora?.slice(0, 5)}.`,
         },
       };
       const notif = msgs[status];
@@ -374,18 +375,18 @@ router.put('/:id', authRequired, async (req, res) => {
       if (solicitante?.email) {
         emailCitaConfirmada({
           solicitante: { nombre: solicitante.nombre, email: solicitante.email },
-          expositor:   { nombre: cita.expositor_nombre || 'El expositor' },
-          cita:        { ...citaActualizada, ubicacion },
-        }).catch(() => {});
+          expositor: { nombre: cita.expositor_nombre || 'El expositor' },
+          cita: { ...citaActualizada, ubicacion },
+        }).catch(() => { });
       }
     } else if (status === 'rechazada') {
       const solicitante = await getSolicitante(cita.solicitante_id).catch(() => null);
       if (solicitante?.email) {
         emailCitaRechazada({
           solicitante: { nombre: solicitante.nombre, email: solicitante.email },
-          expositor:   { nombre: cita.expositor_nombre || 'El expositor' },
-          cita:        citaActualizada,
-        }).catch(() => {});
+          expositor: { nombre: cita.expositor_nombre || 'El expositor' },
+          cita: citaActualizada,
+        }).catch(() => { });
       }
     } else if (status === 'cancelada') {
       // Notificar al expositor
@@ -395,11 +396,11 @@ router.put('/:id', authRequired, async (req, res) => {
       if (expoUser?.email) {
         const solicitante = await getSolicitante(cita.solicitante_id).catch(() => null);
         emailCitaCancelada({
-          expositorEmail:   expoUser.email,
-          expositorNombre:  cita.expositor_nombre || 'Expositor',
+          expositorEmail: expoUser.email,
+          expositorNombre: cita.expositor_nombre || 'Expositor',
           solicitanteNombre: solicitante?.nombre || 'El asistente',
-          cita:             citaActualizada,
-        }).catch(() => {});
+          cita: citaActualizada,
+        }).catch(() => { });
       }
     }
 
@@ -434,6 +435,26 @@ router.delete('/:id', authRequired, async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+
+// PATCH /api/networking/:id/eliminar — eliminar permanente del historial (usuario)
+router.patch('/:id/eliminar', authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const esAdmin = ROLES_ADMIN.includes(req.user.rol);
+
+    const r = await pool.query('SELECT solicitante_id FROM networking WHERE id=$1', [id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    if (r.rows[0].solicitante_id !== userId && !esAdmin)
+      return res.status(403).json({ error: 'Sin permiso' });
+
+    await pool.query(
+      "UPDATE networking SET status='eliminada', updated_at=NOW() WHERE id=$1", [id]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 export default router;

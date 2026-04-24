@@ -3,7 +3,6 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import { useEvent } from "../contexts/EventContext.jsx";
 import API from "../services/api";
 import { CheckCircle, AlertCircle, Filter, Search, Download } from "lucide-react";
-import Header from "../Components/layout/Header";
 
 export default function MisRegistros() {
   const { userProfile, permisos } = useAuth();
@@ -164,7 +163,7 @@ export default function MisRegistros() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100">
+      <div>
         <Header />
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
@@ -178,7 +177,7 @@ export default function MisRegistros() {
 
   if (accessDenied) {
     return (
-      <div className="min-h-screen bg-gray-100">
+      <div>
         <Header />
         <div className="p-6">
           <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
@@ -198,7 +197,7 @@ export default function MisRegistros() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div>
       <Header />
       <div className="p-6 max-w-6xl mx-auto">
         {/* Header */}

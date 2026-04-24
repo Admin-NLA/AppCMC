@@ -19,33 +19,33 @@ import { useMemo } from "react";
 // Agrega aquí cualquier nuevo item de sedeHelper.menuItems
 // ============================================================
 const MENU_MAP = {
-  "Dashboard":          { to: "/dashboard",     icon: <LayoutDashboard size={18} /> },
-  "Agenda":             { to: "/agenda",         icon: <Calendar size={18} /> },
-  "Agenda (D1-D2)":    { to: "/agenda",         icon: <Calendar size={18} /> },
-  "Agenda (D3-D4)":    { to: "/agenda",         icon: <Calendar size={18} /> },
-  "Agenda (D1-4)":     { to: "/agenda",         icon: <Calendar size={18} /> },
-  "Agenda (lectura)":  { to: "/agenda",         icon: <Calendar size={18} /> },
-  "Agenda (ver)":      { to: "/agenda",         icon: <Calendar size={18} /> },
-  "Mapa Expo":         { to: "/mapa-expo",      icon: <Map size={18} /> },
-  "Expositores":       { to: "/expositores",    icon: <Layers size={18} /> },
-  "Expositores (ver)": { to: "/expositores",    icon: <Layers size={18} /> },
-  "Speakers":          { to: "/speakers",       icon: <Users size={18} /> },
-  "Speakers (ver)":    { to: "/speakers",       icon: <Users size={18} /> },
-  "Networking":        { to: "/networking",     icon: <Network size={18} /> },
-  "Perfil":            { to: "/perfil",         icon: <User size={18} /> },
-  "Mi Perfil":         { to: "/perfil",         icon: <User size={18} /> },
-  "Mi Sesión":         { to: "/mi-sesion",      icon: <Award size={18} /> },
-  "Mi Marca":          { to: "/mi-marca",       icon: <Layers size={18} /> },
-  "Encuestas":         { to: "/encuestas",      icon: <ClipboardList size={18} /> },
-  "Mi QR":             { to: "/qr",             icon: <QrCode size={18} /> },
-  "QR":                { to: "/qr",             icon: <QrCode size={18} /> },
-  "Mis Registros":     { to: "/mis-registros",  icon: <FileText size={18} /> },
-  "Mis Cursos":        { to: "/mis-cursos",     icon: <Calendar size={18} /> },
-  "Notificaciones":    { to: "/notificaciones", icon: <Bell size={18} /> },
+  "Dashboard": { to: "/dashboard", icon: <LayoutDashboard size={18} /> },
+  "Agenda": { to: "/agenda", icon: <Calendar size={18} /> },
+  "Agenda (D1-D2)": { to: "/agenda", icon: <Calendar size={18} /> },
+  "Agenda (D3-D4)": { to: "/agenda", icon: <Calendar size={18} /> },
+  "Agenda (D1-4)": { to: "/agenda", icon: <Calendar size={18} /> },
+  "Agenda (lectura)": { to: "/agenda", icon: <Calendar size={18} /> },
+  "Agenda (ver)": { to: "/agenda", icon: <Calendar size={18} /> },
+  "Mapa Expo": { to: "/mapa-expo", icon: <Map size={18} /> },
+  "Expositores": { to: "/expositores", icon: <Layers size={18} /> },
+  "Expositores (ver)": { to: "/expositores", icon: <Layers size={18} /> },
+  "Speakers": { to: "/speakers", icon: <Users size={18} /> },
+  "Speakers (ver)": { to: "/speakers", icon: <Users size={18} /> },
+  "Networking": { to: "/networking", icon: <Network size={18} /> },
+  "Perfil": { to: "/perfil", icon: <User size={18} /> },
+  "Mi Perfil": { to: "/perfil", icon: <User size={18} /> },
+  "Mi Sesión": { to: "/mi-sesion", icon: <Award size={18} /> },
+  "Mi Marca": { to: "/mi-marca", icon: <Layers size={18} /> },
+  "Encuestas": { to: "/encuestas", icon: <ClipboardList size={18} /> },
+  "Mi QR": { to: "/qr", icon: <QrCode size={18} /> },
+  "QR": { to: "/qr", icon: <QrCode size={18} /> },
+  "Mis Registros": { to: "/mis-registros", icon: <FileText size={18} /> },
+  "Mis Cursos": { to: "/mis-cursos", icon: <Calendar size={18} /> },
+  "Notificaciones": { to: "/notificaciones", icon: <Bell size={18} /> },
   //"Staff Panel":       { to: "/staff",          icon: <Scan size={18} /> },
   //"Usuarios":          { to: "/usuarios",       icon: <Users size={18} /> },
-  "Usuarios (ver)":    { to: "/usuarios",       icon: <Users size={18} /> },
-  "Admin Panel":       { to: "/admin",          icon: <Settings size={18} /> },
+  "Usuarios (ver)": { to: "/usuarios", icon: <Users size={18} /> },
+  "Admin Panel": { to: "/admin", icon: <Settings size={18} /> },
   //"Branding":          { to: "/branding",       icon: <Palette size={18} /> },
   //"Configuración":     { to: "/configuracion",  icon: <Settings size={18} /> },
   //"Excel Import":      { to: "/admin/import",   icon: <FileText size={18} /> },
@@ -94,9 +94,9 @@ export default function Layout() {
         setBranding(b);
         // CSS variables para componentes que usen var()
         const root = document.documentElement;
-        if (b.colorPrimario)   root.style.setProperty('--color-primary',   b.colorPrimario);
-        if (b.colorSecundario) root.style.setProperty('--color-secondary',  b.colorSecundario);
-        if (b.colorBoton)      root.style.setProperty('--color-btn',        b.colorBoton);
+        if (b.colorPrimario) root.style.setProperty('--color-primary', b.colorPrimario);
+        if (b.colorSecundario) root.style.setProperty('--color-secondary', b.colorSecundario);
+        if (b.colorBoton) root.style.setProperty('--color-btn', b.colorBoton);
       } catch { /* silencioso */ }
     };
     if (userProfile) loadBranding();
@@ -116,32 +116,32 @@ export default function Layout() {
         .filter((item) => item.to) // descartar labels no mapeados
     : [];*/
 
-    const menu = useMemo(() => {
-      return permisos
-        ? permisos.menuItems
-            .map((label) => ({ label, ...MENU_MAP[label] }))
-            .filter((item) => item.to)
-        : [];
-    }, [permisos]);
+  const menu = useMemo(() => {
+    return permisos
+      ? permisos.menuItems
+        .map((label) => ({ label, ...MENU_MAP[label] }))
+        .filter((item) => item.to)
+      : [];
+  }, [permisos]);
 
-   useEffect(() => {
-      if (menu.length > 0) {
-        const activeItem = menu.find(item => item.to === location.pathname);
-        if (activeItem) {
-          const group = getGroup(activeItem.label);
-          setOpenGroups(prev => ({ ...prev, [group]: true }));
-        }
+  useEffect(() => {
+    if (menu.length > 0) {
+      const activeItem = menu.find(item => item.to === location.pathname);
+      if (activeItem) {
+        const group = getGroup(activeItem.label);
+        setOpenGroups(prev => ({ ...prev, [group]: true }));
       }
-    }, [location.pathname, menu]);
+    }
+  }, [location.pathname, menu]);
 
   // ============================================================
   // Agrupador dinámico (NO rompe permisos)
   // ============================================================
   const getGroup = (label) => {
     if (
-      label.includes("Expositores") || 
+      label.includes("Expositores") ||
       label.includes("Mapa") ||
-      label.includes("Networking") 
+      label.includes("Networking")
     ) return "Expo";
 
     if (label.includes("Speakers")) return "Speakers";
@@ -184,7 +184,7 @@ export default function Layout() {
   const formatTitle = (path) => {
     const clean = path.replace("/", "");
     return clean.charAt(0).toUpperCase() + clean.slice(1);
-  };  
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
@@ -226,10 +226,9 @@ export default function Layout() {
                 to={item.to}
                 onClick={() => setOpen(false)}
                 className={`flex items-center gap-3 p-2 pl-2 rounded-lg text-sm font-medium transition-all
-                  ${
-                    location.pathname === item.to
-                      ? "bg-white/10 font-semibold"
-                      : "opacity-80 hover:bg-white/10 hover:opacity-100"
+                  ${location.pathname === item.to
+                    ? "bg-white/10 font-semibold"
+                    : "opacity-80 hover:bg-white/10 hover:opacity-100"
                   }`}
               >
                 {item.icon}
@@ -255,9 +254,8 @@ export default function Layout() {
 
                   {/* CONTENIDO ANIMADO */}
                   <div
-                    className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                      isOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-                    }`}
+                    className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                      }`}
                   >
                     {items.map((item, index) => (
                       <Link
@@ -265,10 +263,9 @@ export default function Layout() {
                         to={item.to}
                         onClick={() => setOpen(false)}
                         className={`flex items-center gap-3 p-2 pl-4 rounded-lg text-sm font-medium transition-all
-                          ${
-                            location.pathname === item.to
-                              ? "bg-white/10 font-semibold"
-                              : "opacity-80 hover:bg-white/10 hover:opacity-100"
+                          ${location.pathname === item.to
+                            ? "bg-white/10 font-semibold"
+                            : "opacity-80 hover:bg-white/10 hover:opacity-100"
                           }`}
                       >
                         {item.icon}
@@ -309,7 +306,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col ml-0 md:ml-64">
 
         {/* Header */}
-        <header className="flex items-center justify-between shadow px-5 py-3" style={{ backgroundColor: branding.colorHeader || undefined }}>
+        <header className="flex items-center justify-between shadow px-5 py-3 dark:bg-gray-800 dark:text-white" style={{ backgroundColor: branding.colorHeader || undefined, color: branding.colorTextoHeader || undefined }}>
           <button className="md:hidden text-gray-700 dark:text-gray-300" onClick={toggleMenu}>
             {open ? <X size={26} /> : <Menu size={26} />}
           </button>
@@ -367,7 +364,7 @@ export default function Layout() {
               </div>
             )}
 
-          {/* Dark mode */}
+            {/* Dark mode */}
             <button onClick={toggleDark} className="text-gray-700 dark:text-gray-300">
               {dark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
@@ -376,7 +373,7 @@ export default function Layout() {
             <Link to="/perfil" className="flex items-center gap-2 hover:opacity-80 transition">
               <img
                 src={userProfile?.avatar_url || userProfile?.avatar
-                  || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile?.nombre||'U')}&background=2563eb&color=fff&size=64`}
+                  || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile?.nombre || 'U')}&background=2563eb&color=fff&size=64`}
                 className="w-9 h-9 rounded-full border dark:border-gray-600 object-cover"
                 alt="avatar"
               />

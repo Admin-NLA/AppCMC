@@ -7,47 +7,50 @@ import {
 
 // Roles reales del sistema
 const ROLES = [
-  { value: "asistente_general",   label: "Asistente General" },
-  { value: "asistente_curso",     label: "Asistente Curso" },
-  { value: "asistente_sesiones",  label: "Asistente Sesiones" },
-  { value: "asistente_combo",     label: "Asistente Combo" },
-  { value: "expositor",           label: "Expositor" },
-  { value: "speaker",             label: "Speaker" },
-  { value: "staff",               label: "Staff" },
-  { value: "super_admin",         label: "Super Admin" },
+  { value: "asistente_general", label: "Asistente General" },
+  { value: "asistente_curso", label: "Asistente Curso" },
+  { value: "asistente_sesiones", label: "Asistente Sesiones" },
+  { value: "asistente_combo", label: "Asistente Combo" },
+  { value: "expositor", label: "Expositor" },
+  { value: "speaker", label: "Speaker" },
+  { value: "staff", label: "Staff" },
+  { value: "super_admin", label: "Super Admin" },
 ];
 
 const TIPOS_PASE = [
-  { value: "general",   label: "General" },
-  { value: "curso",     label: "Curso" },
-  { value: "sesiones",  label: "Sesiones" },
-  { value: "combo",     label: "Combo" },
+  { value: "general", label: "General" },
+  { value: "curso", label: "Curso" },
+  { value: "sesiones", label: "Sesiones" },
+  { value: "combo", label: "Combo" },
   { value: "expositor", label: "Expositor" },
-  { value: "speaker",   label: "Speaker" },
-  { value: "staff",     label: "Staff" },
+  { value: "speaker", label: "Speaker" },
+  { value: "staff", label: "Staff" },
 ];
 
 const SEDES = [
-  { value: "chile",    label: "Chile" },
-  { value: "mexico",   label: "México" },
+  { value: "chile", label: "Chile" },
+  { value: "mexico", label: "México" },
   { value: "colombia", label: "Colombia" },
 ];
 
 const ROL_COLORS = {
-  super_admin:         "bg-red-100 text-red-800",
-  staff:               "bg-purple-100 text-purple-800",
-  speaker:             "bg-yellow-100 text-yellow-800",
-  expositor:           "bg-blue-100 text-blue-800",
-  asistente_combo:     "bg-green-100 text-green-800",
-  asistente_general:   "bg-gray-100 text-gray-800",
-  asistente_curso:     "bg-orange-100 text-orange-800",
-  asistente_sesiones:  "bg-teal-100 text-teal-800",
+  super_admin: "bg-red-100 text-red-800",
+  staff: "bg-purple-100 text-purple-800",
+  speaker: "bg-yellow-100 text-yellow-800",
+  expositor: "bg-blue-100 text-blue-800",
+  asistente_combo: "bg-green-100 text-green-800",
+  asistente_general: "bg-gray-100 text-gray-800",
+  asistente_curso: "bg-orange-100 text-orange-800",
+  asistente_sesiones: "bg-teal-100 text-teal-800",
 };
 
 const EMPTY_FORM = {
   email: "", password: "", nombre: "",
   rol: "asistente_general", tipo_pase: "general",
-  sede: "chile", empresa: "", telefono: "",
+  sedes: ["colombia"],  // multi-sede: array de sedes
+  sede: "colombia",     // sede principal (primera del array)
+  edicion: 2026,
+  empresa: "", telefono: "",
 };
 
 export default function UsuariosPanel() {
@@ -55,25 +58,25 @@ export default function UsuariosPanel() {
   const rol = userProfile?.rol;
   const esSuperAdmin = rol === "super_admin";
 
-  const [users, setUsers]           = useState([]);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState(null);
-  const [success, setSuccess]       = useState(null);
-  const [busqueda, setBusqueda]     = useState("");
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [busqueda, setBusqueda] = useState("");
   const [filtroSede, setFiltroSede] = useState("");
-  const [filtroRol, setFiltroRol]   = useState("");
+  const [filtroRol, setFiltroRol] = useState("");
 
   // Crear
-  const [showForm, setShowForm]     = useState(false);
-  const [formData, setFormData]     = useState(EMPTY_FORM);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState(EMPTY_FORM);
   const [formLoading, setFormLoading] = useState(false);
-  const [formError, setFormError]   = useState(null);
+  const [formError, setFormError] = useState(null);
 
   // Editar
-  const [editingUser, setEditingUser]   = useState(null);
-  const [editData, setEditData]         = useState(null);
-  const [editLoading, setEditLoading]   = useState(false);
-  const [editError, setEditError]       = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editData, setEditData] = useState(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState(null);
 
   // Eliminar
   const [deletingUser, setDeletingUser] = useState(null);
@@ -133,12 +136,14 @@ export default function UsuariosPanel() {
   const openEdit = (user) => {
     setEditingUser(user);
     setEditData({
-      nombre:    user.nombre,
-      email:     user.email,
-      rol:       user.rol,
+      nombre: user.nombre,
+      email: user.email,
+      rol: user.rol,
       tipo_pase: user.tipo_pase,
-      sede:      user.sede,
-      empresa:   user.empresa || "",
+      sede: user.sede || user.sedes?.[0] || "colombia",
+      sedes: user.sedes || [user.sede || "colombia"],
+      edicion: user.edicion || 2026,
+      empresa: user.empresa || "",
     });
     setEditError(null);
   };
@@ -190,7 +195,7 @@ export default function UsuariosPanel() {
       u.email?.toLowerCase().includes(texto) ||
       u.empresa?.toLowerCase().includes(texto);
     const coincideSede = !filtroSede || u.sede === filtroSede;
-    const coincideRol  = !filtroRol  || u.rol === filtroRol;
+    const coincideRol = !filtroRol || u.rol === filtroRol;
     return coincideTexto && coincideSede && coincideRol;
   });
 
@@ -406,10 +411,27 @@ export default function UsuariosPanel() {
                 placeholder="Nombre de la empresa"
               />
             </Field>
-            <Field label="Sede">
-              <select value={formData.sede} onChange={(e) => setFormData({ ...formData, sede: e.target.value })} className={inputCls}>
-                {SEDES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
+            <Field label="Sedes (puede seleccionar varias)">
+              <div className="flex flex-wrap gap-2 mt-1">
+                {SEDES.map((s) => {
+                  const checked = (formData.sedes || [formData.sede]).includes(s.value);
+                  return (
+                    <label key={s.value} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 cursor-pointer text-sm font-semibold transition ${checked ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
+                      <input type="checkbox" className="hidden" checked={checked} onChange={() => {
+                        const curr = formData.sedes || [formData.sede];
+                        const next = checked ? curr.filter(x => x !== s.value) : [...curr, s.value];
+                        setFormData({ ...formData, sedes: next.length ? next : [s.value], sede: next[0] || s.value });
+                      }} />
+                      {s.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </Field>
+            <Field label="Edición (año)">
+              <input type="number" value={formData.edicion || 2026} min="2020" max="2035"
+                onChange={(e) => setFormData({ ...formData, edicion: parseInt(e.target.value) || 2026 })}
+                className={inputCls} placeholder="2026" />
             </Field>
             <Field label="Rol">
               <select value={formData.rol} onChange={(e) => setFormData({ ...formData, rol: e.target.value })} className={inputCls}>
@@ -474,9 +496,21 @@ export default function UsuariosPanel() {
               />
             </Field>
             <Field label="Sede">
-              <select value={editData.sede} onChange={(e) => setEditData({ ...editData, sede: e.target.value })} className={inputCls}>
-                {SEDES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {SEDES.map((s) => {
+                  const curr = editData.sedes || [editData.sede];
+                  const checked = curr.includes(s.value);
+                  return (
+                    <label key={s.value} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 cursor-pointer text-sm font-semibold transition ${checked ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
+                      <input type="checkbox" className="hidden" checked={checked} onChange={() => {
+                        const next = checked ? curr.filter(x => x !== s.value) : [...curr, s.value];
+                        setEditData({ ...editData, sedes: next.length ? next : [s.value], sede: next[0] || s.value });
+                      }} />
+                      {s.label}
+                    </label>
+                  );
+                })}
+              </div>
             </Field>
             <Field label="Rol">
               <select value={editData.rol} onChange={(e) => setEditData({ ...editData, rol: e.target.value })} className={inputCls}>

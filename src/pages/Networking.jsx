@@ -595,7 +595,7 @@ export default function Networking() {
                             if (window.confirm('¿Limpiar el historial de citas canceladas y rechazadas? Se eliminarán permanentemente.')) {
                               const aEliminar = citas.filter(ct => ['cancelada', 'rechazada'].includes(ct.status));
                               try {
-                                await Promise.all(aEliminar.map(ct => API.delete(`/networking/${ct.id}`)));
+                                await Promise.all(aEliminar.map(ct => API.patch(`/networking/${ct.id}/eliminar`, {})));
                                 setCitas(prev => prev.filter(ct => !['cancelada', 'rechazada'].includes(ct.status)));
                               } catch (err) {
                                 // Si falla el DELETE, al menos limpiar visualmente y recargar

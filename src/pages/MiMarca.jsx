@@ -15,7 +15,6 @@ import {
   Briefcase,
   Filter
 } from "lucide-react";
-import Header from "../Components/layout/Header";
 
 export default function MiMarca() {
   const { userProfile, permisos } = useAuth();
@@ -172,7 +171,7 @@ export default function MiMarca() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100">
+      <div>
         <Header />
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
@@ -186,7 +185,7 @@ export default function MiMarca() {
 
   if (accessDenied) {
     return (
-      <div className="min-h-screen bg-gray-100">
+      <div>
         <Header />
         <div className="p-6">
           <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
@@ -206,7 +205,7 @@ export default function MiMarca() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div>
       <Header />
       <div className="p-6 max-w-6xl mx-auto">
         {/* Header */}
@@ -483,11 +482,11 @@ function StatCard({ label, value, icon: Icon, color }) {
 //      Endpoint cambiado: /mi-marca/visitante → /mi-marca/visita
 // ============================================================
 function NewVisitanteModal({ onClose, onSuccess, expositorId }) {
-  const [email, setEmail]           = useState("");
-  const [buscando, setBuscando]     = useState(false);
+  const [email, setEmail] = useState("");
+  const [buscando, setBuscando] = useState(false);
   const [encontrado, setEncontrado] = useState(null);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Buscar usuario por email
   const buscarUsuario = async () => {

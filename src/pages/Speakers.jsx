@@ -28,7 +28,7 @@ export default function Speakers() {
   // ========================================================
   // FILTROS: Sede y Edición
   // ========================================================
-  const [selectedSede, setSelectedSede] = useState("");
+  const [selectedSede, setSelectedSede] = useState(sedeActiva || "");
   const [selectedEdicion, setSelectedEdicion] = useState("");
   const [availableSedes, setAvailableSedes] = useState([]);
   const [availableEdiciones, setAvailableEdiciones] = useState([]);

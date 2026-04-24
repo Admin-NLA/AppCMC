@@ -15,16 +15,16 @@ import {
 } from "lucide-react";
 
 
-  // Normaliza variantes de sede al mismo valor canónico
-  const normalizarSede = (s) => {
-    if (!s) return s;
-    const mapa = {
-      'cl': 'chile', 'CL': 'chile', 'Chile': 'chile',
-      'mx': 'mexico', 'MX': 'mexico', 'México': 'mexico', 'Mexico': 'mexico',
-      'co': 'colombia', 'CO': 'colombia', 'Colombia': 'colombia',
-    };
-    return mapa[s] || s.toLowerCase();
+// Normaliza variantes de sede al mismo valor canónico
+const normalizarSede = (s) => {
+  if (!s) return s;
+  const mapa = {
+    'cl': 'chile', 'CL': 'chile', 'Chile': 'chile',
+    'mx': 'mexico', 'MX': 'mexico', 'México': 'mexico', 'Mexico': 'mexico',
+    'co': 'colombia', 'CO': 'colombia', 'Colombia': 'colombia',
   };
+  return mapa[s] || s.toLowerCase();
+};
 
 export default function Agenda() {
   const { userProfile, permisos } = useAuth();
@@ -52,14 +52,14 @@ export default function Agenda() {
   const [favorites, setFavorites] = useState(new Set());
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
-  const [wpWarning,       setWpWarning]       = useState(null);  // Bug C: aviso WP caído
+  const [wpWarning, setWpWarning] = useState(null);  // Bug C: aviso WP caído
 
   const days = [
-    { id: "todos",     label: "Todos",      numero: 0 },
-    { id: "lunes",     label: "Lunes",      numero: 1 },
-    { id: "martes",    label: "Martes",     numero: 2 },
-    { id: "miercoles", label: "Miércoles",  numero: 3 },
-    { id: "jueves",    label: "Jueves",     numero: 4 },
+    { id: "todos", label: "Todos", numero: 0 },
+    { id: "lunes", label: "Lunes", numero: 1 },
+    { id: "martes", label: "Martes", numero: 2 },
+    { id: "miercoles", label: "Miércoles", numero: 3 },
+    { id: "jueves", label: "Jueves", numero: 4 },
   ];
 
   // ========================================================
@@ -382,7 +382,7 @@ export default function Agenda() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Sede — solo visible para roles sin restricción */}
-          {puedeVerFiltroManual && (
+          {puedeVerFiltroManual && availableSedes.length > 1 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Sede</label>
               <select
@@ -401,7 +401,7 @@ export default function Agenda() {
           )}
 
           {/* Edición — solo visible para roles sin restricción */}
-          {puedeVerFiltroManual && (
+          {puedeVerFiltroManual && availableEdiciones.length > 1 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Edición</label>
               <select
@@ -425,11 +425,10 @@ export default function Agenda() {
               <label className="block text-sm font-medium text-gray-700 mb-2">Ver</label>
               <button
                 onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-                className={`w-full px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
-                  showOnlyFavorites
+                className={`w-full px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 ${showOnlyFavorites
                     ? "bg-red-600 text-white hover:bg-red-700"
                     : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-                }`}
+                  }`}
               >
                 <Heart size={18} fill={showOnlyFavorites ? "currentColor" : "none"} />
                 {showOnlyFavorites ? "Solo Favoritos" : "Todas"}
@@ -468,11 +467,10 @@ export default function Agenda() {
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
         <button
           onClick={() => setSelectedDay("todos")}
-          className={`px-6 py-2 rounded-lg font-medium transition whitespace-nowrap ${
-            selectedDay === "todos"
+          className={`px-6 py-2 rounded-lg font-medium transition whitespace-nowrap ${selectedDay === "todos"
               ? "bg-blue-600 text-white"
               : "bg-white text-gray-700 hover:bg-gray-100"
-          }`}
+            }`}
         >
           Todos
         </button>
@@ -487,13 +485,12 @@ export default function Agenda() {
                 onClick={() => permitido && setSelectedDay(day.id)}
                 disabled={!permitido}
                 title={!permitido ? `Tu pase no incluye ${day.label}` : undefined}
-                className={`px-6 py-2 rounded-lg font-medium transition whitespace-nowrap ${
-                  !permitido
+                className={`px-6 py-2 rounded-lg font-medium transition whitespace-nowrap ${!permitido
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-50"
                     : selectedDay === day.id
-                    ? "bg-blue-600 text-white"
-                    : "bg-white text-gray-700 hover:bg-gray-100"
-                }`}
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-100"
+                  }`}
               >
                 {day.label}
                 {!permitido && <Lock size={14} className="inline ml-1" />}
@@ -511,8 +508,8 @@ export default function Agenda() {
               {sessions.length === 0
                 ? "No hay sesiones disponibles"
                 : showOnlyFavorites
-                ? "No tienes sesiones marcadas como favoritas"
-                : `No hay sesiones para ${selectedDay === "todos" ? "los días permitidos" : "este día"}`}
+                  ? "No tienes sesiones marcadas como favoritas"
+                  : `No hay sesiones para ${selectedDay === "todos" ? "los días permitidos" : "este día"}`}
             </p>
             {sessions.length > 0 &&
               (selectedDay !== "todos" || selectedSede || selectedEdicion || showOnlyFavorites) && (
@@ -581,11 +578,10 @@ function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails, can
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             {session.tipo && (
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                session.tipo === "conferencia" ? "bg-blue-100 text-blue-700"
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${session.tipo === "conferencia" ? "bg-blue-100 text-blue-700"
                   : session.tipo === "curso" ? "bg-green-100 text-green-700"
-                  : "bg-purple-100 text-purple-700"
-              }`}>
+                    : "bg-purple-100 text-purple-700"
+                }`}>
                 {session.tipo.toUpperCase()}
               </span>
             )}
@@ -746,9 +742,8 @@ function SessionModal({ session, isFavorite, onToggleFavorite, onClose, canMarkF
             {canMarkFavorites && (
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id); }}
-                className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                  isFavorite ? "bg-red-600 text-white hover:bg-red-700" : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-                }`}
+                className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${isFavorite ? "bg-red-600 text-white hover:bg-red-700" : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                  }`}
               >
                 <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
                 {isFavorite ? "En Favoritos" : "Agregar a Favoritos"}

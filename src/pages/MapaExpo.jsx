@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth }  from "../contexts/AuthContext.jsx";
+import { useAuth } from "../contexts/AuthContext.jsx";
 import { useEvent } from "../contexts/EventContext.jsx";
 import API from "../services/api";
 import {
@@ -23,31 +23,34 @@ import {
 } from "lucide-react";
 
 const ROLES_ADMIN = ["super_admin", "staff"];
+const ROLES_IMAGEN = ["super_admin"]; // solo super_admin puede cambiar imagen del mapa
 
 export default function MapaExpo() {
   const { userProfile } = useAuth();
   const { sedeActiva, edicionActiva } = useEvent();
 
-  const [mapa,         setMapa]         = useState(null);   // { url_publica, uploaded_at }
-  const [expositores,  setExpositores]  = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState(null);
-  const [search,       setSearch]       = useState("");
-  const [selected,     setSelected]     = useState(null);   // expositor seleccionado
-  const [zoom,         setZoom]         = useState(1);
-  const [editingUrl,   setEditingUrl]   = useState(false);
-  const [newUrl,       setNewUrl]       = useState("");
-  const [saving,       setSaving]       = useState(false);
-  const [saveMsg,      setSaveMsg]      = useState(null);
+  const [mapa, setMapa] = useState(null);   // { url_publica, uploaded_at }
+  const [expositores, setExpositores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState(null);   // expositor seleccionado
+  const [zoom, setZoom] = useState(1);
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [newUrl, setNewUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState(null);
 
   const imgRef = useRef(null);
   const esAdmin = ROLES_ADMIN.includes(userProfile?.rol);
+  // Para cambiar imagen: solo super_admin REAL (no preview, no staff)
+  const esSuperAdminReal = userProfile?.rol === "super_admin";
   const navigate = useNavigate();
 
   // Estado de grid interactivo
-  const [gridConfig,   setGridConfig]   = useState({ grid_cols: 46, grid_filas: 22 });
-  const [actionMsg,    setActionMsg]    = useState(null);
-  const [imgFailed,    setImgFailed]    = useState(false);
+  const [gridConfig, setGridConfig] = useState({ grid_cols: 46, grid_filas: 22 });
+  const [actionMsg, setActionMsg] = useState(null);
+  const [imgFailed, setImgFailed] = useState(false);
 
   const flash = (msg) => { setActionMsg(msg); setTimeout(() => setActionMsg(null), 3000); };
 
@@ -84,8 +87,8 @@ export default function MapaExpo() {
       const list = Array.isArray(expoRes.data)
         ? expoRes.data
         : Array.isArray(expoRes.data.expositores)
-        ? expoRes.data.expositores
-        : [];
+          ? expoRes.data.expositores
+          : [];
       setExpositores(list.filter(e => e.activo !== false));
     } catch (err) {
       setError("No se pudo cargar el mapa de exposición");
@@ -124,7 +127,7 @@ export default function MapaExpo() {
   });
 
   // ── Zoom ────────────────────────────────────────────────
-  const zoomIn  = () => setZoom(z => Math.min(z + 0.25, 3));
+  const zoomIn = () => setZoom(z => Math.min(z + 0.25, 3));
   const zoomOut = () => setZoom(z => Math.max(z - 0.25, 0.5));
 
   if (loading) {
@@ -154,7 +157,7 @@ export default function MapaExpo() {
           <button onClick={load} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition">
             <RefreshCw size={18} />
           </button>
-          {esAdmin && !editingUrl && (
+          {esSuperAdminReal && !editingUrl && (
             <div className="flex gap-2">
               <button
                 onClick={() => { setEditingUrl(true); setNewUrl(mapa?.url_publica || ""); }}
@@ -196,14 +199,14 @@ export default function MapaExpo() {
         <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Simbología</p>
         <div className="flex flex-wrap gap-2">
           {[
-            { label:"Libre",          dot:"#22c55e", bg:"#f0fdf4", border:"#86efac", text:"#16a34a" },
-            { label:"Solicitado",     dot:"#eab308", bg:"#fffbeb", border:"#fcd34d", text:"#d97706" },
-            { label:"Ocupado",        dot:"#3b82f6", bg:"#eff6ff", border:"#93c5fd", text:"#1d4ed8" },
-            { label:"No disponible",  dot:"#9ca3af", bg:"#f9fafb", border:"#d1d5db", text:"#6b7280" },
+            { label: "Libre", dot: "#22c55e", bg: "#f0fdf4", border: "#86efac", text: "#16a34a" },
+            { label: "Solicitado", dot: "#eab308", bg: "#fffbeb", border: "#fcd34d", text: "#d97706" },
+            { label: "Ocupado", dot: "#3b82f6", bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8" },
+            { label: "No disponible", dot: "#9ca3af", bg: "#f9fafb", border: "#d1d5db", text: "#6b7280" },
           ].map(s => (
             <span key={s.label} className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
-              style={{ backgroundColor:s.bg, borderColor:s.border, color:s.text }}>
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor:s.dot }} />
+              style={{ backgroundColor: s.bg, borderColor: s.border, color: s.text }}>
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.dot }} />
               {s.label}
             </span>
           ))}
@@ -289,7 +292,7 @@ export default function MapaExpo() {
             {/* Nota al pie */}
             {mapa?.uploaded_at && (
               <div className="px-4 py-2 text-xs text-gray-400 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                <span>Última actualización: {new Date(mapa.uploaded_at).toLocaleDateString("es", { day:"numeric", month:"short", year:"numeric" })}</span>
+                <span>Última actualización: {new Date(mapa.uploaded_at).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" })}</span>
                 {mapa.url_publica && (
                   <a href={mapa.url_publica} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1 text-blue-500 hover:text-blue-700">
@@ -310,7 +313,7 @@ export default function MapaExpo() {
                 {selected.logo_url && (
                   <img src={selected.logo_url} alt={selected.nombre}
                     className="w-14 h-14 rounded-xl object-contain bg-gray-50 dark:bg-gray-700 p-1 border dark:border-gray-600 shrink-0"
-                    onError={e => e.target.style.display="none"} />
+                    onError={e => e.target.style.display = "none"} />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-gray-900 dark:text-white">{selected.nombre}</p>
@@ -353,16 +356,16 @@ export default function MapaExpo() {
               {/* Estado del stand */}
               {(() => {
                 const ESTADOS_VIS2 = {
-                  libre:         { label:"Libre",         dot:"#22c55e", bg:"#f0fdf4", border:"#86efac", text:"#16a34a" },
-                  solicitado:    { label:"Solicitado",    dot:"#eab308", bg:"#fffbeb", border:"#fcd34d", text:"#d97706" },
-                  ocupado:       { label:"Ocupado",       dot:"#3b82f6", bg:"#eff6ff", border:"#93c5fd", text:"#1d4ed8" },
-                  no_disponible: { label:"No disponible", dot:"#9ca3af", bg:"#f9fafb", border:"#d1d5db", text:"#6b7280" },
+                  libre: { label: "Libre", dot: "#22c55e", bg: "#f0fdf4", border: "#86efac", text: "#16a34a" },
+                  solicitado: { label: "Solicitado", dot: "#eab308", bg: "#fffbeb", border: "#fcd34d", text: "#d97706" },
+                  ocupado: { label: "Ocupado", dot: "#3b82f6", bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8" },
+                  no_disponible: { label: "No disponible", dot: "#9ca3af", bg: "#f9fafb", border: "#d1d5db", text: "#6b7280" },
                 };
                 const st = ESTADOS_VIS2[selected.estado_stand || "libre"];
                 return (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
-                    style={{ backgroundColor:st.bg, color:st.text, border:`1px solid ${st.border}` }}>
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor:st.dot }} />
+                    style={{ backgroundColor: st.bg, color: st.text, border: `1px solid ${st.border}` }}>
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: st.dot }} />
                     {st.label}
                   </span>
                 );
@@ -436,7 +439,7 @@ export default function MapaExpo() {
                       {expo.logo_url ? (
                         <img src={expo.logo_url} alt={expo.nombre}
                           className="w-full h-full object-contain p-1"
-                          onError={e => { e.target.style.display="none"; e.target.parentNode.innerHTML = `<span class="text-lg font-bold text-gray-400">${expo.nombre?.charAt(0)}</span>`; }} />
+                          onError={e => { e.target.style.display = "none"; e.target.parentNode.innerHTML = `<span class="text-lg font-bold text-gray-400">${expo.nombre?.charAt(0)}</span>`; }} />
                       ) : (
                         <span className="text-lg font-bold text-gray-400">
                           {expo.nombre?.charAt(0)?.toUpperCase()}
@@ -474,10 +477,10 @@ export default function MapaExpo() {
 
 // ── Grid generado cuando no hay imagen ───────────────────────
 const ESTADOS_VIS = {
-  libre:         { bg:"#f0fdf4", border:"#86efac", text:"#16a34a", dot:"#22c55e" },
-  solicitado:    { bg:"#fffbeb", border:"#fcd34d", text:"#d97706", dot:"#eab308" },
-  ocupado:       { bg:"#eff6ff", border:"#93c5fd", text:"#1d4ed8", dot:"#3b82f6" },
-  no_disponible: { bg:"#f9fafb", border:"#d1d5db", text:"#6b7280", dot:"#9ca3af" },
+  libre: { bg: "#f0fdf4", border: "#86efac", text: "#16a34a", dot: "#22c55e" },
+  solicitado: { bg: "#fffbeb", border: "#fcd34d", text: "#d97706", dot: "#eab308" },
+  ocupado: { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", dot: "#3b82f6" },
+  no_disponible: { bg: "#f9fafb", border: "#d1d5db", text: "#6b7280", dot: "#9ca3af" },
 };
 
 function MapaGrid({ expositores, gridConfig, selected, onSelect, esAdmin, imagenFondo, zoom = 1, onImgError }) {
@@ -489,16 +492,16 @@ function MapaGrid({ expositores, gridConfig, selected, onSelect, esAdmin, imagen
     const w = e.ancho_celdas || 1, h = e.alto_celdas || 1;
     for (let dc = 0; dc < w; dc++)
       for (let df = 0; df < h; df++)
-        gridMap[`${e.grid_col+dc}-${e.grid_fila+df}`] = { expo: e, isOrigin: dc===0 && df===0 };
+        gridMap[`${e.grid_col + dc}-${e.grid_fila + df}`] = { expo: e, isOrigin: dc === 0 && df === 0 };
   });
 
   const conPos = expositores.filter(e => e.grid_col != null);
 
   const ESTADOS_G = {
-    libre:         { bg:"#f0fdf4", border:"#86efac", text:"#16a34a", dot:"#22c55e" },
-    solicitado:    { bg:"#fffbeb", border:"#fcd34d", text:"#d97706", dot:"#eab308" },
-    ocupado:       { bg:"#eff6ff", border:"#93c5fd", text:"#1d4ed8", dot:"#3b82f6" },
-    no_disponible: { bg:"#f9fafb", border:"#d1d5db", text:"#6b7280", dot:"#9ca3af" },
+    libre: { bg: "#f0fdf4", border: "#86efac", text: "#16a34a", dot: "#22c55e" },
+    solicitado: { bg: "#fffbeb", border: "#fcd34d", text: "#d97706", dot: "#eab308" },
+    ocupado: { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", dot: "#3b82f6" },
+    no_disponible: { bg: "#f9fafb", border: "#d1d5db", text: "#6b7280", dot: "#9ca3af" },
   };
 
   if (conPos.length === 0 && !imagenFondo) {
@@ -520,7 +523,7 @@ function MapaGrid({ expositores, gridConfig, selected, onSelect, esAdmin, imagen
         transform: `scale(${zoom})`,
         transformOrigin: "top left",
         transition: "transform 0.2s",
-        width: `${100/zoom}%`,
+        width: `${100 / zoom}%`,
       }}
     >
       {/* Imagen de fondo opcional */}
@@ -545,25 +548,25 @@ function MapaGrid({ expositores, gridConfig, selected, onSelect, esAdmin, imagen
         }}
       >
         {Array.from({ length: grid_cols * grid_filas }, (_, i) => {
-          const col  = (i % grid_cols) + 1;
+          const col = (i % grid_cols) + 1;
           const fila = Math.floor(i / grid_cols) + 1;
           const cell = gridMap[`${col}-${fila}`];
           if (cell && !cell.isOrigin) return null;
 
-          const expo   = cell?.expo;
+          const expo = cell?.expo;
           const estado = ESTADOS_G[expo?.estado_stand || "libre"];
-          const isSel  = expo && selected?.id === expo.id;
-          const ancho  = expo?.ancho_celdas || 1;
-          const alto   = expo?.alto_celdas  || 1;
+          const isSel = expo && selected?.id === expo.id;
+          const ancho = expo?.ancho_celdas || 1;
+          const alto = expo?.alto_celdas || 1;
 
           return (
             <div
               key={`${col}-${fila}`}
               onClick={() => expo && onSelect(isSel ? null : expo)}
-              title={expo ? `${expo.nombre}${expo.stand ? " · Stand "+expo.stand : ""}` : ""}
+              title={expo ? `${expo.nombre}${expo.stand ? " · Stand " + expo.stand : ""}` : ""}
               style={{
                 gridColumn: `span ${ancho}`,
-                gridRow:    `span ${alto}`,
+                gridRow: `span ${alto}`,
                 backgroundColor: expo
                   ? (isSel ? "#dbeafe" : estado.bg)
                   : "rgba(248,250,252,0.5)",
@@ -587,9 +590,9 @@ function MapaGrid({ expositores, gridConfig, selected, onSelect, esAdmin, imagen
               {expo ? (
                 <>
                   {expo.logo_url
-                    ? <img src={expo.logo_url} style={{width:22,height:22}}
-                        className="object-contain"
-                        onError={e => e.target.style.display="none"} />
+                    ? <img src={expo.logo_url} style={{ width: 22, height: 22 }}
+                      className="object-contain"
+                      onError={e => e.target.style.display = "none"} />
                     : <Building2 size={12} style={{ color: estado.text }} />
                   }
                   <span style={{
