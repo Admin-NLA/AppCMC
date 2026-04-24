@@ -22,38 +22,39 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-/* ── Dark mode global — variables CSS automáticas ─────────────────────────
-   Cuando la clase 'dark' está en <html>, todos los fondos blancos
-   y textos oscuros cambian automáticamente sin tocar cada componente.
-   ──────────────────────────────────────────────────────────────────────── */
 
-/* Variables base (light) */
+/* ════════════════════════════════════════════════════════
+   DARK MODE GLOBAL
+   Aplica automáticamente cuando <html> tiene clase "dark"
+   sin necesitar dark: en cada componente.
+   ════════════════════════════════════════════════════════ */
+
 :root {
-  --bg-page:       #f9fafb;
-  --bg-card:       #ffffff;
-  --bg-input:      #ffffff;
-  --text-primary:  #111827;
-  --text-secondary:#6b7280;
-  --border-color:  #e5e7eb;
+  --bg-page: #f9fafb;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --border-color: #e5e7eb;
 }
 
-/* Variables dark */
 .dark {
-  --bg-page:       #111827;
-  --bg-card:       #1f2937;
-  --bg-input:      #374151;
-  --text-primary:  #f9fafb;
-  --text-secondary:#9ca3af;
-  --border-color:  #374151;
+  --bg-page: #111827;
+  --bg-card: #1f2937;
+  --bg-input: #374151;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --border-color: #374151;
 }
 
-/* Aplicar variables a elementos comunes */
-.dark body {
-  background-color: #111827;
+/* ── Body ── */
+.dark body,
+.dark #root {
+  background-color: #111827 !important;
   color: #f9fafb;
 }
 
-/* Cards y contenedores sin dark: explícito */
+/* ── Fondos de cards ── */
 .dark .bg-white {
   background-color: #1f2937 !important;
   color: #f9fafb;
@@ -67,19 +68,151 @@ body {
   background-color: #1f2937 !important;
 }
 
-/* Textos */
-.dark .text-gray-900 { color: #f9fafb !important; }
-.dark .text-gray-800 { color: #f3f4f6 !important; }
-.dark .text-gray-700 { color: #e5e7eb !important; }
-.dark .text-gray-600 { color: #d1d5db !important; }
-.dark .text-gray-500 { color: #9ca3af !important; }
+.dark .bg-gray-200 {
+  background-color: #374151 !important;
+}
 
-/* Bordes */
-.dark .border-gray-100 { border-color: #374151 !important; }
-.dark .border-gray-200 { border-color: #374151 !important; }
-.dark .border-gray-300 { border-color: #4b5563 !important; }
+/* ── Alertas de colores (bg-*-50) ── */
+.dark .bg-blue-50 {
+  background-color: #1e3a5f !important;
+}
 
-/* Inputs */
+.dark .bg-green-50 {
+  background-color: #14532d !important;
+}
+
+.dark .bg-red-50 {
+  background-color: #450a0a !important;
+}
+
+.dark .bg-amber-50 {
+  background-color: #451a03 !important;
+}
+
+.dark .bg-yellow-50 {
+  background-color: #422006 !important;
+}
+
+.dark .bg-purple-50 {
+  background-color: #2e1065 !important;
+}
+
+.dark .bg-indigo-50 {
+  background-color: #1e1b4b !important;
+}
+
+.dark .bg-orange-50 {
+  background-color: #431407 !important;
+}
+
+/* ── Textos ── */
+.dark .text-gray-900 {
+  color: #f9fafb !important;
+}
+
+.dark .text-gray-800 {
+  color: #f3f4f6 !important;
+}
+
+.dark .text-gray-700 {
+  color: #e5e7eb !important;
+}
+
+.dark .text-gray-600 {
+  color: #d1d5db !important;
+}
+
+.dark .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+.dark .text-gray-400 {
+  color: #6b7280 !important;
+}
+
+/* Textos de color en dark — ajustar contraste */
+.dark .text-blue-600 {
+  color: #93c5fd !important;
+}
+
+.dark .text-blue-700 {
+  color: #bfdbfe !important;
+}
+
+.dark .text-blue-800 {
+  color: #dbeafe !important;
+}
+
+.dark .text-green-600 {
+  color: #86efac !important;
+}
+
+.dark .text-green-700 {
+  color: #bbf7d0 !important;
+}
+
+.dark .text-green-800 {
+  color: #dcfce7 !important;
+}
+
+.dark .text-red-600 {
+  color: #fca5a5 !important;
+}
+
+.dark .text-red-700 {
+  color: #fecaca !important;
+}
+
+.dark .text-amber-600 {
+  color: #fcd34d !important;
+}
+
+.dark .text-amber-700 {
+  color: #fde68a !important;
+}
+
+.dark .text-amber-800 {
+  color: #fef3c7 !important;
+}
+
+.dark .text-purple-600 {
+  color: #c4b5fd !important;
+}
+
+.dark .text-purple-700 {
+  color: #ddd6fe !important;
+}
+
+/* ── Bordes ── */
+.dark .border-gray-100 {
+  border-color: #374151 !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #374151 !important;
+}
+
+.dark .border-gray-300 {
+  border-color: #4b5563 !important;
+}
+
+.dark .border-blue-200 {
+  border-color: #1e40af !important;
+}
+
+.dark .border-green-200 {
+  border-color: #166534 !important;
+}
+
+.dark .border-red-200 {
+  border-color: #991b1b !important;
+}
+
+.dark .border-amber-200 {
+  border-color: #92400e !important;
+}
+
+/* ── Inputs, textareas, selects ── */
 .dark input:not([type="color"]),
 .dark textarea,
 .dark select {
@@ -93,12 +226,112 @@ body {
   color: #6b7280;
 }
 
-/* Hover states */
-.dark .hover\:bg-gray-50:hover { background-color: #1f2937 !important; }
-.dark .hover\:bg-gray-100:hover { background-color: #374151 !important; }
+/* ── Hover states ── */
+.dark .hover\:bg-gray-50:hover {
+  background-color: #1f2937 !important;
+}
 
-/* Rounded cards específicos */
-.dark .rounded-xl,
-.dark .rounded-2xl {
-  --tw-shadow: 0 1px 3px 0 rgba(0,0,0,0.3);
+.dark .hover\:bg-gray-100:hover {
+  background-color: #374151 !important;
+}
+
+.dark .hover\:bg-blue-50:hover {
+  background-color: #1e3a5f !important;
+}
+
+.dark .hover\:bg-red-50:hover {
+  background-color: #450a0a !important;
+}
+
+.dark .hover\:bg-green-50:hover {
+  background-color: #14532d !important;
+}
+
+/* ── Divisores ── */
+.dark .divide-gray-100>*+* {
+  border-color: #374151 !important;
+}
+
+.dark .divide-gray-200>*+* {
+  border-color: #374151 !important;
+}
+
+/* ── Tablas ── */
+.dark thead,
+.dark .dark-thead {
+  background-color: #374151 !important;
+}
+
+.dark tbody tr:hover {
+  background-color: rgba(55, 65, 81, 0.4);
+}
+
+/* ── Badges de colores (bg-blue-100, bg-green-100 etc.) ── */
+.dark .bg-blue-100 {
+  background-color: #1e3a5f !important;
+}
+
+.dark .bg-green-100 {
+  background-color: #14532d !important;
+}
+
+.dark .bg-red-100 {
+  background-color: #7f1d1d !important;
+}
+
+.dark .bg-amber-100 {
+  background-color: #78350f !important;
+}
+
+.dark .bg-purple-100 {
+  background-color: #4c1d95 !important;
+}
+
+.dark .bg-yellow-100 {
+  background-color: #713f12 !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #374151 !important;
+}
+
+.dark .bg-sky-100 {
+  background-color: #0c4a6e !important;
+}
+
+/* ── Shadows en dark ── */
+.dark .shadow-sm {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.dark .shadow-md {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+}
+
+.dark .shadow-lg {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Sidebar / Layout ── */
+.dark .sidebar-bg {
+  background-color: #1f2937 !important;
+}
+
+/* ── Scrollbars en dark ── */
+.dark ::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* ── Focus rings ── */
+.dark .focus\:ring-blue-500:focus {
+  --tw-ring-color: #3b82f6;
 }

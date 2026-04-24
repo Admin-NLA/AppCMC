@@ -160,13 +160,26 @@ export default function Speakers() {
 
     // Filtro por sede seleccionado
     if (selectedSede) {
-      filtered = filtered.filter((s) => s.sede === selectedSede);
+      const sedeLower = selectedSede.toLowerCase();
+      filtered = filtered.filter((s) => {
+        // Sede directa del speaker
+        if (s.sede && s.sede.toLowerCase() === sedeLower) return true;
+        // Sede en sus sesiones asignadas
+        if (s.sesiones && s.sesiones.some(ses => ses.sede?.toLowerCase() === sedeLower)) return true;
+        // Sede en campo eventos (speakers de WP)
+        if (s.eventos && s.eventos.some(ev => ev.toLowerCase().includes(sedeLower))) return true;
+        return false;
+      });
     }
 
     // Filtro por edición seleccionado
     if (selectedEdicion) {
-      // Comparar como strings para evitar mismatch number vs string
-      filtered = filtered.filter((s) => String(s.edicion) === String(selectedEdicion));
+      const edicionStr = String(selectedEdicion);
+      filtered = filtered.filter((s) => {
+        if (String(s.edicion) === edicionStr) return true;
+        if (s.sesiones && s.sesiones.some(ses => String(ses.edicion) === edicionStr)) return true;
+        return false;
+      });
     }
 
     console.log("📌 Speakers filtrados:", filtered.length);
@@ -674,7 +687,7 @@ function SpeakerModal({ speaker, onClose, userRole }) {
                     <div className="flex flex-wrap gap-2 mt-1 text-xs text-gray-500">
                       {s.dia && <span>📆 Día {s.dia}</span>}
                       {s.horaInicio && (
-                        <span>🕐 {new Date(s.horaInicio).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}</span>
+                        <span>🕐 {new Date(s.horaInicio).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span>
                       )}
                       {s.sala && <span>📍 {s.sala}</span>}
                       {s.sede && <span className="capitalize">🌎 {s.sede}</span>}

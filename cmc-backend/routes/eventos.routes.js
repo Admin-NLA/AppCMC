@@ -14,33 +14,33 @@
 //   PATCH  /api/eventos/:id/activar  → marcar como evento activo global (super_admin)
 
 import express from 'express';
-import pool    from '../db.js';
+import pool from '../db.js';
 import { authRequired } from '../utils/authMiddleware.js';
 
 const router = express.Router();
 
-const ESTADOS_VALIDOS = ['borrador','activo','suspendido','concluido','cancelado'];
+const ESTADOS_VALIDOS = ['borrador', 'activo', 'suspendido', 'concluido', 'cancelado'];
 
 // ── GET /api/eventos ─────────────────────────────────────
 router.get('/', authRequired, async (req, res) => {
   try {
-    if (!['super_admin','staff'].includes(req.user?.rol))
+    if (!['super_admin', 'staff'].includes(req.user?.rol))
       return res.status(403).json({ error: 'Sin permisos' });
 
     const { sede, edicion, estado } = req.query;
     const params = [];
-    const where  = [];
+    const where = [];
 
-    if (sede)   { where.push(`LOWER(sede) = LOWER($${params.length+1})`);   params.push(sede); }
-    if (edicion){ where.push(`edicion = $${params.length+1}`);               params.push(parseInt(edicion)); }
-    if (estado) { where.push(`estado = $${params.length+1}`);                params.push(estado); }
+    if (sede) { where.push(`LOWER(sede) = LOWER($${params.length + 1})`); params.push(sede); }
+    if (edicion) { where.push(`edicion = $${params.length + 1}`); params.push(parseInt(edicion)); }
+    if (estado) { where.push(`estado = $${params.length + 1}`); params.push(estado); }
 
     const sql = `
       SELECT e.*,
              u.nombre as creado_por_nombre
       FROM eventos e
       LEFT JOIN users u ON u.id = e.created_by
-      ${where.length ? 'WHERE '+where.join(' AND ') : ''}
+      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
       ORDER BY e.es_activo DESC, e.edicion DESC, e.sede ASC, e.created_at DESC
     `;
     const r = await pool.query(sql, params);
@@ -76,8 +76,8 @@ router.post('/', authRequired, async (req, res) => {
     } = req.body;
 
     if (!nombre?.trim()) return res.status(400).json({ error: 'nombre es requerido' });
-    if (!sede?.trim())   return res.status(400).json({ error: 'sede es requerida' });
-    if (!edicion)        return res.status(400).json({ error: 'edicion es requerida' });
+    if (!sede?.trim()) return res.status(400).json({ error: 'sede es requerida' });
+    if (!edicion) return res.status(400).json({ error: 'edicion es requerida' });
     if (!ESTADOS_VALIDOS.includes(estado))
       return res.status(400).json({ error: `estado inválido: ${ESTADOS_VALIDOS.join(', ')}` });
 
@@ -92,11 +92,11 @@ router.post('/', authRequired, async (req, res) => {
         sede.toLowerCase().trim(),
         parseInt(edicion),
         fecha_inicio || null,
-        fecha_fin    || null,
+        fecha_fin || null,
         estado,
         JSON.stringify(Array.isArray(visible_roles) ? visible_roles : ['todos']),
-        descripcion  || null,
-        imagen_url   || null,
+        descripcion || null,
+        imagen_url || null,
         req.user.id,
       ]
     );
@@ -139,15 +139,15 @@ router.put('/:id', authRequired, async (req, res) => {
        WHERE id = $10
        RETURNING *`,
       [
-        nombre?.trim()   || null,
+        nombre?.trim() || null,
         sede?.toLowerCase().trim() || null,
         edicion ? parseInt(edicion) : null,
         fecha_inicio || null,
-        fecha_fin    || null,
-        estado       || null,
-        visible_roles ? JSON.stringify(Array.isArray(visible_roles)?visible_roles:['todos']) : null,
+        fecha_fin || null,
+        estado || null,
+        visible_roles ? JSON.stringify(Array.isArray(visible_roles) ? visible_roles : ['todos']) : null,
         descripcion !== undefined ? descripcion : null,
-        imagen_url  !== undefined ? imagen_url  : null,
+        imagen_url !== undefined ? imagen_url : null,
         id,
       ]
     );
@@ -246,7 +246,7 @@ router.patch('/:id/activar', authRequired, async (req, res) => {
          VALUES ($1, $2, $3, $4, true)
          ON CONFLICT DO NOTHING`,
         [ev.sede, ev.edicion, ev.fecha_inicio, ev.fecha_fin]
-      ).catch(() => {}); // no fallar si ya existe
+      ).catch(() => { }); // no fallar si ya existe
     }
 
     await client.query('COMMIT');
@@ -265,7 +265,7 @@ router.patch('/:id/activar', authRequired, async (req, res) => {
 // Retorna el estado de calendario_sedes para gestión simultánea
 router.get('/sedes-calendario', authRequired, async (req, res) => {
   try {
-    if (!['super_admin','staff'].includes(req.user?.rol))
+    if (!['super_admin', 'staff'].includes(req.user?.rol))
       return res.status(403).json({ error: 'Sin permisos' });
 
     const r = await pool.query(
@@ -298,12 +298,31 @@ router.put('/sedes-calendario/:sede/:edicion', authRequired, async (req, res) =>
       [
         sede.toLowerCase(), parseInt(edicion),
         fecha_inicio || null,
-        fecha_fin    || null,
+        fecha_fin || null,
         activo !== undefined ? activo : true,
         mes_evento ? parseInt(mes_evento) : null,
       ]
     );
     res.json({ ok: true, sede: r.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ── DELETE /api/eventos/sedes-calendario/:sede/:edicion ─── (super_admin)
+router.delete('/sedes-calendario/:sede/:edicion', authRequired, async (req, res) => {
+  try {
+    if (req.user?.rol !== 'super_admin')
+      return res.status(403).json({ error: 'Sin permisos' });
+    const { sede, edicion } = req.params;
+    const r = await pool.query(
+      `DELETE FROM calendario_sedes WHERE LOWER(sede)=LOWER($1) AND edicion=$2 RETURNING id`,
+      [sede, parseInt(edicion)]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'No encontrado' });
+    console.log(`[Eventos] Sede calendario eliminada: ${sede} ${edicion}`);
+    res.json({ ok: true, message: `${sede} ${edicion} eliminado del calendario` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

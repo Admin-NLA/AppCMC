@@ -42,13 +42,13 @@ const MENU_MAP = {
   "Mis Registros":     { to: "/mis-registros",  icon: <FileText size={18} /> },
   "Mis Cursos":        { to: "/mis-cursos",     icon: <Calendar size={18} /> },
   "Notificaciones":    { to: "/notificaciones", icon: <Bell size={18} /> },
-  "Staff Panel":       { to: "/staff",          icon: <Scan size={18} /> },
-  "Usuarios":          { to: "/usuarios",       icon: <Users size={18} /> },
+  //"Staff Panel":       { to: "/staff",          icon: <Scan size={18} /> },
+  //"Usuarios":          { to: "/usuarios",       icon: <Users size={18} /> },
   "Usuarios (ver)":    { to: "/usuarios",       icon: <Users size={18} /> },
   "Admin Panel":       { to: "/admin",          icon: <Settings size={18} /> },
-  "Branding":          { to: "/branding",       icon: <Palette size={18} /> },
-  "Configuración":     { to: "/configuracion",  icon: <Settings size={18} /> },
-  "Excel Import":      { to: "/admin/import",   icon: <FileText size={18} /> },
+  //"Branding":          { to: "/branding",       icon: <Palette size={18} /> },
+  //"Configuración":     { to: "/configuracion",  icon: <Settings size={18} /> },
+  //"Excel Import":      { to: "/admin/import",   icon: <FileText size={18} /> },
 };
 
 export default function Layout() {
@@ -156,15 +156,13 @@ export default function Layout() {
     ) return "Usuario";
 
     if (
-      label.includes("Usuarios") ||
-      label.includes("Admin") ||
-      label.includes("Configuración") ||
-      label.includes("Branding") ||
-      label.includes("Staff") ||
-      label.includes("Excel Import")
-    ) return "Admin";
+      label.includes("Encuestas") ||
+      label.includes("Notificaciones")
+    ) return "Informativos";
 
-    return "Informativos"; // 🔥 clave para no perder nada
+    if (label.includes("Admin")) return "Admin";
+
+    //return "otros"; // 🔥 clave para no perder nada
   };
 
   const NO_GROUP = ["Dashboard", "Agenda"];

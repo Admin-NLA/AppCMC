@@ -21,6 +21,7 @@ const requireStaff = (req, res, next) => {
 // ========================================================
 router.get('/stats', authRequired, requireStaff, async (req, res) => {
   try {
+    const { sede } = req.query;
     console.log('[Staff Stats] Obteniendo estadísticas...');
 
     // 1. USUARIOS REGISTRADOS POR TIPO_PASE
@@ -128,6 +129,7 @@ router.get('/stats', authRequired, requireStaff, async (req, res) => {
 // ========================================================
 router.get('/checkins', authRequired, requireStaff, async (req, res) => {
   try {
+    const { sede } = req.query;
     console.log('[Staff Checkins] Obteniendo registro de check-ins...');
 
     const limit = req.query.limit || 50;
@@ -184,6 +186,7 @@ router.get('/checkins', authRequired, requireStaff, async (req, res) => {
 // ========================================================
 router.get('/sessions-stats', authRequired, requireStaff, async (req, res) => {
   try {
+    const { sede } = req.query;
     console.log('[Staff Sessions Stats] Obteniendo asistencia por sesión...');
 
     const result = await pool.query(`
@@ -225,6 +228,7 @@ router.get('/sessions-stats', authRequired, requireStaff, async (req, res) => {
 // ========================================================
 router.get('/cursos-stats', authRequired, requireStaff, async (req, res) => {
   try {
+    const { sede } = req.query;
     console.log('[Staff Cursos Stats] Obteniendo asistencia por curso...');
 
     const result = await pool.query(`
@@ -318,6 +322,7 @@ router.get('/usuarios-tipo-pase', authRequired, requireStaff, async (req, res) =
 // ========================================================
 router.get('/resumen-diario', authRequired, requireStaff, async (req, res) => {
   try {
+    const { sede } = req.query;
     console.log('[Staff Resumen] Obteniendo resumen del día...');
 
     // Check-ins hoy

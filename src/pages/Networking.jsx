@@ -8,7 +8,7 @@
 //   Staff/Admin → ven todas las citas, pueden filtrar
 
 import { useState, useEffect } from 'react';
-import { useAuth }  from '../contexts/AuthContext.jsx';
+import { useAuth } from '../contexts/AuthContext.jsx';
 import { useEvent } from '../contexts/EventContext.jsx';
 import API from '../services/api';
 import {
@@ -19,18 +19,18 @@ import {
 
 // ── Constantes ───────────────────────────────────────────────
 const STATUS_CONFIG = {
-  pendiente:  { label: 'Pendiente',  color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
-  confirmada: { label: 'Confirmada', color: 'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-300'  },
-  rechazada:  { label: 'Rechazada',  color: 'bg-red-100    text-red-700    dark:bg-red-900/30    dark:text-red-300'    },
-  cancelada:  { label: 'Cancelada',  color: 'bg-gray-100   text-gray-600   dark:bg-gray-700      dark:text-gray-400'   },
+  pendiente: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
+  confirmada: { label: 'Confirmada', color: 'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-300' },
+  rechazada: { label: 'Rechazada', color: 'bg-red-100    text-red-700    dark:bg-red-900/30    dark:text-red-300' },
+  cancelada: { label: 'Cancelada', color: 'bg-gray-100   text-gray-600   dark:bg-gray-700      dark:text-gray-400' },
 };
 
 // Horarios disponibles del evento (bloques de 30 min)
 const HORARIOS = [
-  '08:00','08:30','09:00','09:30','10:00','10:30',
-  '11:00','11:30','12:00','12:30','13:00','13:30',
-  '14:00','14:30','15:00','15:30','16:00','16:30',
-  '17:00','17:30','18:00',
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+  '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+  '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+  '17:00', '17:30', '18:00',
 ];
 
 const inputCls = "w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -43,7 +43,7 @@ const fmtFecha = (d) => {
       ? d.includes('T') ? d.split('T')[0] : d
       : new Date(d).toISOString().split('T')[0];
     return new Date(fechaStr + 'T12:00:00').toLocaleDateString('es', {
-      weekday:'long', day:'numeric', month:'long'
+      weekday: 'long', day: 'numeric', month: 'long'
     });
   } catch { return String(d); }
 };
@@ -52,13 +52,13 @@ const fmtFecha = (d) => {
 // Modal: Solicitar cita con un expositor
 // ─────────────────────────────────────────────────────────────
 function ModalSolicitarCita({ expositor, onSave, onClose }) {
-  const [fecha,    setFecha]    = useState('');
-  const [hora,     setHora]     = useState('');
-  const [horaFin,  setHoraFin]  = useState('');
-  const [notas,    setNotas]    = useState('');
+  const [fecha, setFecha] = useState('');
+  const [hora, setHora] = useState('');
+  const [horaFin, setHoraFin] = useState('');
+  const [notas, setNotas] = useState('');
   const [ocupados, setOcupados] = useState([]);
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   // Cargar horarios ocupados cuando cambia la fecha
   useEffect(() => {
@@ -132,7 +132,7 @@ function ModalSolicitarCita({ expositor, onSave, onClose }) {
                       className={`py-1.5 rounded-lg text-xs font-medium border-2 transition
                         ${ocupado ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-200 dark:border-gray-600 cursor-not-allowed line-through'
                           : sel ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                          : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-blue-400'}`}>
+                            : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-blue-400'}`}>
                       {h}
                     </button>
                   );
@@ -197,9 +197,9 @@ function ModalSolicitarCita({ expositor, onSave, onClose }) {
 // ─────────────────────────────────────────────────────────────
 function ModalGestionarCita({ cita, onSave, onClose }) {
   const [ubicacion, setUbicacion] = useState(cita.ubicacion || '');
-  const [notas,     setNotas]     = useState(cita.notas     || '');
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState(null);
+  const [notas, setNotas] = useState(cita.notas || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleAction = async (status) => {
     setSaving(true); setError(null);
@@ -220,7 +220,7 @@ function ModalGestionarCita({ cita, onSave, onClose }) {
           <div>
             <h2 className="font-bold text-lg dark:text-white">Gestionar cita</h2>
             <p className="text-sm text-gray-500 mt-0.5">
-              {cita.solicitante_nombre} · {fmtFecha(cita.fecha)} {cita.hora?.slice(0,5)}
+              {cita.solicitante_nombre} · {fmtFecha(cita.fecha)} {cita.hora?.slice(0, 5)}
             </p>
           </div>
           <button onClick={onClose}><X size={20} className="text-gray-400 hover:text-gray-600" /></button>
@@ -294,7 +294,7 @@ function ModalGestionarCita({ cita, onSave, onClose }) {
 function CitaCard({ cita, vistaExpositor, onGestionar, onCancelar }) {
   const sc = STATUS_CONFIG[cita.status] || STATUS_CONFIG.pendiente;
   const nombre = vistaExpositor ? cita.solicitante_nombre : cita.expositor_nombre;
-  const sub    = vistaExpositor ? cita.solicitante_empresa : `Stand ${cita.expositor_stand || '—'}`;
+  const sub = vistaExpositor ? cita.solicitante_empresa : `Stand ${cita.expositor_stand || '—'}`;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4">
@@ -315,7 +315,7 @@ function CitaCard({ cita, vistaExpositor, onGestionar, onCancelar }) {
         </span>
         <span className="flex items-center gap-1.5">
           <Clock size={14} className="text-green-500" />
-          {cita.hora?.slice(0,5)}{cita.hora_fin ? ` – ${cita.hora_fin.slice(0,5)}` : ''}
+          {cita.hora?.slice(0, 5)}{cita.hora_fin ? ` – ${cita.hora_fin.slice(0, 5)}` : ''}
         </span>
         {cita.ubicacion && (
           <span className="flex items-center gap-1.5">
@@ -340,7 +340,7 @@ function CitaCard({ cita, vistaExpositor, onGestionar, onCancelar }) {
           </button>
         )}
         {/* Asistente: cancelar si está pendiente */}
-        {!vistaExpositor && ['pendiente','confirmada'].includes(cita.status) && onCancelar && (
+        {!vistaExpositor && ['pendiente', 'confirmada'].includes(cita.status) && onCancelar && (
           <button onClick={() => onCancelar(cita)}
             className="flex items-center gap-1.5 text-xs text-red-600 border border-red-200 dark:border-red-700 px-3 py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition font-semibold">
             <X size={13} /> Cancelar cita
@@ -358,13 +358,13 @@ export default function Networking() {
   const { userProfile, permisos } = useAuth();
   const { sedeActiva } = useEvent();
 
-  const [tab,          setTab]          = useState('citas');   // 'citas' | 'directorio'
-  const [expositores,  setExpositores]  = useState([]);
-  const [citas,        setCitas]        = useState([]);
-  const [citasAdmin,   setCitasAdmin]   = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState(null);
-  const [success,      setSuccess]      = useState(null);
+  const [tab, setTab] = useState('citas');   // 'citas' | 'directorio'
+  const [expositores, setExpositores] = useState([]);
+  const [citas, setCitas] = useState([]);
+  const [citasAdmin, setCitasAdmin] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   // Modales
   const [modalSolicitar, setModalSolicitar] = useState(null); // expositor seleccionado
@@ -377,7 +377,7 @@ export default function Networking() {
   const [busqueda, setBusqueda] = useState('');
 
   const rol = userProfile?.rol;
-  const esAdmin     = ['super_admin','staff'].includes(rol);
+  const esAdmin = ['super_admin', 'staff'].includes(rol);
   const esExpositor = rol === 'expositor';
   const esAsistente = !esAdmin && !esExpositor;
 
@@ -429,14 +429,14 @@ export default function Networking() {
     if (!busqueda) return true;
     const q = busqueda.toLowerCase();
     return e.nombre?.toLowerCase().includes(q) ||
-           e.stand?.toLowerCase().includes(q) ||
-           e.categoria?.toLowerCase().includes(q);
+      e.stand?.toLowerCase().includes(q) ||
+      e.categoria?.toLowerCase().includes(q);
   });
 
   // Separar citas por status
-  const citasPendientes  = citas.filter(c => c.status === 'pendiente');
+  const citasPendientes = citas.filter(c => c.status === 'pendiente');
   const citasConfirmadas = citas.filter(c => c.status === 'confirmada');
-  const citasPasadas     = citas.filter(c => ['rechazada','cancelada'].includes(c.status));
+  const citasPasadas = citas.filter(c => ['rechazada', 'cancelada'].includes(c.status));
 
   const citasAdminFiltradas = filtroStatus === 'todas'
     ? citasAdmin
@@ -470,8 +470,8 @@ export default function Networking() {
             {esExpositor
               ? `${citasPendientes.length} cita${citasPendientes.length !== 1 ? 's' : ''} pendiente${citasPendientes.length !== 1 ? 's' : ''} de confirmar`
               : esAdmin
-              ? `${citasAdmin.length} citas registradas en total`
-              : `Agenda reuniones con expositores del CMC`}
+                ? `${citasAdmin.length} citas registradas en total`
+                : `Agenda reuniones con expositores del CMC`}
           </p>
         </div>
         <button onClick={load} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition">
@@ -495,9 +495,9 @@ export default function Networking() {
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 dark:bg-gray-700/50 p-1 rounded-xl w-fit">
         {[
-          { id:'citas',     label:`Mis citas (${citas.filter(c => !['cancelada','rechazada'].includes(c.status)).length})` },
-          { id:'directorio', label:`Expositores (${expositores.length})` },
-          ...(esAdmin ? [{ id:'admin', label:`Todas las citas (${citasAdmin.length})` }] : []),
+          { id: 'citas', label: `Mis citas (${citas.filter(c => !['cancelada', 'rechazada'].includes(c.status)).length})` },
+          { id: 'directorio', label: `Expositores (${expositores.length})` },
+          ...(esAdmin ? [{ id: 'admin', label: `Todas las citas (${citasAdmin.length})` }] : []),
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition
@@ -591,9 +591,16 @@ export default function Networking() {
                           Historial ({citasPasadas.length})
                         </h3>
                         <button
-                          onClick={() => {
-                            if (window.confirm('¿Limpiar el historial de citas canceladas y rechazadas?')) {
-                              setCitas(prev => prev.filter(ct => !['cancelada','rechazada'].includes(ct.status)));
+                          onClick={async () => {
+                            if (window.confirm('¿Limpiar el historial de citas canceladas y rechazadas? Se eliminarán permanentemente.')) {
+                              const aEliminar = citas.filter(ct => ['cancelada', 'rechazada'].includes(ct.status));
+                              try {
+                                await Promise.all(aEliminar.map(ct => API.delete(`/networking/${ct.id}`)));
+                                setCitas(prev => prev.filter(ct => !['cancelada', 'rechazada'].includes(ct.status)));
+                              } catch (err) {
+                                // Si falla el DELETE, al menos limpiar visualmente y recargar
+                                setCitas(prev => prev.filter(ct => !['cancelada', 'rechazada'].includes(ct.status)));
+                              }
                             }
                           }}
                           className="text-xs text-red-400 hover:text-red-600 font-medium transition"
@@ -640,7 +647,7 @@ export default function Networking() {
                           {expo.logo_url ? (
                             <img src={expo.logo_url} alt={expo.nombre}
                               className="w-full h-full object-contain p-1"
-                              onError={e => { e.target.style.display='none'; }} />
+                              onError={e => { e.target.style.display = 'none'; }} />
                           ) : (
                             <Building2 size={22} className="text-gray-400" />
                           )}
@@ -693,13 +700,13 @@ export default function Networking() {
             <div className="space-y-4">
               {/* Filtros */}
               <div className="flex flex-wrap gap-2">
-                {['todas','pendiente','confirmada','rechazada','cancelada'].map(s => (
+                {['todas', 'pendiente', 'confirmada', 'rechazada', 'cancelada'].map(s => (
                   <button key={s} onClick={() => setFiltroStatus(s)}
                     className={`px-4 py-1.5 rounded-xl text-xs font-semibold border-2 transition capitalize
                       ${filtroStatus === s
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700'
                         : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-400'}`}>
-                    {s === 'todas' ? `Todas (${citasAdmin.length})` : `${s} (${citasAdmin.filter(c=>c.status===s).length})`}
+                    {s === 'todas' ? `Todas (${citasAdmin.length})` : `${s} (${citasAdmin.filter(c => c.status === s).length})`}
                   </button>
                 ))}
               </div>
@@ -716,7 +723,7 @@ export default function Networking() {
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 dark:bg-gray-700/50">
                         <tr>
-                          {['Asistente','Expositor','Fecha','Hora','Status','Ubicación'].map(h => (
+                          {['Asistente', 'Expositor', 'Fecha', 'Hora', 'Status', 'Ubicación'].map(h => (
                             <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                           ))}
                         </tr>
@@ -738,7 +745,7 @@ export default function Networking() {
                                 {fmtFecha(c.fecha)}
                               </td>
                               <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                                {c.hora?.slice(0,5)}{c.hora_fin ? `–${c.hora_fin.slice(0,5)}` : ''}
+                                {c.hora?.slice(0, 5)}{c.hora_fin ? `–${c.hora_fin.slice(0, 5)}` : ''}
                               </td>
                               <td className="px-4 py-3">
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${sc.color}`}>
