@@ -92,9 +92,15 @@ router.post('/', authRequired, async (req, res) => {
       rol = 'asistente_general',
       tipo_pase = 'general',
       sede = 'colombia',
+      sedes,
+      edicion = 2026,
       empresa = '',
-      telefono = '',   // se guarda en columna 'movil'
+      telefono = '',
     } = req.body;
+
+    // Calcular sede principal y array de sedes
+    const sedesParsed = Array.isArray(sedes) && sedes.length ? sedes : [sede];
+    const sedePrincipal = sedesParsed[0] || 'colombia';
 
     // Validaciones básicas
     if (!email || !password || !nombre) {
@@ -118,17 +124,16 @@ router.post('/', authRequired, async (req, res) => {
       return res.status(409).json({ error: 'Ya existe un usuario con ese email' });
     }
 
-    // FIX: usar bcrypt.hash y guardar en password_hash (no en 'password')
     const password_hash = await bcrypt.hash(password, 10);
 
-    // FIX: INSERT usa password_hash y movil (columnas reales de la tabla)
+    // multi_sedes es ARRAY en PostgreSQL — pasar como texto[] no como JSON
     const result = await pool.query(
       `INSERT INTO users
         (email, password_hash, nombre, rol, tipo_pase, sede, empresa, movil, activo, edicion, multi_sedes, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, NOW())
-       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, edicion, multi_sedes, created_at`,
+       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, edicion, created_at`,
       [email.toLowerCase().trim(), password_hash, nombre, rol, tipo_pase, sedePrincipal,
-        empresa, telefono, parseInt(edicion) || 2026, JSON.stringify(sedesParsed)]
+        empresa, telefono, parseInt(edicion) || 2026, sedesParsed]
     );
 
     console.log(`[Users] ✅ Usuario creado: ${email} (${rol})`);

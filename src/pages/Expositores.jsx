@@ -285,7 +285,7 @@ export default function Expositores() {
         </div>
 
         {/* Filtros Sede y Edición — solo si hay más de 1 sede/edición */}
-        {(availableSedes.length > 1 || availableEdiciones.length > 1) && (
+        {userProfile?.rol !== "expositor" && availableSedes.length > 1 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Filtro Sede */}
             <div>

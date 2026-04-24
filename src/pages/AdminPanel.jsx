@@ -203,7 +203,7 @@ export default function AdminPanel() {
     return { nombre: "", bio: "", company: "", photo_url: "", cargo: "", email: "", telefono: "", linkedin_url: "", twitter_url: "", website_url: "", sede: sede || "colombia", edicion: edicion || 2026, activo: true };
   }
   function blankExpositor(sede, edicion) {
-    return { nombre: "", descripcion: "", stand: "", logo_url: "", categoria: "", website_url: "", contact_email: "", contact_telefono: "", contact_nombre: "", sede: sede || "colombia", edicion: edicion || 2026, activo: true };
+    return { nombre: "", descripcion: "", stand: "", logo_url: "", categoria: "", website_url: "", contact_email: "", contact_telefono: "", contact_nombre: "", usuario_id: "", sede: sede || "colombia", edicion: edicion || 2026, activo: true };
   }
   function blankNoti() {
     return { titulo: "", mensaje: "", tipo: "info", tipo_usuario: ["todos"], sede: "todos" };
@@ -217,7 +217,7 @@ export default function AdminPanel() {
     if (activeTab === "sesiones") loadSessions();
     if (activeTab === "eventos") loadEventos();
     if (activeTab === "speakers") loadSpeakers();
-    if (activeTab === "expositores") loadExpositores();
+    if (activeTab === "expositores") { loadExpositores(); loadUsers(); }
     if (activeTab === "mapa_stands") loadExpositores();
     if (activeTab === "gestion_usuarios") loadUsers();
     if (activeTab === "notificaciones") loadUsers();
@@ -361,14 +361,14 @@ export default function AdminPanel() {
     e.preventDefault(); setLoading(true); setError(null);
     try {
       const contact = { email: expositorForm.contact_email || "", telefono: expositorForm.contact_telefono || "", nombre: expositorForm.contact_nombre || "" };
-      const payload = { nombre: expositorForm.nombre, descripcion: expositorForm.descripcion, stand: expositorForm.stand, logo_url: expositorForm.logo_url, categoria: expositorForm.categoria, website_url: expositorForm.website_url, contact, sede: expositorForm.sede, edicion: parseInt(expositorForm.edicion) || edicionActiva || 2026, activo: expositorForm.activo !== false };
+      const payload = { nombre: expositorForm.nombre, descripcion: expositorForm.descripcion, stand: expositorForm.stand, logo_url: expositorForm.logo_url, categoria: expositorForm.categoria, website_url: expositorForm.website_url, contact, usuario_id: expositorForm.usuario_id || null, sede: expositorForm.sede, edicion: parseInt(expositorForm.edicion) || edicionActiva || 2026, activo: expositorForm.activo !== false };
       if (editingExpositorId) { await API.put(`/expositores/${editingExpositorId}`, payload); flash("Expositor actualizado"); }
       else { await API.post("/expositores", payload); flash("Expositor creado"); }
       resetExpositorForm(); loadExpositores();
     } catch (e) { flash(e.response?.data?.error || e.message, true); } finally { setLoading(false); }
   };
   const deleteExpositor = async (id) => { if (!confirm("¿Eliminar expositor?")) return; try { await API.delete(`/expositores/${id}`); setExpositores(s => s.filter(x => x.id !== id)); flash("Expositor eliminado"); } catch (e) { flash(e.response?.data?.error || e.message, true); } };
-  const editExpositor = (ex) => { setEditingExpositorId(ex.id); const c = ex.contact || {}; setExpositorForm({ nombre: ex.nombre || "", descripcion: ex.descripcion || "", stand: ex.stand || "", logo_url: ex.logo_url || "", categoria: ex.categoria || "", website_url: ex.website_url || "", contact_email: c.email || "", contact_telefono: c.telefono || "", contact_nombre: c.nombre || "", sede: ex.sede || sedeForm, edicion: ex.edicion || edicionActiva || 2026, activo: ex.activo !== false }); setShowExpositorForm(true); };
+  const editExpositor = (ex) => { setEditingExpositorId(ex.id); const c = ex.contact || {}; setExpositorForm({ nombre: ex.nombre || "", descripcion: ex.descripcion || "", stand: ex.stand || "", logo_url: ex.logo_url || "", categoria: ex.categoria || "", website_url: ex.website_url || "", contact_email: c.email || "", contact_telefono: c.telefono || "", contact_nombre: c.nombre || "", usuario_id: ex.usuario_id || "", sede: ex.sede || sedeForm, edicion: ex.edicion || edicionActiva || 2026, activo: ex.activo !== false }); setShowExpositorForm(true); };
   const resetExpositorForm = () => { setEditingExpositorId(null); setExpositorForm(blankExpositor(sedeForm, edicionActiva)); setShowExpositorForm(false); };
 
   // ── Notificaciones ────────────────────────────────────────
@@ -697,6 +697,15 @@ export default function AdminPanel() {
                       <Field label="Logo URL"><input type="url" className={inputCls} value={expositorForm.logo_url} onChange={e => setExpositorForm(p => ({ ...p, logo_url: e.target.value }))} /></Field>
                       <Field label="Sede"><select className={inputCls} value={expositorForm.sede} onChange={e => setExpositorForm(p => ({ ...p, sede: e.target.value }))}>{SEDES.map(s => <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}</select></Field>
                       <Field label="Descripción"><textarea className={inputCls} rows={2} value={expositorForm.descripcion} onChange={e => setExpositorForm(p => ({ ...p, descripcion: e.target.value }))} /></Field>
+                      <Field label="Ligar a usuario (email de la cuenta)">
+                        <select className={inputCls} value={expositorForm.usuario_id} onChange={e => setExpositorForm(p => ({ ...p, usuario_id: e.target.value }))}>
+                          <option value="">— Sin usuario ligado —</option>
+                          {users.filter(u => u.rol === "expositor" || u.rol === "super_admin").map(u => (
+                            <option key={u.id} value={u.id}>{u.nombre} ({u.email})</option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-400 mt-1">Liga este stand a una cuenta — permite acceder a "Mi Marca"</p>
+                      </Field>
                       <div className="space-y-2"><p className="text-xs font-semibold text-gray-600 uppercase">Contacto</p><input className={inputCls} placeholder="Nombre contacto" value={expositorForm.contact_nombre} onChange={e => setExpositorForm(p => ({ ...p, contact_nombre: e.target.value }))} /><input type="email" className={inputCls} placeholder="email@empresa.com" value={expositorForm.contact_email} onChange={e => setExpositorForm(p => ({ ...p, contact_email: e.target.value }))} /><input type="tel" className={inputCls} placeholder="Teléfono" value={expositorForm.contact_telefono} onChange={e => setExpositorForm(p => ({ ...p, contact_telefono: e.target.value }))} /></div>
                     </div>
                     {expositorForm.logo_url && <img src={expositorForm.logo_url} alt="" className="h-14 object-contain border rounded-lg p-1" onError={e => e.target.style.display = "none"} />}

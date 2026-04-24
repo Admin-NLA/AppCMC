@@ -382,7 +382,7 @@ export default function Agenda() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Sede — solo visible para roles sin restricción */}
-          {puedeVerFiltroManual && availableSedes.length > 1 && (
+          {(userProfile?.rol === "super_admin" || userProfile?.rol === "staff") && availableSedes.length > 1 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Sede</label>
               <select
@@ -401,7 +401,7 @@ export default function Agenda() {
           )}
 
           {/* Edición — solo visible para roles sin restricción */}
-          {puedeVerFiltroManual && availableEdiciones.length > 1 && (
+          {userProfile?.rol === "super_admin" && availableEdiciones.length > 1 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Edición</label>
               <select
