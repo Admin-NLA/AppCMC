@@ -45,38 +45,6 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 // ========================================================
-// GET /users/:id — obtener usuario específico
-// ========================================================
-router.get('/:id', authRequired, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (req.user.id !== id && req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
-      return res.status(403).json({ error: 'No tienes permiso para ver este usuario' });
-    }
-
-    const result = await pool.query(
-      `SELECT
-        id, nombre, email, rol, tipo_pase, sede, multi_sedes, edicion,
-        empresa, movil, avatar_url,
-        activo, created_at
-       FROM users
-       WHERE id = $1`,
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('❌ Error en GET /users/:id:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ========================================================
 // POST /users — crear usuario (solo super_admin)
 // ========================================================
 router.post('/', authRequired, async (req, res) => {
@@ -397,6 +365,220 @@ router.delete('/:id/permanente', authRequired, async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NUEVAS FUNCIONES PARA UNION  ------------------- SYNC DESDE PROYECTO CMC
+// ════════════════════════════════════════════════════════════════════════════════
+
+// Mapa de tipo_pase del Excel → rol y tipo_pase de la web app
+const TIPO_PASE_MAP = {
+  'combo': { rol: 'asistente_combo', tipo_pase: 'combo' },
+  'general': { rol: 'asistente_general', tipo_pase: 'general' },
+  'sesiones': { rol: 'asistente_sesiones', tipo_pase: 'sesiones' },
+  'sesion': { rol: 'asistente_sesiones', tipo_pase: 'sesiones' },
+  'cursos': { rol: 'asistente_curso', tipo_pase: 'curso' },
+  'curso': { rol: 'asistente_curso', tipo_pase: 'curso' },
+  'expositor': { rol: 'expositor', tipo_pase: null },
+  'speaker': { rol: 'speaker', tipo_pase: null },
+  'ponente': { rol: 'speaker', tipo_pase: null },
+  'staff': { rol: 'staff', tipo_pase: null },
+};
+
+// ── Helper: normalizar tipo_pase que viene del Excel ────────
+function normalizarTipoPase(raw) {
+  if (!raw) return 'general';
+  const val = raw.toLowerCase().trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // quita acentos
+  for (const key of Object.keys(TIPO_PASE_MAP)) {
+    if (val.includes(key)) return key;
+  }
+  return 'general';
+}
+
+// ============================================================
+// POST /api/users/sync-from-excel
+// Recibe lista de usuarios desde Proyecto CMC y hace upsert
+// Body: { usuarios: [ {nombre, apellido, email, empresa,
+//                      telefono, tipo_pase, sede, edicion} ] }
+// Auth: X-Service-Token (no requiere login de usuario)
+// ============================================================
+router.post('/sync-from-excel', async (req, res) => {
+  try {
+    // Verificar service token
+    const token = req.headers['x-service-token'];
+    if (!token || token !== process.env.DESKTOP_SERVICE_TOKEN) {
+      return res.status(401).json({ ok: false, error: 'Token inválido o ausente' });
+    }
+
+    const { usuarios } = req.body;
+
+    if (!Array.isArray(usuarios) || usuarios.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Lista de usuarios vacía o inválida' });
+    }
+
+    const creados = [];
+    const actualizados = [];
+    const errores = [];
+
+    for (const u of usuarios) {
+      try {
+        // Validar que tenga email
+        if (!u.email || !u.email.includes('@')) {
+          errores.push({ email: u.email || 'sin email', error: 'Email inválido' });
+          continue;
+        }
+
+        const email = u.email.toLowerCase().trim();
+        const nombre = `${u.nombre || ''} ${u.apellido || ''}`.trim();
+        const empresa = u.empresa || '';
+        const movil = u.telefono || '';
+        const sede = u.sede || 'colombia';
+        const edicion = parseInt(u.edicion) || 2026;
+
+        // Determinar rol y tipo_pase
+        const tipoKey = normalizarTipoPase(u.tipo_pase);
+        const mapping = TIPO_PASE_MAP[tipoKey] || TIPO_PASE_MAP['general'];
+        const rol = mapping.rol;
+        const tipo_pase = mapping.tipo_pase || tipoKey;
+
+        // Password temporal: CMC2026! + primeras 4 letras del email
+        const prefijo = email.split('@')[0].slice(0, 4);
+        const passwordTemp = `CMC2026!${prefijo}`;
+        const password_hash = await bcrypt.hash(passwordTemp, 10);
+
+        // Upsert: crear si no existe, actualizar si ya existe
+        const result = await pool.query(
+          `INSERT INTO users
+             (email, password_hash, nombre, rol, tipo_pase,
+              sede, empresa, movil, activo, edicion, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, NOW())
+           ON CONFLICT (email)
+           DO UPDATE SET
+             nombre    = EXCLUDED.nombre,
+             rol       = EXCLUDED.rol,
+             tipo_pase = EXCLUDED.tipo_pase,
+             empresa   = EXCLUDED.empresa,
+             movil     = EXCLUDED.movil,
+             sede      = EXCLUDED.sede,
+             activo    = true
+           RETURNING id, email, nombre, rol, tipo_pase, xmax`,
+          [email, password_hash, nombre, rol, tipo_pase,
+            sede, empresa, movil, edicion]
+        );
+
+        const row = result.rows[0];
+        // xmax = 0 significa que fue INSERT, > 0 fue UPDATE
+        if (row.xmax === '0') {
+          creados.push({ id: row.id, email: row.email, nombre: row.nombre, rol: row.rol });
+        } else {
+          actualizados.push({ id: row.id, email: row.email, nombre: row.nombre, rol: row.rol });
+        }
+
+      } catch (e) {
+        errores.push({ email: u.email || 'desconocido', error: e.message });
+      }
+    }
+
+    console.log(`[Sync] ✅ Sync desde Excel: ${creados.length} creados, ${actualizados.length} actualizados, ${errores.length} errores`);
+
+    res.json({
+      ok: true,
+      resumen: {
+        total: usuarios.length,
+        creados: creados.length,
+        actualizados: actualizados.length,
+        errores: errores.length,
+      },
+      creados,
+      actualizados,
+      errores,
+    });
+
+  } catch (err) {
+    console.error('❌ POST /users/sync-from-excel:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================================
+// GET /api/users/export-ids
+// Devuelve mapa email → UUID para que Proyecto CMC
+// pueda identificar usuarios al enviar escaneos
+// Auth: X-Service-Token
+// ============================================================
+router.get('/export-ids', async (req, res) => {
+  try {
+    const token = req.headers['x-service-token'];
+    if (!token || token !== process.env.DESKTOP_SERVICE_TOKEN) {
+      return res.status(401).json({ ok: false, error: 'Token inválido o ausente' });
+    }
+
+    const { sede, edicion } = req.query;
+
+    const conditions = ['activo = true'];
+    const values = [];
+    let p = 1;
+
+    if (sede) { conditions.push(`sede = $${p++}`); values.push(sede); }
+    if (edicion) { conditions.push(`edicion = $${p++}`); values.push(parseInt(edicion)); }
+
+    const result = await pool.query(
+      `SELECT id, email, nombre, rol, tipo_pase
+       FROM users
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY nombre ASC`,
+      values
+    );
+
+    // Devolver como array y como mapa email→id para facilitar búsqueda
+    const mapa = {};
+    result.rows.forEach(u => { mapa[u.email] = u.id; });
+
+    res.json({
+      ok: true,
+      total: result.rows.length,
+      usuarios: result.rows,
+      mapa,     // { 'juan@empresa.com': 'uuid-aqui', ... }
+    });
+
+  } catch (err) {
+    console.error('❌ GET /users/export-ids:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ========================================================
+// GET /users/:id — obtener usuario específico
+// ========================================================
+router.get('/:id', authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user.id !== id && req.user.rol !== 'super_admin' && req.user.rol !== 'staff') {
+      return res.status(403).json({ error: 'No tienes permiso para ver este usuario' });
+    }
+
+    const result = await pool.query(
+      `SELECT
+        id, nombre, email, rol, tipo_pase, sede, multi_sedes, edicion,
+        empresa, movil, avatar_url,
+        activo, created_at
+       FROM users
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Error en GET /users/:id:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 

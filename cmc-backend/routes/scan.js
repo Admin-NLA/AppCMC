@@ -21,7 +21,7 @@
 //   GET /sesiones y GET /stats son accesibles para todos los autenticados.
 
 import express from 'express';
-import pool    from '../db.js';
+import pool from '../db.js';
 import { authRequired, requireRole } from '../utils/authMiddleware.js';
 
 const router = express.Router();
@@ -98,7 +98,7 @@ router.post('/checkin', authRequired, async (req, res) => {
     // ── TIPO: entrada general al evento ──────────────────
     if (tipo === 'entrada') {
       const diaActual = dia || new Date().getDay() || 1; // lunes=1
-      const fechaHoy  = new Date().toISOString().split('T')[0];
+      const fechaHoy = new Date().toISOString().split('T')[0];
 
       // Verificar duplicado (hoy)
       const dup = await pool.query(
@@ -179,8 +179,8 @@ router.post('/checkin', authRequired, async (req, res) => {
            VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'qr', NOW())
            ON CONFLICT DO NOTHING`,
           [userId, fechaHoy, usuario.tipo_pase || 'general', sede || usuario.sede,
-           new Date().getDay() || 1, req.user.id]
-        ).catch(() => {}); // Ignorar si falla (ON CONFLICT no funciona sin índice único)
+            new Date().getDay() || 1, req.user.id]
+        ).catch(() => { }); // Ignorar si falla (ON CONFLICT no funciona sin índice único)
       }
 
       console.log(`✅ [Scanner] ${tipo} registrado: user=${usuario.nombre}, sesion=${sesion.titulo}`);
@@ -266,10 +266,10 @@ router.get('/sesiones', authRequired, async (req, res) => {
     const { dia, sede } = req.query;
 
     const conditions = ['activo = true'];
-    const values     = [];
+    const values = [];
     let p = 1;
 
-    if (dia)  { conditions.push(`dia = $${p++}`);  values.push(parseInt(dia)); }
+    if (dia) { conditions.push(`dia = $${p++}`); values.push(parseInt(dia)); }
     if (sede) { conditions.push(`sede = $${p++}`); values.push(sede); }
 
     const r = await pool.query(
@@ -326,7 +326,7 @@ router.get('/stats', authRequired, async (req, res) => {
     res.json({
       ok: true,
       stats: {
-        entradas_hoy:    parseInt(entradasR.rows[0].count),
+        entradas_hoy: parseInt(entradasR.rows[0].count),
         asistentes_sesion: asistSesion,
         fecha: fechaHoy,
       },
@@ -382,5 +382,131 @@ router.get('/historial', authRequired, async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+//---------------------FUCIÓN APPS----------------------------
+// ============================================================
+// POST /api/scan/sync-from-desktop
+// Recibe escaneos desde Proyecto CMC en tiempo real
+// Header: X-Service-Token
+// Body: { user_id, tipo, dia, sede }
+// tipo: 'entrada' | 'sesion'
+// ============================================================
+router.post('/sync-from-desktop', async (req, res) => {
+  try {
+    // Verificar service token
+    const token = req.headers['x-service-token'];
+    if (!token || token !== process.env.DESKTOP_SERVICE_TOKEN) {
+      return res.status(401).json({ ok: false, error: 'Token inválido o ausente' });
+    }
+
+    const { user_id, tipo = 'entrada', dia = 1, sede } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ ok: false, error: 'user_id requerido' });
+    }
+
+    // Verificar que el usuario existe y está activo
+    const userResult = await pool.query(
+      `SELECT id, nombre, email, rol, tipo_pase, sede
+       FROM users
+       WHERE id = $1 AND activo = true`,
+      [user_id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Usuario no encontrado o inactivo'
+      });
+    }
+
+    //=== WEB APP CMC — Integración ========= NUEVA FUNCIÓN ===============
+    const usuario = userResult.rows[0];
+    const sedeReal = sede || usuario.sede || null;
+    const fechaHoy = new Date().toISOString().split('T')[0];
+    const diaNum = parseInt(dia) || 1;
+
+    // Validar acceso según tipo de pase y día
+    const tipoPase = usuario.tipo_pase || '';
+    const diasCurso = [1, 2]; // días de cursos
+    const diasSesiones = [3, 4]; // días de sesiones/expo
+
+    const accesoDenegado = (
+      (tipoPase === 'curso' && !diasCurso.includes(diaNum)) ||
+      (tipoPase === 'sesiones' && !diasSesiones.includes(diaNum)) ||
+      (tipoPase === 'expositor' && !diasSesiones.includes(diaNum))
+    );
+
+    if (accesoDenegado) {
+      return res.status(403).json({
+        ok: false,
+        accesoDenegado: true,
+        usuario: {
+          nombre: usuario.nombre,
+          tipo_pase: tipoPase,
+        },
+        mensaje: `❌ ${usuario.nombre} — tipo de pase '${tipoPase}' no tiene acceso el día ${diaNum}`,
+      });
+    }
+    //=========================================================================
+
+    if (tipo === 'entrada') {
+      // Verificar si ya tiene entrada hoy para este día
+      const dup = await pool.query(
+        `SELECT 1 FROM entradas
+         WHERE user_id = $1 AND fecha = $2 AND dia = $3`,
+        [user_id, fechaHoy, diaNum]
+      );
+
+      if (dup.rows.length > 0) {
+        return res.json({
+          ok: true,
+          yaRegistrado: true,
+          usuario: {
+            nombre: usuario.nombre,
+            tipo_pase: usuario.tipo_pase,
+          },
+          mensaje: `${usuario.nombre} ya tiene entrada registrada hoy (día ${diaNum})`,
+        });
+      }
+
+      // Registrar entrada
+      await pool.query(
+        `INSERT INTO entradas
+           (id, user_id, fecha, tipo, sede, dia, registrado_por, metodo, created_at)
+         VALUES
+           (gen_random_uuid(), $1, $2, $3, $4, $5, NULL, 'desktop-sync', NOW())`,
+        [user_id, fechaHoy, usuario.tipo_pase || 'general', sedeReal, diaNum]
+      );
+
+      console.log(`[Desktop Sync] ✅ Entrada registrada: ${usuario.nombre} — Día ${diaNum}`);
+
+      return res.json({
+        ok: true,
+        yaRegistrado: false,
+        tipo: 'entrada',
+        dia: diaNum,
+        usuario: {
+          id: usuario.id,
+          nombre: usuario.nombre,
+          email: usuario.email,
+          tipo_pase: usuario.tipo_pase,
+        },
+        mensaje: `✅ ${usuario.nombre} — Entrada día ${diaNum} registrada`,
+      });
+    }
+
+    // Tipo no reconocido
+    return res.status(400).json({
+      ok: false,
+      error: `Tipo de registro no soportado: ${tipo}. Usa 'entrada'`,
+    });
+
+  } catch (err) {
+    console.error('❌ POST /scan/sync-from-desktop:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+//-----------------------------------------------------------
 
 export default router;

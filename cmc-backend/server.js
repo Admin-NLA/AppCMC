@@ -1,6 +1,8 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import pool from "./db.js";
 
 // Rutas
@@ -31,7 +33,6 @@ import pushRoutes from "./routes/push.js";
 import { sendSSE } from "./routes/notificaciones.js";
 import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js";
 
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,7 +59,7 @@ app.use(
     },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-service-token"],
     exposedHeaders: ["Authorization"],
   })
 );
