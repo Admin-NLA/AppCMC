@@ -46,11 +46,15 @@ router.get('/stats', authRequired, requireStaff, async (req, res) => {
     `);
     const totalUsers = parseInt(totalUsersResult.rows[0]?.total || 0);
 
-    // 3. CHECK-INS TOTALES
-    const totalCheckinsResult = await pool.query(`
-      SELECT COUNT(id) as total FROM asistencias_sesion
+    // 3. CHECK-INS TOTALES ------------------------------ AJUSTE NUEVO WEB APP CMC--------------->
+    // entradas + asistencias_sesion
+    t = await pool.query(`
+      SELECT 
+        (SELECT COUNT(id) FROM entradas) +
+        (SELECT COUNT(id) FROM asistencias_sesion) AS total
     `);
     const totalCheckins = parseInt(totalCheckinsResult.rows[0]?.total || 0);
+    //---------------------------------------------------- AJUSTE NUEVO WEB APP CMC--------------->
 
     // 4. ASISTENCIAS POR TIPO (CURSOS vs SESIONES)
     const attendanceByTypeResult = await pool.query(`
@@ -69,13 +73,15 @@ router.get('/stats', authRequired, requireStaff, async (req, res) => {
       checkins_sesiones: 0
     };
 
-    // 5. CHECK-INS HOY
-    const todayCheckinsResult = await pool.query(`
-      SELECT COUNT(id) as total
-      FROM asistencias_sesion
-      WHERE DATE(fecha) = CURRENT_DATE
+    // 5. CHECK-INS HOY ------------------------------ AJUSTE NUEVO WEB APP CMC--------------->
+    // entradas + asistencias_sesion
+    const checkinsHoyResult = await pool.query(`
+      SELECT 
+        (SELECT COUNT(id) FROM entradas WHERE DATE(created_at) = CURRENT_DATE) +
+        (SELECT COUNT(id) FROM asistencias_sesion WHERE DATE(fecha) = CURRENT_DATE) AS total
     `);
-    const checkinsToday = parseInt(todayCheckinsResult.rows[0]?.total || 0);
+    const checkinsHoy = parseInt(checkinsHoyResult.rows[0]?.total || 0);
+    //------------------------------------------------- AJUSTE NUEVO WEB APP CMC--------------->
 
     // 6. USUARIOS POR SEDE
     const sedesResult = await pool.query(`
@@ -135,32 +141,53 @@ router.get('/checkins', authRequired, requireStaff, async (req, res) => {
     const limit = req.query.limit || 50;
     const offset = req.query.offset || 0;
 
-    // Obtener check-ins con detalles de usuario y sesión
+    // ------------------------------------------------------------- --- AJUSTE NUEVO WEB APP CMC--------------->
+    // Obtener check-ins con detalles de usuario y sesión --- AJUSTE NUEVO WEB APP CMC
     const checkinsResult = await pool.query(`
-      SELECT 
+      SELECT
+        e.id,
+        e.user_id,
+        NULL::uuid        AS session_id,
+        e.created_at      AS fecha,
+        u.nombre          AS usuario_nombre,
+        u.email,
+        u.tipo_pase,
+        CONCAT('Entrada Día ', e.dia) AS sesion_titulo,
+        e.dia,
+        e.created_at      AS hora_sesion,
+        e.sede            AS sala,
+        'entrada'         AS origen
+      FROM entradas e
+      JOIN users u ON u.id = e.user_id
+      UNION ALL
+      SELECT
         a.id,
         a.user_id,
         a.session_id,
         a.fecha,
-        u.nombre as usuario_nombre,
+        u.nombre          AS usuario_nombre,
         u.email,
         u.tipo_pase,
-        ag.title as sesion_titulo,
+        ag.title          AS sesion_titulo,
         ag.dia,
-        ag.start_at as hora_sesion,
-        ag.sala
+        ag.start_at       AS hora_sesion,
+        ag.sala,
+        'sesion'          AS origen
       FROM asistencias_sesion a
-      LEFT JOIN users u ON a.user_id = u.id
-      LEFT JOIN agenda ag ON a.session_id = ag.id
-      ORDER BY a.fecha DESC
+      LEFT JOIN users u  ON u.id  = a.user_id
+      LEFT JOIN agenda ag ON ag.id = a.session_id
+      ORDER BY fecha DESC
       LIMIT $1 OFFSET $2
     `, [limit, offset]);
 
-    // Contar total
+    // Contar total (entradas + asistencias_sesion)
     const countResult = await pool.query(`
-      SELECT COUNT(id) as total FROM asistencias_sesion
+      SELECT 
+        (SELECT COUNT(id) FROM entradas) +
+        (SELECT COUNT(id) FROM asistencias_sesion) AS total
     `);
     const total = parseInt(countResult.rows[0]?.total || 0);
+    // ------------------------------------------------------------- --- AJUSTE NUEVO WEB APP CMC--------------->
 
     console.log('[Staff Checkins] ✅ Obtenidos:', checkinsResult.rows.length);
 
@@ -332,6 +359,7 @@ router.get('/resumen-diario', authRequired, requireStaff, async (req, res) => {
     `);
     const checkinsHoy = parseInt(checkinsHoyResult.rows[0]?.total || 0);
 
+    //------------------------------------------------- AJUSTE NUEVO WEB APP CMC--------------->
     // Sesiones hoy
     const sesionesHoyResult = await pool.query(`
       SELECT COUNT(DISTINCT session_id) as total
@@ -340,28 +368,42 @@ router.get('/resumen-diario', authRequired, requireStaff, async (req, res) => {
     `);
     const sesionesHoy = parseInt(sesionesHoyResult.rows[0]?.total || 0);
 
-    // Usuarios únicos hoy
+    // Usuarios únicos hoy (entradas + asistencias_sesion)
     const usuariosHoyResult = await pool.query(`
-      SELECT COUNT(DISTINCT user_id) as total
-      FROM asistencias_sesion
-      WHERE DATE(fecha) = CURRENT_DATE
+      SELECT COUNT(DISTINCT user_id) as total FROM (
+        SELECT user_id FROM entradas WHERE DATE(created_at) = CURRENT_DATE
+        UNION
+        SELECT user_id FROM asistencias_sesion WHERE DATE(fecha) = CURRENT_DATE
+      ) t
     `);
     const usuariosHoy = parseInt(usuariosHoyResult.rows[0]?.total || 0);
 
-    // Últimas 5 entradas
+    /// Últimas 5 entradas (entradas + asistencias_sesion)
     const ultimasEntradasResult = await pool.query(`
-      SELECT 
-        u.nombre,
-        u.email,
-        ag.title as sesion,
-        a.fecha
-      FROM asistencias_sesion a
-      LEFT JOIN users u ON a.user_id = u.id
-      LEFT JOIN agenda ag ON a.session_id = ag.id
-      WHERE DATE(a.fecha) = CURRENT_DATE
-      ORDER BY a.fecha DESC
+      SELECT nombre, email, sesion, fecha FROM (
+        SELECT
+          u.nombre,
+          u.email,
+          CONCAT('Entrada Día ', e.dia) AS sesion,
+          e.created_at AS fecha
+        FROM entradas e
+        JOIN users u ON u.id = e.user_id
+        WHERE DATE(e.created_at) = CURRENT_DATE
+        UNION ALL
+        SELECT
+          u.nombre,
+          u.email,
+          ag.title AS sesion,
+          a.fecha
+        FROM asistencias_sesion a
+        LEFT JOIN users u ON u.id = a.user_id
+        LEFT JOIN agenda ag ON ag.id = a.session_id
+        WHERE DATE(a.fecha) = CURRENT_DATE
+      ) t
+      ORDER BY fecha DESC
       LIMIT 5
     `);
+    //------------------------------------------------- AJUSTE NUEVO WEB APP CMC--------------->
 
     res.json({
       resumen: {
