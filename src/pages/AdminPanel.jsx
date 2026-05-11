@@ -458,8 +458,8 @@ export default function AdminPanel() {
                     if (firstTab) setActiveTab(firstTab.id);
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all border-2 ${isAct
-                      ? `${col.active} border-transparent shadow-md`
-                      : `bg-white dark:bg-gray-800 border-transparent hover:border-current ${col.hover} text-gray-600 dark:text-gray-300`
+                    ? `${col.active} border-transparent shadow-md`
+                    : `bg-white dark:bg-gray-800 border-transparent hover:border-current ${col.hover} text-gray-600 dark:text-gray-300`
                     }`}
                 >
                   <Icon size={18} className={isAct ? "" : col.header} />
@@ -479,8 +479,8 @@ export default function AdminPanel() {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`w-full text-left text-xs px-2 py-1.5 rounded-lg transition ${activeTab === tab.id
-                        ? `${colors.active} font-semibold`
-                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      ? `${colors.active} font-semibold`
+                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                       }`}
                   >
                     {tab.label}
@@ -2075,10 +2075,10 @@ function StatsInline({ flash, isAdmin }) {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Asistentes registrados", value: stats.total_usuarios || 0, color: "blue" },
-            { label: "Entradas hoy", value: stats.entradas_hoy || 0, color: "green" },
-            { label: "Sesiones activas", value: stats.sesiones_activas || 0, color: "purple" },
-            { label: "Stands visitados", value: stats.stands_visitados || 0, color: "amber" },
+            { label: "Asistentes registrados", value: stats.totalUsers || 0, color: "blue" },
+            { label: "Check-ins Totales", value: stats.totalCheckins || 0, color: "green" },
+            { label: "Check-ins Hoy", value: stats.checkinsHoy || 0, color: "purple" },
+            { label: "Usuarios por sede", value: Object.values(stats.bySede || {}).reduce((a, b) => a + b, 0), color: "amber" },
           ].map(k => (
             <div key={k.label} className={`bg-${k.color}-50 dark:bg-${k.color}-900/20 border border-${k.color}-200 dark:border-${k.color}-700 rounded-2xl p-4 text-center`}>
               <p className={`text-3xl font-black text-${k.color}-600`}>{k.value.toLocaleString()}</p>
@@ -2104,12 +2104,13 @@ function StatsInline({ flash, isAdmin }) {
               <thead className="bg-gray-50 dark:bg-gray-700"><tr>{["Día", "Entradas", "Sesiones", "Cursos"].map(h => <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {[1, 2, 3, 4].map(dia => {
-                  const d = resumen?.dias?.find(x => x.dia === dia) || {};
+                  const entradas = checkins.filter(c => c.dia === dia && c.origen === 'entrada').length;
+                  const sesiones = checkins.filter(c => c.origen === 'sesion').length;
                   return (<tr key={dia} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                     <td className="px-4 py-2.5 text-sm font-semibold text-gray-900 dark:text-white">Día {dia}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{d.entradas || 0}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{d.sesiones || 0}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{d.cursos || 0}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{entradas}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{sesiones}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">0</td>
                   </tr>);
                 })}
               </tbody>
@@ -2127,14 +2128,15 @@ function StatsInline({ flash, isAdmin }) {
           </div>
           <div className="overflow-auto" style={{ maxHeight: 400 }}>
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0"><tr>{["Usuario", "Tipo", "Sede", "Fecha"].map(h => <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr></thead>
+              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0"><tr>{["Usuario", "Email", "Tipo Pase", "Día", "Fecha"].map(h => <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {checkins.filter(c => !filtroSede || c.sede === filtroSede).slice(0, 50).map((c, i) => (
+                {checkins.slice(0, 50).map((c, i) => (
                   <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                    <td className="px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white">{c.nombre || c.email || c.user_id}</td>
-                    <td className="px-4 py-2.5"><span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full capitalize">{c.tipo || "entrada"}</span></td>
-                    <td className="px-4 py-2.5 text-xs text-gray-500 capitalize">{c.sede || "—"}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-400">{c.fecha ? new Date(c.fecha).toLocaleString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                    <td className="px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white">{c.nombre || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-blue-600">{c.email || "—"}</td>
+                    <td className="px-4 py-2.5"><span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-semibold">{c.tipo_pase || "—"}</span></td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500 font-semibold">{c.dia ? `Día ${c.dia}` : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-400">{c.fecha ? new Date(c.fecha).toLocaleString("es", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
                   </tr>
                 ))}
                 {checkins.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">Sin registros</td></tr>}
@@ -2372,10 +2374,10 @@ function ControlFunciones({ config, onSave, flash }) {
                             <button
                               onClick={() => toggle(func.key, r.id)}
                               className={`w-10 h-5 rounded-full transition-colors relative inline-flex ${active
-                                  ? ""
-                                  : applicable
-                                    ? "bg-gray-200 dark:bg-gray-600"
-                                    : "bg-gray-100 dark:bg-gray-700 border border-dashed border-gray-300 dark:border-gray-600"
+                                ? ""
+                                : applicable
+                                  ? "bg-gray-200 dark:bg-gray-600"
+                                  : "bg-gray-100 dark:bg-gray-700 border border-dashed border-gray-300 dark:border-gray-600"
                                 }`}
                               style={active ? { backgroundColor: r.color } : {}}
                               title={

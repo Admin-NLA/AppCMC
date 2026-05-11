@@ -103,7 +103,7 @@ router.get('/stats', authRequired, requireStaff, async (req, res) => {
     const stats = {
       totalUsers,
       totalCheckins,
-      checkinsToday,
+      checkinsHoy,
       byTipoPase,
       attendanceByType: {
         cursos: parseInt(attendanceByType.checkins_cursos || 0),
@@ -116,7 +116,7 @@ router.get('/stats', authRequired, requireStaff, async (req, res) => {
     console.log('[Staff Stats] ✅ Estadísticas obtenidas:', {
       totalUsers,
       totalCheckins,
-      checkinsToday
+      checkinsHoy
     });
 
     res.json(stats);
@@ -424,4 +424,191 @@ router.get('/resumen-diario', authRequired, requireStaff, async (req, res) => {
   }
 });
 
+// ================== AJUSTE NUEVO WEB APP CMC=======================================================>
+// GET /api/staff/checkins-recientes - Últimos check-ins
+// ========================================================
+router.get('/checkins-recientes', authRequired, requireStaff, async (req, res) => {
+  try {
+    const { sede, limit: limitParam } = req.query;
+    const limit = parseInt(limitParam) || 10;
+
+    const result = await pool.query(`
+      SELECT nombre, email, sesion, fecha, tipo_pase, origen FROM (
+        SELECT
+          u.nombre,
+          u.email,
+          CONCAT('Entrada Día ', e.dia) AS sesion,
+          e.created_at AS fecha,
+          u.tipo_pase,
+          'entrada' AS origen,
+          e.dia AS dia
+        FROM entradas e
+        JOIN users u ON u.id = e.user_id
+        UNION ALL
+        SELECT
+          u.nombre,
+          u.email,
+          ag.title AS sesion,
+          a.fecha,
+          u.tipo_pase,
+          'sesion' AS origen,
+          ag.dia AS dia
+        FROM asistencias_sesion a
+        LEFT JOIN users u ON u.id = a.user_id
+        LEFT JOIN agenda ag ON ag.id = a.session_id
+      ) t
+      ORDER BY fecha DESC
+      LIMIT $1
+    `, [limit]);
+
+    res.json({
+      checkins: result.rows,
+      total: result.rows.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error en GET /staff/checkins-recientes:', error.message);
+    res.status(500).json({
+      error: 'Error al obtener checkins recientes',
+      details: error.message
+    });
+  }
+});
+
+// ========================================================
+// GET /api/staff/estadisticas-evento - Estadísticas completas
+// Replica lo que muestra App Mobile + totales del evento
+// ========================================================
+router.get('/estadisticas-evento', authRequired, requireStaff, async (req, res) => {
+  try {
+    const { sede } = req.query;
+    const sedeFilter = sede ? `AND e.sede = '${sede}'` : '';
+
+    // Día actual del evento (basado en calendario_sedes)
+    const calendarioRes = await pool.query(`
+      SELECT fecha_inicio, fecha_fin 
+      FROM calendario_sedes 
+      WHERE activo = true ${sede ? `AND sede = $1` : ''}
+      LIMIT 1
+    `, sede ? [sede] : []);
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    let diaActual = null;
+
+    if (calendarioRes.rows.length > 0) {
+      const inicio = new Date(calendarioRes.rows[0].fecha_inicio);
+      inicio.setHours(0, 0, 0, 0);
+      const diff = Math.floor((hoy - inicio) / (1000 * 60 * 60 * 24));
+      if (diff >= 0 && diff < 4) diaActual = diff + 1;
+    }
+
+    // Estadísticas por día — entradas
+    const porDiaRes = await pool.query(`
+      SELECT 
+        e.dia,
+        u.tipo_pase,
+        COUNT(*) as total
+      FROM entradas e
+      JOIN users u ON u.id = e.user_id
+      WHERE 1=1 ${sedeFilter}
+      GROUP BY e.dia, u.tipo_pase
+      ORDER BY e.dia
+    `);
+
+    // Construir estructura por día
+    const diasMap = { 1: {}, 2: {}, 3: {}, 4: {} };
+    for (const row of porDiaRes.rows) {
+      const dia = row.dia;
+      const tipo = row.tipo_pase || 'otros';
+      if (!diasMap[dia]) diasMap[dia] = {};
+      diasMap[dia][tipo] = parseInt(row.total);
+    }
+
+    const resumenPorDia = [1, 2, 3, 4].map(dia => {
+      const d = diasMap[dia] || {};
+      const total = Object.values(d).reduce((a, b) => a + b, 0);
+      return {
+        dia,
+        total,
+        combo: d.combo || 0,
+        sesiones: d.sesiones || 0,
+        curso: d.curso || 0,
+        expositor: d.expositor || 0,
+        ponente: d.ponente || 0,
+        staff: d.staff || 0,
+        otros: d.general || d.null || 0,
+        esDiaActual: dia === diaActual
+      };
+    });
+
+    // Totales generales del evento
+    const totalEventoRes = await pool.query(`
+      SELECT COUNT(*) as total FROM entradas e
+      WHERE 1=1 ${sedeFilter}
+    `);
+    const totalEvento = parseInt(totalEventoRes.rows[0]?.total || 0);
+
+    // Asistencias a sesiones por día
+    const sesionesRes = await pool.query(`
+      SELECT ag.dia, COUNT(a.id) as total
+      FROM asistencias_sesion a
+      JOIN agenda ag ON ag.id = a.session_id
+      GROUP BY ag.dia
+      ORDER BY ag.dia
+    `);
+    const sesionesMap = {};
+    for (const row of sesionesRes.rows) {
+      sesionesMap[row.dia] = parseInt(row.total);
+    }
+
+    // Usuarios registrados por tipo de pase
+    const usuariosRes = await pool.query(`
+      SELECT tipo_pase, COUNT(*) as total
+      FROM users WHERE activo = true
+      ${sede ? `AND sede = $1` : ''}
+      GROUP BY tipo_pase
+    `, sede ? [sede] : []);
+
+    const usuariosPorTipo = usuariosRes.rows.reduce((acc, row) => {
+      acc[row.tipo_pase || 'otros'] = parseInt(row.total);
+      return acc;
+    }, {});
+
+    // Citas networking
+    const citasRes = await pool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN status = 'confirmada' THEN 1 END) as confirmadas,
+        COUNT(CASE WHEN status = 'pendiente' THEN 1 END) as pendientes,
+        COUNT(CASE WHEN status = 'rechazada' THEN 1 END) as rechazadas
+      FROM networking
+      ${sede ? `WHERE sede = $1` : ''}
+    `, sede ? [sede] : []);
+
+    const citas = citasRes.rows[0] || {};
+
+    res.json({
+      ok: true,
+      diaActual,
+      fechaHoy: hoy.toISOString().split('T')[0],
+      totalEntradas: totalEvento,
+      usuariosRegistrados: usuariosPorTipo,
+      resumenPorDia,
+      sesionesAsistencia: sesionesMap,
+      networking: {
+        total: parseInt(citas.total || 0),
+        confirmadas: parseInt(citas.confirmadas || 0),
+        pendientes: parseInt(citas.pendientes || 0),
+        rechazadas: parseInt(citas.rechazadas || 0),
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error en estadisticas-evento:', error.message);
+    res.status(500).json({ error: 'Error al obtener estadísticas', details: error.message });
+  }
+});
+// ================== AJUSTE NUEVO WEB APP CMC=======================================================>
 export default router;

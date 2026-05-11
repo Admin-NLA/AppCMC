@@ -507,6 +507,44 @@ router.post('/sync-from-desktop', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
-//-----------------------------------------------------------
 
+// ================== AJUSTE NUEVO WEB APP CMC=======================================================>
+// ========================================================
+// POST /api/scan/sync-event-dates
+// Recibe fechas del evento desde Proyecto CMC y actualiza
+// calendario_sedes en Web App CMC
+// ========================================================
+router.post('/sync-event-dates', async (req, res) => {
+  const token = req.headers['x-service-token'];
+  if (token !== process.env.DESKTOP_SERVICE_TOKEN) {
+    return res.status(401).json({ ok: false, error: 'Token inválido' });
+  }
+
+  try {
+    const { sede, edicion, fecha_inicio, fecha_fin } = req.body;
+
+    if (!sede || !fecha_inicio || !fecha_fin) {
+      return res.status(400).json({ ok: false, error: 'sede, fecha_inicio y fecha_fin son requeridos' });
+    }
+
+    await pool.query(`
+      INSERT INTO calendario_sedes (sede, edicion, fecha_inicio, fecha_fin, activo)
+      VALUES ($1, $2, $3, $4, true)
+      ON CONFLICT (sede, edicion)
+      DO UPDATE SET
+        fecha_inicio = EXCLUDED.fecha_inicio,
+        fecha_fin    = EXCLUDED.fecha_fin,
+        activo       = true
+    `, [sede, edicion || new Date().getFullYear(), fecha_inicio, fecha_fin]);
+
+    console.log(`[Event Dates Sync] ✅ ${sede} ${edicion}: ${fecha_inicio} → ${fecha_fin}`);
+
+    res.json({ ok: true, mensaje: `Fechas sincronizadas para ${sede} ${edicion}` });
+
+  } catch (error) {
+    console.error('[Event Dates Sync] ❌ Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+// ================== AJUSTE NUEVO WEB APP CMC=======================================================>
 export default router;
