@@ -69,8 +69,8 @@ function parseSessionClassList(classList = []) {
   let sede = null, tipo = null, edicion = null, categoria = 'sesion';
 
   classList.forEach((cls) => {
-    if (cls === 'events_category-chile')    sede = 'chile';
-    if (cls === 'events_category-mexico')   sede = 'mexico';
+    if (cls === 'events_category-chile') sede = 'chile';
+    if (cls === 'events_category-mexico') sede = 'mexico';
     if (cls === 'events_category-colombia') sede = 'colombia';
 
     if (cls.startsWith('events_category-') && /\d{4}/.test(cls)) {
@@ -203,33 +203,43 @@ async function cargarSesionesLocales(sede, edicion) {
 }
 
 // ============================================================
-// GET /sessions
+// GET /sessions ------------------------------------------------------------- AJUSTE WEB APP CMC
 // ============================================================
 router.get('/sessions', authRequired, async (req, res) => {
   const { sede, edicion } = req.query;
-
   console.log(`[Agenda] GET /sessions — sede=${sede}, edicion=${edicion}`);
 
   let wpSessions = [];
   let wpTotal = 0;
   let wpError = null;
 
-  // ── Intentar cargar desde WordPress ──────────────────────
   try {
-    const wpResponse = await wordpressAPI.get('/session', {
-      params: { per_page: 100, _fields: 'id,title,content,slug,class_list,acf' },
-      timeout: 5000, // 5 s máximo — si WP tarda más, usamos fallback local
-    });
+    let allWpData = [];
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const wpResponse = await wordpressAPI.get('/session', {
+        params: { page, per_page: 100, _fields: 'id,title,content,slug,class_list,acf' },
+        timeout: 5000,
+      });
+      const data = wpResponse.data || [];
+      if (data.length === 0) {
+        hasMore = false;
+      } else {
+        allWpData = allWpData.concat(data);
+        console.log(`[Agenda] WP página ${page}: +${data.length} (total: ${allWpData.length})`);
+        if (data.length < 100) hasMore = false;
+        page++;
+      }
+    }
 
-    wpTotal = wpResponse.data.length;
+    wpTotal = allWpData.length;
     console.log(`[Agenda] WordPress: ${wpTotal} sesiones`);
 
-    // Cargar overrides para aplicar encima de los datos de WP
     const { overridesMap } = await cargarSesionesLocales(null, null);
 
-    wpSessions = wpResponse.data.map((post) => {
+    wpSessions = allWpData.map((post) => {
       if (overridesMap[post.id]) return overridesMap[post.id];
-
       const parsed = parseSessionClassList(post.class_list || []);
       return {
         id: post.id,
@@ -239,23 +249,22 @@ router.get('/sessions', authRequired, async (req, res) => {
         slug: post.slug,
         dia: post.acf?.dia ?? 0,
         horaInicio: post.acf?.hora_inicio || post.acf?.start_time || null,
-        horaFin: post.acf?.hora_fin   || post.acf?.end_time   || null,
+        horaFin: post.acf?.hora_fin || post.acf?.end_time || null,
         sala: post.acf?.sala || post.acf?.room || '',
         qrSala: post.acf?.qr_sala || post.acf?.qr || '',
         tipo: parsed.tipo || 'general',
         categoria: parsed.categoria,
         sede: parsed.sede,
         edicion: parsed.edicion,
-        speakerNombre: post.acf?.speaker    || '',
-        speakerId:     post.acf?.speaker_id || null,
+        speakerNombre: post.acf?.speaker || '',
+        speakerId: post.acf?.speaker_id || null,
         source: 'wordpress',
         canEdit: true,
         isOverride: false,
       };
     });
 
-    // Aplicar filtros a sesiones de WP
-    if (sede)    wpSessions = wpSessions.filter((s) => s.sede    === sede.toLowerCase());
+    if (sede) wpSessions = wpSessions.filter((s) => s.sede === sede.toLowerCase());
     if (edicion) wpSessions = wpSessions.filter((s) => s.edicion === parseInt(edicion));
 
   } catch (err) {
@@ -264,12 +273,8 @@ router.get('/sessions', authRequired, async (req, res) => {
     console.warn('[Agenda] Usando solo sesiones locales como fallback');
   }
 
-  // ── Cargar sesiones locales (siempre) ────────────────────
   const { sessions: localSessions } = await cargarSesionesLocales(sede, edicion);
 
-  // Si WP falló, localSessions ya incluye los overrides
-  // Si WP funcionó, localSessions solo tiene las sesiones locales puras (wp_id IS NULL)
-  // — para no duplicar overrides que ya se aplicaron arriba
   let localOnly = localSessions;
   if (!wpError) {
     localOnly = localSessions.filter((s) => s.source === 'local');
@@ -326,7 +331,7 @@ router.post('/sessions', authRequired, async (req, res) => {
         end_at      AS "horaFin",
         sala, tipo, sede, edicion, speakers, categoria`,
       [titulo, descripcion || '', dia || null, horaInicio || null, horaFin || null,
-       sala || '', tipo, sede, edicion, speakersArray, tipo === 'curso' ? 'curso' : 'sesion']
+        sala || '', tipo, sede, edicion, speakersArray, tipo === 'curso' ? 'curso' : 'sesion']
     );
 
     console.log('[Agenda] ✅ Sesión creada:', result.rows[0].id);
@@ -376,8 +381,8 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
     // CASO 1: Sesión de WordPress (ID numérico grande)
     if (!isNaN(id) && parseInt(id) > 1000) {
       const startTs = convertirHoraATimestamp(horaInicio);
-      const endTs   = convertirHoraATimestamp(horaFin);
-      const wpId    = parseInt(id);
+      const endTs = convertirHoraATimestamp(horaFin);
+      const wpId = parseInt(id);
 
       const existing = await pool.query(
         'SELECT id FROM agenda WHERE wp_id = $1 AND override = true', [wpId]
@@ -416,8 +421,8 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
             (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $10, $10, $10,
              $11, $12, true, 'wordpress', true, NOW())`,
           [wpId, titulo, descripcion || '', diaFinal,
-           convertirHoraATimestamp(horaInicio), convertirHoraATimestamp(horaFin),
-           sala || '', tipo, sede, edicion, speakersArray, tipo === 'curso' ? 'curso' : 'sesion']
+            convertirHoraATimestamp(horaInicio), convertirHoraATimestamp(horaFin),
+            sala || '', tipo, sede, edicion, speakersArray, tipo === 'curso' ? 'curso' : 'sesion']
         );
         return res.json({ ok: true, session: { id: wpId, titulo }, message: 'Override creado para sesión de WordPress' });
       }
@@ -447,8 +452,8 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
                  dia, start_at AS "horaInicio", end_at AS "horaFin",
                  sala, tipo, sede, edicion`,
       [titulo, descripcion, diaFinal,
-       convertirHoraATimestamp(horaInicio), convertirHoraATimestamp(horaFin),
-       sala, tipo, sede, edicion, speakersArray ?? null, id]
+        convertirHoraATimestamp(horaInicio), convertirHoraATimestamp(horaFin),
+        sala, tipo, sede, edicion, speakersArray ?? null, id]
     );
 
     console.log('[Agenda] ✅ Sesión local actualizada:', id);
@@ -551,15 +556,32 @@ router.post('/sessions/sync-wp', authRequired, async (req, res) => {
 
     const { sede, forzar_limpiar } = req.body;
 
-    // 1. Traer sesiones de WordPress
+    // 1. Traer sesiones de WordPress ---------------- AJUSTE WEB APP CMC
     let wpSessions = [];
     try {
-      const params = { per_page: 100, _fields: 'id,title,content,slug,class_list,acf' };
-      const wpResp = await wordpressAPI.get('/session', { params, timeout: 15000 });
-      wpSessions = wpResp.data || [];
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const params = {
+          page,
+          per_page: 100,
+          _fields: 'id,title,content,slug,class_list,acf'
+        };
+        const wpResp = await wordpressAPI.get('/session', { params, timeout: 15000 });
+        const data = wpResp.data || [];
+        if (data.length === 0) {
+          hasMore = false;
+        } else {
+          wpSessions = wpSessions.concat(data);
+          console.log(`[Sync WP] Página ${page}: +${data.length} sesiones (total: ${wpSessions.length})`);
+          if (data.length < 100) hasMore = false;
+          page++;
+        }
+      }
     } catch (wpErr) {
       return res.status(502).json({ ok: false, error: 'No se pudo conectar con WordPress: ' + wpErr.message });
     }
+    //----------------------------------------------------------------------------------------------- AJUSTE WEB APP CMC
 
     let reparadas = 0, limpias = 0;
 
@@ -586,8 +608,8 @@ router.post('/sessions/sync-wp', authRequired, async (req, res) => {
             dia         = COALESCE($3, dia),
             wp_synced_at = NOW()
            WHERE wp_id = $4 AND override = true`,
-          [titulo, post.content?.rendered?.replace(/<[^>]+>/g,'').substring(0,500) || '',
-           post.acf?.dia || null, post.id]
+          [titulo, post.content?.rendered?.replace(/<[^>]+>/g, '').substring(0, 500) || '',
+            post.acf?.dia || null, post.id]
         );
         reparadas++;
       }
@@ -605,7 +627,7 @@ router.post('/sessions/sync-wp', authRequired, async (req, res) => {
     // Actualizar última sync en configuracion_evento
     await pool.query(
       `UPDATE configuracion_evento SET ultima_sync_wp = NOW() WHERE id IN (SELECT id FROM configuracion_evento LIMIT 1)`
-    ).catch(() => {}); // silencioso si no hay fila
+    ).catch(() => { }); // silencioso si no hay fila
 
     res.json({
       ok: true,

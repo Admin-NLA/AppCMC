@@ -216,6 +216,14 @@ export default function Agenda() {
       filtered = filtered.filter((s) => favorites.has(s.id));
     }
 
+    // Ordenar por hora de inicio (más temprano primero)
+    filtered.sort((a, b) => {
+      if (!a.horaInicio && !b.horaInicio) return 0;
+      if (!a.horaInicio) return 1;
+      if (!b.horaInicio) return -1;
+      return String(a.horaInicio).localeCompare(String(b.horaInicio));
+    });
+
     setFilteredSessions(filtered);
   }, [selectedDay, selectedSede, selectedEdicion, sessions, userProfile, permisos, favorites, showOnlyFavorites]);
 
@@ -426,8 +434,8 @@ export default function Agenda() {
               <button
                 onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
                 className={`w-full px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 ${showOnlyFavorites
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-gray-200 text-gray-800 hover:bg-gray-300"
                   }`}
               >
                 <Heart size={18} fill={showOnlyFavorites ? "currentColor" : "none"} />
@@ -468,8 +476,8 @@ export default function Agenda() {
         <button
           onClick={() => setSelectedDay("todos")}
           className={`px-6 py-2 rounded-lg font-medium transition whitespace-nowrap ${selectedDay === "todos"
-              ? "bg-blue-600 text-white"
-              : "bg-white text-gray-700 hover:bg-gray-100"
+            ? "bg-blue-600 text-white"
+            : "bg-white text-gray-700 hover:bg-gray-100"
             }`}
         >
           Todos
@@ -486,10 +494,10 @@ export default function Agenda() {
                 disabled={!permitido}
                 title={!permitido ? `Tu pase no incluye ${day.label}` : undefined}
                 className={`px-6 py-2 rounded-lg font-medium transition whitespace-nowrap ${!permitido
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-50"
-                    : selectedDay === day.id
-                      ? "bg-blue-600 text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-100"
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-50"
+                  : selectedDay === day.id
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-gray-700 hover:bg-gray-100"
                   }`}
               >
                 {day.label}
@@ -555,19 +563,59 @@ export default function Agenda() {
     </div>
   );
 }
+//--------------------------------AJUSTE - WEB APP----------------------------------------------------------------------------------  
+function getSessionStatus(horaInicio, horaFin) {
+  if (!horaInicio) return null;
+  try {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const matchInicio = String(horaInicio).match(/T(\d{2}):(\d{2})/);
+    if (!matchInicio) return null;
+    const inicioMinutes = parseInt(matchInicio[1]) * 60 + parseInt(matchInicio[2]);
+
+    let finMinutes = null;
+    if (horaFin) {
+      const matchFin = String(horaFin).match(/T(\d{2}):(\d{2})/);
+      if (matchFin) finMinutes = parseInt(matchFin[1]) * 60 + parseInt(matchFin[2]);
+    }
+
+    if (currentMinutes < inicioMinutes - 15) return null; // muy pronto, sin badge
+    if (currentMinutes < inicioMinutes) return "por_iniciar";
+    if (finMinutes && currentMinutes > finMinutes) return "finalizado";
+    if (!finMinutes && currentMinutes > inicioMinutes + 60) return "finalizado";
+    return "transcurriendo";
+  } catch {
+    return null;
+  }
+}
+//--------------------------------AJUSTE - WEB APP----------------------------------------------------------------------------------  
+
 
 // ========================================================
 // SessionCard
 // ========================================================
 function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails, canMarkFavorites, esLectura }) {
+  //--------------------------------AJUSTE - WEB APP----------------------------------------------------------------------------------  
   const formatTime = (dateString) => {
     if (!dateString) return "Sin hora";
     try {
+      // Extraer hora directamente del string para evitar conversión de zona horaria
+      // El formato es "2000-01-01T08:00:00" o "2000-01-01T08:00:00.000Z"
+      const match = String(dateString).match(/T(\d{2}):(\d{2})/);
+      if (match) {
+        const h = parseInt(match[1]);
+        const m = match[2];
+        const ampm = h >= 12 ? "p.m." : "a.m.";
+        const h12 = h % 12 || 12;
+        return `${h12}:${m} ${ampm}`;
+      }
       return new Date(dateString).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
     } catch {
       return dateString;
     }
   };
+  //--------------------------------AJUSTE - WEB APP----------------------------------------------------------------------------------  
 
   return (
     <div
@@ -577,10 +625,30 @@ function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails, can
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {(() => {
+              const status = getSessionStatus(session.horaInicio, session.horaFin);
+              if (status === "transcurriendo") return (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-white flex items-center gap-1 animate-pulse">
+                  🟢 En curso
+                </span>
+              );
+              if (status === "por_iniciar") return (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-400 text-white flex items-center gap-1">
+                  🟡 Por iniciar
+                </span>
+              );
+              if (status === "finalizado") return (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-400 text-white flex items-center gap-1">
+                  ⚫ Finalizado
+                </span>
+              );
+              return null;
+            })()}
             {session.tipo && (
+              //-- ----- AJUSTE----------------------------------------------------------------------------------------------------------------------------------------
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${session.tipo === "conferencia" ? "bg-blue-100 text-blue-700"
-                  : session.tipo === "curso" ? "bg-green-100 text-green-700"
-                    : "bg-purple-100 text-purple-700"
+                : session.tipo === "curso" ? "bg-green-100 text-green-700"
+                  : "bg-purple-100 text-purple-700"
                 }`}>
                 {session.tipo.toUpperCase()}
               </span>
@@ -649,18 +717,94 @@ function SessionCard({ session, isFavorite, onToggleFavorite, onViewDetails, can
   );
 }
 
+//----------------------------NUEVA FUNCION WEB APP ----------------------------------------------------
+function SpeakerCard({ speakerId, speakerNombre }) {
+  const [speaker, setSpeaker] = useState(null);
+  const [showBio, setShowBio] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!speakerId) return;
+    setLoading(true);
+    API.get(`/speakers/${speakerId}`)
+      .then(r => setSpeaker(r.data))
+      .catch(() => setSpeaker(null))
+      .finally(() => setLoading(false));
+  }, [speakerId]);
+
+  const nombre = speaker?.nombre || speakerNombre || "Speaker";
+  const foto = speaker?.foto || speaker?.photo_url;
+  const cargo = speaker?.cargo;
+  const empresa = speaker?.empresa || speaker?.company;
+  const bio = speaker?.bio;
+
+  return (
+    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+      <p className="text-xs text-gray-600 mb-3 flex items-center gap-2">
+        <User size={14} /> PONENTE
+      </p>
+      <div className="flex items-center gap-3">
+        {foto ? (
+          <img
+            src={foto}
+            alt={nombre}
+            className="w-12 h-12 rounded-full object-cover border-2 border-blue-200 shrink-0"
+            onError={e => e.target.style.display = 'none'}
+          />
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+            <User size={20} className="text-blue-600" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-gray-900">{nombre}</p>
+          {cargo && <p className="text-sm text-gray-600 truncate">{cargo}</p>}
+          {empresa && <p className="text-xs text-gray-400 truncate">{empresa}</p>}
+        </div>
+        {bio && (
+          <button
+            onClick={() => setShowBio(!showBio)}
+            className="shrink-0 text-xs px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition font-semibold"
+          >
+            {showBio ? "Ocultar" : "Ver bio"}
+          </button>
+        )}
+      </div>
+      {showBio && bio && (
+        <div className="mt-3 pt-3 border-t border-gray-200">
+          <p className="text-sm text-gray-700 leading-relaxed">{bio}</p>
+        </div>
+      )}
+      {loading && <p className="text-xs text-gray-400 mt-2">Cargando info del ponente...</p>}
+    </div>
+  );
+}
+//------------------------------------------------------------------------------------------------------
+
 // ========================================================
 // SessionModal
 // ========================================================
 function SessionModal({ session, isFavorite, onToggleFavorite, onClose, canMarkFavorites, esLectura }) {
+  //--------------------------------AJUSTE - WEB APP----------------------------------------------------------------------------------  
   const formatTime = (dateString) => {
     if (!dateString) return "Sin hora";
     try {
+      // Extraer hora directamente del string para evitar conversión de zona horaria
+      // El formato es "2000-01-01T08:00:00" o "2000-01-01T08:00:00.000Z"
+      const match = String(dateString).match(/T(\d{2}):(\d{2})/);
+      if (match) {
+        const h = parseInt(match[1]);
+        const m = match[2];
+        const ampm = h >= 12 ? "p.m." : "a.m.";
+        const h12 = h % 12 || 12;
+        return `${h12}:${m} ${ampm}`;
+      }
       return new Date(dateString).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
     } catch {
       return dateString;
     }
   };
+  //--------------------------------AJUSTE - WEB APP---------------------------------------------------------------------------------- 
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
@@ -731,11 +875,11 @@ function SessionModal({ session, isFavorite, onToggleFavorite, onClose, canMarkF
             )}
           </div>
 
-          {session.speakerNombre && (
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <p className="text-xs text-gray-600 mb-2 flex items-center gap-2"><User size={14} /> EXPOSITOR</p>
-              <p className="font-bold text-gray-900">{session.speakerNombre}</p>
-            </div>
+          {(session.speakerNombre || session.speakerId) && (
+            <SpeakerCard
+              speakerId={session.speakerId}
+              speakerNombre={session.speakerNombre}
+            />
           )}
 
           <div className="flex gap-2">

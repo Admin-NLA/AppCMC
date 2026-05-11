@@ -17,7 +17,7 @@ import {
   FileUp, AlertCircle, CheckCircle, Loader2,
   Calendar, Mic, Building2, ExternalLink, ChevronDown,
   RefreshCw, Wifi, WifiOff, Clock, Map, ChevronRight,
-  Settings, Palette, BarChart2, User,
+  Settings, Palette, BarChart2, User, Download,
 } from "lucide-react";
 
 // ────────────────────────────────────────────────────────────
@@ -2014,18 +2014,19 @@ function BrandingInline({ flash }) {
 }
 
 // ════════════════════════════════════════════════════════════
-// FASE 4B — PANEL ESTADÍSTICO INLINE
+// FASE 4B — PANEL ESTADÍSTICO INLINE ---- AJUSTE APP WEB SINCRONIZADA
 // ════════════════════════════════════════════════════════════
 
 function StatsInline({ flash, isAdmin }) {
   const [stats, setStats] = useState(null);
-  const [resumen, setResumen] = useState(null);
+  const [evento, setEvento] = useState(null);
   const [checkins, setCheckins] = useState([]);
   const [sessionStats, setSessionStats] = useState([]);
   const [cursoStats, setCursoStats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("resumen");
   const [filtroSede, setFiltroSede] = useState("");
+  const [descargando, setDescargando] = useState(false);
 
   useEffect(() => { loadStats(); }, []);
 
@@ -2033,21 +2034,58 @@ function StatsInline({ flash, isAdmin }) {
     setLoading(true);
     const q = sede ? `?sede=${sede}` : "";
     try {
-      const [sR, rR, cR, ssR, csR] = await Promise.all([
+      const [sR, eR, cR, ssR, csR] = await Promise.all([
         API.get(`/staff/stats${q}`).catch(() => null),
-        API.get(`/staff/resumen-diario${q}`).catch(() => null),
+        API.get(`/staff/estadisticas-evento${q}`).catch(() => null),
         API.get(`/staff/checkins-recientes${q}`).catch(() => null),
         API.get(`/staff/sessions-stats${q}`).catch(() => null),
         API.get(`/staff/cursos-stats${q}`).catch(() => null),
       ]);
       if (sR) setStats(sR.data);
-      if (rR) setResumen(rR.data);
+      if (eR) setEvento(eR.data);
       if (cR) setCheckins(cR.data?.checkins || []);
-      if (ssR) setSessionStats(ssR.data?.sessions || ssR.data || []);
-      if (csR) setCursoStats(csR.data?.cursos || csR.data || []);
-    } catch (err) { flash("Error al cargar estadísticas", true); }
-    finally { setLoading(false); }
+      if (ssR) setSessionStats(ssR.data?.sessions || []);
+      if (csR) setCursoStats(csR.data?.cursos || []);
+    } catch (err) {
+      flash("Error al cargar estadísticas", true);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  //--------------NUEVA FUNCION-------------
+  const descargarExcel = async () => {
+    setDescargando(true);
+    try {
+      const q = filtroSede ? `?sede=${filtroSede}` : "";
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/excel/estadisticas${q}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error("Error al descargar");
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const fecha = new Date().toISOString().split("T")[0];
+      link.download = `estadisticas_cmc_${fecha}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      flash("Error al descargar el Excel", true);
+    } finally {
+      setDescargando(false);
+    }
+  };
+  //----------------------------------------------------
 
   const TABS_STATS = [
     { id: "resumen", label: "📊 Resumen" },
@@ -2056,66 +2094,136 @@ function StatsInline({ flash, isAdmin }) {
     { id: "cursos", label: "📚 Cursos" },
   ];
 
+  const TIPO_COLORS = {
+    combo: "bg-purple-100 text-purple-700",
+    sesiones: "bg-blue-100 text-blue-700",
+    curso: "bg-green-100 text-green-700",
+    expositor: "bg-amber-100 text-amber-700",
+    ponente: "bg-rose-100 text-rose-700",
+    staff: "bg-gray-100 text-gray-700",
+    otros: "bg-slate-100 text-slate-600",
+  };
+
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
 
   return (
     <div className="space-y-5">
+
+      {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-bold dark:text-white flex-1">Panel Estadístico</h2>
-        <button onClick={loadStats} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl"><RefreshCw size={16} /></button>
+        <button onClick={descargarExcel} disabled={descargando}
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition">
+          <Download size={16} />{descargando ? "Descargando..." : "Descargar CSV"}
+        </button>
+        <button onClick={() => loadStats(filtroSede)} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl"><RefreshCw size={16} /></button>
         {isAdmin && (
-          <select value={filtroSede} onChange={e => { setFiltroSede(e.target.value); loadStats(e.target.value); }} className="text-sm border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-1.5 bg-white dark:bg-gray-700 dark:text-white">
+          <select value={filtroSede} onChange={e => { setFiltroSede(e.target.value); loadStats(e.target.value); }}
+            className="text-sm border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-1.5 bg-white dark:bg-gray-700 dark:text-white">
             <option value="">Todas las sedes</option>
             {["colombia", "mexico", "chile"].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
           </select>
         )}
       </div>
 
-      {/* KPIs principales */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: "Asistentes registrados", value: stats.totalUsers || 0, color: "blue" },
-            { label: "Check-ins Totales", value: stats.totalCheckins || 0, color: "green" },
-            { label: "Check-ins Hoy", value: stats.checkinsHoy || 0, color: "purple" },
-            { label: "Usuarios por sede", value: Object.values(stats.bySede || {}).reduce((a, b) => a + b, 0), color: "amber" },
-          ].map(k => (
-            <div key={k.label} className={`bg-${k.color}-50 dark:bg-${k.color}-900/20 border border-${k.color}-200 dark:border-${k.color}-700 rounded-2xl p-4 text-center`}>
-              <p className={`text-3xl font-black text-${k.color}-600`}>{k.value.toLocaleString()}</p>
-              <p className="text-xs text-gray-500 mt-1">{k.label}</p>
-            </div>
-          ))}
+      {/* Día actual del evento */}
+      {evento?.diaActual && (
+        <div className="bg-blue-600 text-white rounded-2xl px-5 py-3 flex items-center gap-3">
+          <Calendar size={20} />
+          <span className="font-bold">Día {evento.diaActual} del evento</span>
+          <span className="text-blue-200 text-sm">— {evento.fechaHoy}</span>
         </div>
       )}
+
+      {/* KPIs principales */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Usuarios registrados", value: stats?.totalUsers || 0, color: "blue" },
+          { label: "Entradas totales", value: evento?.totalEntradas || 0, color: "green" },
+          { label: "Check-ins hoy", value: stats?.checkinsHoy || 0, color: "purple" },
+          { label: "Citas networking", value: evento?.networking?.total || 0, color: "amber" },
+        ].map(k => (
+          <div key={k.label} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 text-center">
+            <p className={`text-3xl font-black text-${k.color}-600`}>{k.value.toLocaleString()}</p>
+            <p className="text-xs text-gray-500 mt-1">{k.label}</p>
+          </div>
+        ))}
+      </div>
 
       {/* Sub-tabs */}
       <div className="flex gap-2 flex-wrap">
         {TABS_STATS.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition border-2 ${activeTab === t.id ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-gray-800 border-gray-200 text-gray-600 hover:border-blue-400"}`}>{t.label}</button>
+          <button key={t.id} onClick={() => setActiveTab(t.id)}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition border-2 ${activeTab === t.id ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-gray-800 border-gray-200 text-gray-600 hover:border-blue-400"}`}>
+            {t.label}
+          </button>
         ))}
       </div>
 
-      {/* Resumen diario */}
-      {activeTab === "resumen" && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700"><p className="text-sm font-semibold dark:text-white">Resumen por día</p></div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700"><tr>{["Día", "Entradas", "Sesiones", "Cursos"].map(h => <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr></thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {[1, 2, 3, 4].map(dia => {
-                  const entradas = checkins.filter(c => c.dia === dia && c.origen === 'entrada').length;
-                  const sesiones = checkins.filter(c => c.origen === 'sesion').length;
-                  return (<tr key={dia} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                    <td className="px-4 py-2.5 text-sm font-semibold text-gray-900 dark:text-white">Día {dia}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{entradas}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{sesiones}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">0</td>
-                  </tr>);
-                })}
-              </tbody>
-            </table>
+      {/* Resumen por día */}
+      {activeTab === "resumen" && evento && (
+        <div className="space-y-4">
+          {/* Resumen por día */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+              <p className="text-sm font-semibold dark:text-white">Entradas por día</p>
+            </div>
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
+              {evento.resumenPorDia.map(d => (
+                <div key={d.dia} className={`px-4 py-3 ${d.esDiaActual ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-900 dark:text-white text-sm">Día {d.dia}</span>
+                      {d.esDiaActual && <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">Hoy</span>}
+                    </div>
+                    <span className="text-2xl font-black text-blue-600">{d.total}</span>
+                  </div>
+                  {d.total > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(d).filter(([k]) => !["dia", "total", "esDiaActual"].includes(k) && d[k] > 0).map(([tipo, val]) => (
+                        <span key={tipo} className={`text-xs px-2 py-0.5 rounded-full font-semibold ${TIPO_COLORS[tipo] || "bg-gray-100 text-gray-600"}`}>
+                          {tipo}: {val}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* Usuarios registrados por tipo */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4">
+            <p className="text-sm font-semibold dark:text-white mb-3">Usuarios registrados por tipo de pase</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {Object.entries(evento.usuariosRegistrados).map(([tipo, val]) => (
+                <div key={tipo} className={`rounded-xl p-3 text-center ${TIPO_COLORS[tipo] || "bg-gray-50 text-gray-600"}`}>
+                  <p className="text-2xl font-black">{val}</p>
+                  <p className="text-xs font-semibold capitalize mt-0.5">{tipo}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Networking */}
+          {evento.networking && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4">
+              <p className="text-sm font-semibold dark:text-white mb-3">Networking — Citas</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Total", value: evento.networking.total, color: "text-blue-600" },
+                  { label: "Confirmadas", value: evento.networking.confirmadas, color: "text-green-600" },
+                  { label: "Pendientes", value: evento.networking.pendientes, color: "text-amber-600" },
+                  { label: "Rechazadas", value: evento.networking.rechazadas, color: "text-red-600" },
+                ].map(k => (
+                  <div key={k.label} className="bg-gray-50 dark:bg-gray-700 rounded-xl p-3 text-center">
+                    <p className={`text-2xl font-black ${k.color}`}>{k.value}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{k.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2128,18 +2236,30 @@ function StatsInline({ flash, isAdmin }) {
           </div>
           <div className="overflow-auto" style={{ maxHeight: 400 }}>
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0"><tr>{["Usuario", "Email", "Tipo Pase", "Día", "Fecha"].map(h => <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr></thead>
+              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                <tr>{["Usuario", "Email", "Tipo Pase", "Día", "Fecha"].map(h => (
+                  <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
+                ))}</tr>
+              </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {checkins.slice(0, 50).map((c, i) => (
                   <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                     <td className="px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white">{c.nombre || "—"}</td>
                     <td className="px-4 py-2.5 text-xs text-blue-600">{c.email || "—"}</td>
-                    <td className="px-4 py-2.5"><span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-semibold">{c.tipo_pase || "—"}</span></td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${TIPO_COLORS[c.tipo_pase] || "bg-gray-100 text-gray-600"}`}>
+                        {c.tipo_pase || "—"}
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5 text-xs text-gray-500 font-semibold">{c.dia ? `Día ${c.dia}` : "—"}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-400">{c.fecha ? new Date(c.fecha).toLocaleString("es", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-400">
+                      {c.fecha ? new Date(c.fecha).toLocaleString("es", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                    </td>
                   </tr>
                 ))}
-                {checkins.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">Sin registros</td></tr>}
+                {checkins.length === 0 && (
+                  <tr><td colSpan={5} className="text-center py-8 text-gray-400 text-sm">Sin registros</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -2149,20 +2269,28 @@ function StatsInline({ flash, isAdmin }) {
       {/* Sesiones */}
       {activeTab === "sesiones" && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700"><p className="text-sm font-semibold dark:text-white">Participación por sesión</p></div>
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+            <p className="text-sm font-semibold dark:text-white">Participación por sesión</p>
+          </div>
           <div className="overflow-auto" style={{ maxHeight: 450 }}>
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0"><tr>{["Sesión", "Sala", "Asistentes", "Día"].map(h => <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr></thead>
+              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                <tr>{["Sesión", "Sala", "Asistentes", "Día"].map(h => (
+                  <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
+                ))}</tr>
+              </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {sessionStats.filter(s => !filtroSede || s.sede === filtroSede).map((s, i) => (
+                {sessionStats.map((s, i) => (
                   <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                    <td className="px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white max-w-xs truncate">{s.titulo || s.title || "—"}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-500">{s.sala || s.room || "—"}</td>
-                    <td className="px-4 py-2.5"><span className="text-sm font-bold text-blue-600">{s.asistentes || s.count || 0}</span></td>
+                    <td className="px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white max-w-xs truncate">{s.titulo || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{s.sala || "—"}</td>
+                    <td className="px-4 py-2.5"><span className="text-sm font-bold text-blue-600">{s.asistentes || 0}</span></td>
                     <td className="px-4 py-2.5 text-xs text-gray-400">Día {s.dia || "—"}</td>
                   </tr>
                 ))}
-                {sessionStats.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">Sin datos de sesiones</td></tr>}
+                {sessionStats.length === 0 && (
+                  <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">Sin datos de sesiones</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -2172,20 +2300,28 @@ function StatsInline({ flash, isAdmin }) {
       {/* Cursos */}
       {activeTab === "cursos" && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700"><p className="text-sm font-semibold dark:text-white">Participación por curso</p></div>
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+            <p className="text-sm font-semibold dark:text-white">Participación por curso</p>
+          </div>
           <div className="overflow-auto" style={{ maxHeight: 450 }}>
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0"><tr>{["Curso", "Inscritos", "Asistencias", "Día"].map(h => <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr></thead>
+              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                <tr>{["Curso", "Sala", "Asistentes", "Día"].map(h => (
+                  <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
+                ))}</tr>
+              </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {cursoStats.filter(c => !filtroSede || c.sede === filtroSede).map((c, i) => (
+                {cursoStats.map((c, i) => (
                   <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                    <td className="px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white max-w-xs truncate">{c.titulo || c.title || "—"}</td>
-                    <td className="px-4 py-2.5"><span className="text-sm font-bold text-green-600">{c.inscritos || c.inscriptions || 0}</span></td>
-                    <td className="px-4 py-2.5"><span className="text-sm font-bold text-blue-600">{c.asistencias || c.attendances || 0}</span></td>
+                    <td className="px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white max-w-xs truncate">{c.titulo || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{c.sala || "—"}</td>
+                    <td className="px-4 py-2.5"><span className="text-sm font-bold text-green-600">{c.asistentes || 0}</span></td>
                     <td className="px-4 py-2.5 text-xs text-gray-400">Día {c.dia || "—"}</td>
                   </tr>
                 ))}
-                {cursoStats.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">Sin datos de cursos</td></tr>}
+                {cursoStats.length === 0 && (
+                  <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">Sin datos de cursos</td></tr>
+                )}
               </tbody>
             </table>
           </div>

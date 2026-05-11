@@ -29,6 +29,7 @@ import scanRoutes from "./routes/scan.js";
 import mapaRoutes from "./routes/mapa.js";
 import eventosRoutes from "./routes/eventos.routes.js";
 import pushRoutes from "./routes/push.js";
+import excelRoutes from "./routes/excel.js";
 
 import { sendSSE } from "./routes/notificaciones.js";
 import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js";
@@ -204,6 +205,7 @@ app.use("/api/scan", scanRoutes);
 app.use("/api/mapa", mapaRoutes);
 app.use("/api/eventos", eventosRoutes);
 app.use("/api/push", pushRoutes);
+app.use("/api/excel", excelRoutes);
 
 // ============================================================
 // CRON — Notificaciones programadas (cada 30 segundos)
