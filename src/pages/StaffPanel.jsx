@@ -12,6 +12,7 @@ import {
   Clock,
   AlertCircle,
   RefreshCw,
+  CheckCircle,
 } from "lucide-react";
 
 export default function StaffPanel() {
@@ -144,11 +145,10 @@ export default function StaffPanel() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 font-medium border-b-2 transition ${
-              activeTab === tab.id
+            className={`px-4 py-2 font-medium border-b-2 transition ${activeTab === tab.id
                 ? "border-blue-600 text-blue-600"
                 : "border-transparent text-gray-600 hover:text-gray-800"
-            }`}
+              }`}
           >
             {tab.label}
           </button>
@@ -367,11 +367,10 @@ export default function StaffPanel() {
                       <td className="px-4 py-2 font-medium">{session.titulo}</td>
                       <td className="px-4 py-2">
                         <span
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
-                            session.categoria === "curso"
+                          className={`px-2 py-1 rounded text-xs font-semibold ${session.categoria === "curso"
                               ? "bg-green-100 text-green-800"
                               : "bg-blue-100 text-blue-800"
-                          }`}
+                            }`}
                         >
                           {session.categoria}
                         </span>
@@ -380,9 +379,9 @@ export default function StaffPanel() {
                       <td className="px-4 py-2">
                         {session.hora
                           ? new Date(session.hora).toLocaleTimeString("es-MX", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                           : "—"}
                       </td>
                       <td className="px-4 py-2">{session.sala || "—"}</td>
@@ -426,9 +425,9 @@ export default function StaffPanel() {
                       <td className="px-4 py-2">
                         {curso.hora
                           ? new Date(curso.hora).toLocaleTimeString("es-MX", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                           : "—"}
                       </td>
                       <td className="px-4 py-2">{curso.sala || "—"}</td>
@@ -472,21 +471,5 @@ function StatCard({ icon: Icon, label, value, color }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function CheckCircle({ size = 24 }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
-    </svg>
   );
 }

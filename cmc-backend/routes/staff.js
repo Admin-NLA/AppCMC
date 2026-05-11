@@ -48,7 +48,7 @@ router.get('/stats', authRequired, requireStaff, async (req, res) => {
 
     // 3. CHECK-INS TOTALES ------------------------------ AJUSTE NUEVO WEB APP CMC--------------->
     // entradas + asistencias_sesion
-    t = await pool.query(`
+    const totalCheckinsResult = await pool.query(`
       SELECT 
         (SELECT COUNT(id) FROM entradas) +
         (SELECT COUNT(id) FROM asistencias_sesion) AS total
