@@ -546,5 +546,33 @@ router.post('/sync-event-dates', async (req, res) => {
     res.status(500).json({ ok: false, error: error.message });
   }
 });
+
+// ========================================================
+// DELETE /api/scan/clear-entradas
+// Limpia registros de entradas desde Proyecto CMC
+// ========================================================
+router.delete('/clear-entradas', async (req, res) => {
+  const token = req.headers['x-service-token'];
+  if (token !== process.env.DESKTOP_SERVICE_TOKEN) {
+    return res.status(401).json({ ok: false, error: 'Token inválido' });
+  }
+
+  try {
+    const { sede } = req.query;
+
+    if (sede) {
+      await pool.query(`DELETE FROM entradas WHERE sede = $1`, [sede]);
+    } else {
+      await pool.query(`DELETE FROM entradas`);
+    }
+
+    console.log(`[Scan] 🗑️ Entradas limpiadas${sede ? ` (sede: ${sede})` : ''}`);
+    res.json({ ok: true, mensaje: 'Entradas limpiadas correctamente' });
+
+  } catch (error) {
+    console.error('[Scan] ❌ Error limpiando entradas:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
 // ================== AJUSTE NUEVO WEB APP CMC=======================================================>
 export default router;
