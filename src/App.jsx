@@ -17,6 +17,7 @@ import Expositores from "./pages/Expositores.jsx";
 import Notificaciones from "./pages/Notificaciones.jsx";
 import Perfil from "./pages/Perfil.jsx";
 import Networking from "./pages/Networking.jsx";
+import NetworkingExpo from "./pages/NetworkingExpo.jsx";
 
 // Páginas de asistente
 import MisRegistros from "./pages/MisRegistros.jsx";
@@ -25,10 +26,10 @@ import QR from "./pages/QR.jsx";
 // Páginas de rol especial
 import MiMarca from "./pages/MiMarca.jsx";
 import MiSesion from "./pages/MiSesion.jsx";
-import Encuestas      from "./pages/Encuestas.jsx";
-import BrandingPanel  from "./pages/BrandingPanel.jsx";
-import MapaExpo       from "./pages/MapaExpo.jsx";
-import Scanner        from "./pages/Scanner.jsx";
+import Encuestas from "./pages/Encuestas.jsx";
+import BrandingPanel from "./pages/BrandingPanel.jsx";
+import MapaExpo from "./pages/MapaExpo.jsx";
+import Scanner from "./pages/Scanner.jsx";
 
 // Páginas de staff / admin
 import StaffPanel from "./pages/StaffPanel.jsx";
@@ -242,7 +243,7 @@ function AppWithEvent() {
               }
             />
 
-{/* Encuestas — todos los roles autenticados */}
+            {/* Encuestas — todos los roles autenticados */}
             <Route
               path="encuestas"
               element={
@@ -314,6 +315,8 @@ function AppWithEvent() {
             />
 
           </Route>
+
+          <Route path="/networking-expo" element={<NetworkingExpo />} />
 
           {/* ── 404 ── */}
           <Route path="/404" element={<NotFound />} />
