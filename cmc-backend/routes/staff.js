@@ -611,4 +611,247 @@ router.get('/estadisticas-evento', authRequired, requireStaff, async (req, res) 
   }
 });
 // ================== AJUSTE NUEVO WEB APP CMC=======================================================>
+// ════════════════════════════════════════════════════════════
+// GET /api/staff/quien-no-llego
+//
+// Cruza `users` (activos) contra `sync_asistencia` (datos que vienen
+// del Tkinter vía sync) para mostrar quién NO ha sido registrado
+// como presente. Soporta dos modos:
+//
+//   - SIN ?dia      → quién no ha llegado NINGÚN día (total)
+//   - CON  ?dia=N    → quién no ha llegado ese día específico (1-4)
+//
+// sync_asistencia.qr_code = users.qr_code (el ID del Excel)
+// sync_asistencia.dia es texto tipo "day_1", "day_2"... por eso
+// se convierte el día numérico a esa forma antes de comparar.
+// ════════════════════════════════════════════════════════════
+router.get('/quien-no-llego', authRequired, requireStaff, async (req, res) => {
+  try {
+    const { sede, dia } = req.query;
+    console.log('[Staff QuienNoLlego] Consultando... dia=', dia || 'todos');
+
+    const params = [];
+    let sedeFilter = '';
+    if (sede) {
+      params.push(sede);
+      sedeFilter = `AND u.sede = $${params.length}`;
+    }
+
+    let diaFilter = '';
+    if (dia) {
+      const diaKey = `day_${parseInt(dia)}`;
+      params.push(diaKey);
+      diaFilter = `AND sa.dia = $${params.length}`;
+    }
+
+    // Usuarios activos que SÍ tienen registro en sync_asistencia
+    // (en el día solicitado, o en cualquier día si no se especifica)
+    const sql = `
+      SELECT
+        u.id,
+        u.nombre,
+        u.email,
+        u.tipo_pase,
+        u.empresa,
+        u.sede,
+        u.qr_code
+      FROM users u
+      WHERE u.activo = true
+        AND u.qr_code IS NOT NULL
+        AND u.rol = 'asistente'
+        ${sedeFilter}
+        AND NOT EXISTS (
+          SELECT 1 FROM sync_asistencia sa
+          WHERE sa.qr_code = u.qr_code
+          ${diaFilter}
+        )
+      ORDER BY u.nombre ASC
+    `;
+
+    const result = await pool.query(sql, params);
+
+    // Totales por tipo de pase, para dar contexto rápido al staff
+    const porTipoPase = result.rows.reduce((acc, row) => {
+      const key = row.tipo_pase || 'sin_tipo';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    console.log(`[Staff QuienNoLlego] ✅ ${result.rows.length} usuarios sin registro`);
+
+    res.json({
+      ok: true,
+      dia: dia ? parseInt(dia) : null,
+      total: result.rows.length,
+      porTipoPase,
+      usuarios: result.rows,
+      timestamp: new Date().toISOString(),
+    });
+
+  } catch (error) {
+    console.error('❌ Error en GET /staff/quien-no-llego:', error.message);
+    res.status(500).json({
+      error: 'Error al obtener usuarios sin registro',
+      details: error.message,
+    });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// GET /api/staff/flask-stats
+// Lee sync_stats (sincronizado por el Tkinter/Flask) y devuelve
+// el resumen por día + lista de asistentes al StaffPanel.
+// ════════════════════════════════════════════════════════════
+router.get('/flask-stats', authRequired, requireStaff, async (req, res) => {
+  try {
+    console.log('[Staff Flask Stats] Obteniendo estadísticas del Tkinter...');
+
+    const result = await pool.query(`
+      SELECT stats, sede, edicion, synced_at
+      FROM sync_stats
+      WHERE source = 'flask'
+      ORDER BY synced_at DESC
+      LIMIT 1
+    `);
+
+    if (result.rows.length === 0) {
+      console.log('[Staff Flask Stats] Sin datos — sync aún no ejecutado');
+      return res.json(null);
+    }
+
+    const row = result.rows[0];
+    const stats = row.stats || {};
+
+    const response = {
+      total_attendees: stats.total_attendees ?? null,
+      entry_scans: stats.entry_scans ?? null,
+      total_exhibitors: stats.total_exhibitors ?? null,
+      daily_summary: stats.daily_summary ?? {},
+      attendees: stats.attendees_scan_stats ?? [],
+      sede: row.sede,
+      edicion: row.edicion,
+      synced_at: row.synced_at,
+    };
+
+    console.log('[Staff Flask Stats] ✅ Datos enviados. Días:', Object.keys(response.daily_summary));
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error en GET /staff/flask-stats:', error.message);
+    res.status(500).json({
+      error: 'Error al obtener estadísticas del Tkinter',
+      details: error.message
+    });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// POST /api/staff/registro-manual
+//
+// Permite al staff marcar manualmente a un asistente como
+// presente, sin pasar por el Tkinter. Se usa típicamente cuando
+// alguien llegó pero el escáner/QR no lo registró.
+//
+// Body: { usuario_id, dia? }
+//   - usuario_id: uuid del usuario en Neon (requerido)
+//   - dia: 1-4 (opcional, default = día actual del evento)
+//
+// Escribe en AMBAS tablas para mantener todo consistente:
+//   - entradas         (la que usan los paneles de la App Web)
+//   - sync_asistencia  (la que usa la vista "Quién no llegó" y
+//                       el tab Tkinter Live, para que el usuario
+//                       deje de aparecer como "sin registro")
+//
+// metodo = 'manual_staff' para diferenciarlo de los registros
+// que vienen del QR/Tkinter (metodo = 'qr' o 'tkinter_sync').
+// ════════════════════════════════════════════════════════════
+router.post('/registro-manual', authRequired, requireStaff, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { usuario_id, dia } = req.body;
+
+    if (!usuario_id) {
+      return res.status(400).json({ error: 'usuario_id es requerido' });
+    }
+
+    // Determinar el día: el que pasen explícitamente, o el día actual
+    // calculado contra calendario_sedes (igual criterio que el resto del panel)
+    let diaFinal = dia ? parseInt(dia) : null;
+
+    const userRes = await client.query(
+      `SELECT id, nombre, email, tipo_pase, sede, qr_code
+       FROM users WHERE id = $1 AND activo = true`,
+      [usuario_id]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado o inactivo' });
+    }
+
+    const user = userRes.rows[0];
+
+    if (!diaFinal) {
+      // Calcular día actual del evento según calendario_sedes de su sede
+      const calRes = await client.query(
+        `SELECT fecha_inicio FROM calendario_sedes
+         WHERE sede = $1 AND activo = true LIMIT 1`,
+        [user.sede]
+      );
+      if (calRes.rows.length > 0) {
+        const inicio = new Date(calRes.rows[0].fecha_inicio);
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        inicio.setHours(0, 0, 0, 0);
+        const diffDias = Math.floor((hoy - inicio) / (1000 * 60 * 60 * 24)) + 1;
+        diaFinal = diffDias >= 1 && diffDias <= 4 ? diffDias : 1;
+      } else {
+        diaFinal = 1; // fallback si no hay calendario configurado
+      }
+    }
+
+    await client.query('BEGIN');
+
+    // 1. Insertar en entradas (tabla operativa de la App Web)
+    const entradaRes = await client.query(
+      `INSERT INTO entradas (user_id, fecha, tipo, sede, dia, registrado_por, metodo)
+       VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, 'manual_staff')
+       ON CONFLICT (user_id, dia, sede) DO UPDATE
+         SET metodo = 'manual_staff', registrado_por = $5
+       RETURNING *`,
+      [user.id, user.tipo_pase, user.sede, diaFinal, req.user.id]
+    );
+
+    // 2. Insertar/actualizar en sync_asistencia (para que coincida
+    //    con la vista "Quién no llegó" y el tab Tkinter Live)
+    if (user.qr_code) {
+      await client.query(
+        `INSERT INTO sync_asistencia
+           (qr_code, flask_event_id, dia, tipo_asistente, empresa, nombre, apellido, synced_at)
+         VALUES ($1, 0, $2, $3, $4, $5, '', NOW())
+         ON CONFLICT (qr_code, flask_event_id, dia) DO UPDATE
+           SET synced_at = NOW()`,
+        [user.qr_code, `day_${diaFinal}`, user.tipo_pase, '', user.nombre]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    console.log(`[Staff RegistroManual] ✅ ${user.nombre} marcado presente Día ${diaFinal} por ${req.user.nombre || req.user.id}`);
+
+    res.json({
+      ok: true,
+      message: `${user.nombre} registrado como presente — Día ${diaFinal}`,
+      entrada: entradaRes.rows[0],
+      dia: diaFinal,
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error en POST /staff/registro-manual:', error.message);
+    res.status(500).json({ error: 'Error al registrar asistencia', details: error.message });
+  } finally {
+    client.release();
+  }
+});
+
 export default router;

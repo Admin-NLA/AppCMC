@@ -43,14 +43,92 @@ function generateQRSVG(text, size = 250) {
   return url;
 }
 
+// ============================================================
+// vCard 3.0 — MISMO FORMATO que genera el Tkinter/Flask
+// (ver qr_generator.py / data_models.py del sistema de escritorio)
+//
+// El escáner del Tkinter identifica al asistente buscando la línea
+// "EMAIL;TYPE=INTERNET:" dentro del QR y comparándola contra el
+// email guardado en su Excel. Mientras el email coincida exactamente,
+// el escáner reconoce el QR generado aquí sin ninguna modificación
+// al lado del Tkinter.
+//
+// Formato exacto (orden y mayúsculas importan):
+//   BEGIN:VCARD
+//   VERSION:3.0
+//   FN:{nombre} {apellido}
+//   N:{apellido};{nombre};;;
+//   ORG:{empresa}
+//   EMAIL;TYPE=INTERNET:{email}
+//   TEL;TYPE=CELL:{telefono sin formato}
+//   NOTE:{tipo} CMC {sede} {año}
+//   END:VCARD
+// Separador de línea: \r\n (estándar vCard)
+// ============================================================
+
+// Mapeo tipo_pase (App CMC Web) → etiqueta de NOTE (igual que VCARD_TYPES del Tkinter)
+const VCARD_NOTE_LABEL = {
+  asistente_combo: "Asistente",
+  asistente_sesiones: "Asistente",
+  asistente_curso: "Asistente",
+  asistente_general: "Asistente Expo",
+  expositor: "Expositor",
+  speaker: "Speaker",
+  staff: "Comité Organizador",
+  super_admin: "Comité Organizador",
+};
+
+/**
+ * Separa "nombre completo" en nombre/apellido lo mejor posible.
+ * El Excel del Tkinter guarda nombre y apellido por separado, pero
+ * userProfile.nombre llega como un solo string concatenado.
+ * Tomamos la primera palabra como nombre y el resto como apellido
+ * (igual de impreciso que cualquier heurística de nombre completo,
+ * pero el EMAIL es el campo que realmente usa el escáner).
+ */
+function splitNombre(nombreCompleto) {
+  const partes = (nombreCompleto || "").trim().split(/\s+/);
+  if (partes.length <= 1) return { nombre: partes[0] || "", apellido: "" };
+  const nombre = partes[0];
+  const apellido = partes.slice(1).join(" ");
+  return { nombre, apellido };
+}
+
+/**
+ * Construye el vCard 3.0 idéntico en formato al que genera el Tkinter.
+ */
+function buildVCard(userProfile) {
+  const { nombre, apellido } = splitNombre(userProfile?.nombre);
+  const empresa = userProfile?.empresa || "";
+  const email = userProfile?.email || "";
+  const telefono = (userProfile?.movil || "").replace(/\D/g, ""); // solo dígitos
+  const sede = (userProfile?.sede || "").toUpperCase();
+  const año = new Date().getFullYear();
+  const tipoLabel = VCARD_NOTE_LABEL[userProfile?.rol] || VCARD_NOTE_LABEL[userProfile?.tipo_pase] || "Asistente";
+
+  const lines = [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+    `FN:${nombre} ${apellido}`.trim(),
+    `N:${apellido};${nombre};;;`,
+    `ORG:${empresa}`,
+    `EMAIL;TYPE=INTERNET:${email}`,
+    `TEL;TYPE=CELL:${telefono}`,
+    `NOTE:${tipoLabel} CMC ${sede} ${año}`,
+    "END:VCARD",
+  ];
+
+  return lines.join("\r\n");
+}
+
 export default function QR() {
   const { userProfile, permisos } = useAuth();
 
-  const [qrUrl, setQrUrl]         = useState(null);
-  const [qrLoaded, setQrLoaded]   = useState(false);
-  const [qrError, setQrError]     = useState(false);
-  const [copied, setCopied]       = useState(false);
-  const [loading, setLoading]     = useState(true);
+  const [qrUrl, setQrUrl] = useState(null);
+  const [qrLoaded, setQrLoaded] = useState(false);
+  const [qrError, setQrError] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
 
   // ============================================================
@@ -70,14 +148,7 @@ export default function QR() {
       return;
     }
 
-    const qrPayload = JSON.stringify({
-      id:     userProfile.id,
-      email:  userProfile.email,
-      nombre: userProfile.nombre,
-      rol:    userProfile.rol,
-      pase:   userProfile.tipo_pase,
-      sede:   userProfile.sede,
-    });
+    const qrPayload = buildVCard(userProfile);
 
     setQrUrl(generateQRSVG(qrPayload, 300));
     setLoading(false);
@@ -182,14 +253,14 @@ export default function QR() {
   // LABEL AMIGABLE PARA EL TIPO DE PASE
   // ============================================================
   const labelRol = {
-    asistente_general:  "Asistente General",
-    asistente_curso:    "Asistente Curso",
+    asistente_general: "Asistente General",
+    asistente_curso: "Asistente Curso",
     asistente_sesiones: "Asistente Sesiones",
-    asistente_combo:    "Asistente Combo",
-    expositor:          "Expositor",
-    speaker:            "Speaker",
-    staff:              "Staff",
-    super_admin:        "Super Admin",
+    asistente_combo: "Asistente Combo",
+    expositor: "Expositor",
+    speaker: "Speaker",
+    staff: "Staff",
+    super_admin: "Super Admin",
   };
 
   // ============================================================
@@ -259,7 +330,7 @@ export default function QR() {
                 No se pudo cargar el QR.<br />Verifica tu conexión.
               </p>
               <button
-                onClick={() => { setQrError(false); setQrLoaded(false); setQrUrl(generateQRSVG(JSON.stringify({ id: userProfile?.id, email: userProfile?.email }), 300)); }}
+                onClick={() => { setQrError(false); setQrLoaded(false); setQrUrl(generateQRSVG(buildVCard(userProfile), 300)); }}
                 className="flex items-center gap-1 text-blue-600 text-sm font-medium"
               >
                 <RefreshCw size={14} /> Reintentar
@@ -327,8 +398,8 @@ export default function QR() {
         <ul className="text-blue-800 text-sm space-y-1.5">
           <li>✅ Descarga o imprime tu QR antes del evento</li>
           <li>✅ Ten tu QR visible en tu teléfono o en papel</li>
-          <li>✅ El QR contiene tu identificación personal del evento</li>
-          <li>✅ Se escanea en cada acceso a salas y stands</li>
+          <li>✅ El QR contiene tu tarjeta de contacto (vCard) del evento</li>
+          <li>✅ Se escanea en cada acceso a salas y stands — el mismo QR que genera el sistema de registro</li>
         </ul>
       </div>
 
