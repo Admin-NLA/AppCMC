@@ -3,7 +3,7 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import API from "../services/api";
 import {
   Plus, Edit2, Trash2, X, AlertCircle, Search, RefreshCw,
-  CheckSquare, Square, Loader2,
+  CheckSquare, Square, RotateCcw, Clock, Loader2,
 } from "lucide-react";
 
 // Roles reales del sistema
@@ -94,10 +94,6 @@ export default function UsuariosPanel() {
   const [deleteMasivoLoading, setDeleteMasivoLoading] = useState(false);
   const [deleteMasivoProgreso, setDeleteMasivoProgreso] = useState(0);
 
-  // Sincronización manual con Tkinter/Flask
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncResultado, setSyncResultado] = useState(null);
-
   // --------------------------------------------------------
   useEffect(() => { loadUsers(); }, []);
 
@@ -117,6 +113,21 @@ export default function UsuariosPanel() {
   const showSuccess = (msg) => {
     setSuccess(msg);
     setTimeout(() => setSuccess(null), 3000);
+  };
+
+  // --------------------------------------------------------
+  // PAPELERA — cargar usuarios inactivos
+  // --------------------------------------------------------
+  const loadPapelera = async () => {
+    try {
+      setLoadingPapelera(true);
+      const res = await API.get("/users/papelera");
+      setPapelera(Array.isArray(res.data) ? res.data : res.data?.usuarios || []);
+    } catch (err) {
+      setError(err.response?.data?.error || "No se pudo cargar la papelera");
+    } finally {
+      setLoadingPapelera(false);
+    }
   };
 
   // --------------------------------------------------------
@@ -233,8 +244,6 @@ export default function UsuariosPanel() {
 
   const toggleSeleccionarTodos = () => {
     setSeleccionados((prev) => {
-      // Si todos los visibles ya están seleccionados, deseleccionar todo.
-      // Si no, seleccionar todos los que están visibles con el filtro actual.
       const idsVisibles = usuariosFiltrados.map((u) => u.id);
       const todosSeleccionados = idsVisibles.length > 0 && idsVisibles.every((id) => prev.has(id));
       if (todosSeleccionados) return new Set();
@@ -245,7 +254,7 @@ export default function UsuariosPanel() {
   const limpiarSeleccion = () => setSeleccionados(new Set());
 
   // --------------------------------------------------------
-  // BORRADO MASIVO (mismo flujo de papelera: soft-delete por uno a uno)
+  // BORRADO MASIVO (mismo flujo de papelera: soft-delete uno a uno)
   // --------------------------------------------------------
   const handleDeleteMasivo = async () => {
     const ids = Array.from(seleccionados);
@@ -280,54 +289,6 @@ export default function UsuariosPanel() {
     } finally {
       setDeleteMasivoLoading(false);
       setDeleteMasivoProgreso(0);
-    }
-  };
-
-  // --------------------------------------------------------
-  // SINCRONIZACIÓN MANUAL CON TKINTER/FLASK
-  // El Flask local expone POST /sync/run (ver sync_routes.py).
-  // Se llama directo desde el navegador usando VITE_FLASK_URL,
-  // igual patrón que el panel de Sincronización en AdminPanel.
-  // --------------------------------------------------------
-  const handleSyncManual = async () => {
-    const flaskUrl = import.meta.env.VITE_FLASK_URL;
-    const flaskToken = import.meta.env.VITE_FLASK_TOKEN;
-
-    if (!flaskUrl) {
-      setError("VITE_FLASK_URL no está configurado en el .env del frontend");
-      return;
-    }
-
-    try {
-      setSyncLoading(true);
-      setSyncResultado(null);
-      setError(null);
-
-      const res = await fetch(`${flaskUrl}/sync/run`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(flaskToken ? { "X-Service-Token": flaskToken } : {}),
-        },
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.error || `Error HTTP ${res.status}`);
-      }
-
-      setSyncResultado(data);
-      showSuccess(
-        `Sincronización completada: ${data.usuarios ?? 0} usuarios, ${data.asistencia ?? 0} asistencias`
-      );
-      loadUsers(); // refrescar la lista — pueden haber llegado usuarios nuevos
-    } catch (err) {
-      setError(`No se pudo sincronizar con Tkinter: ${err.message}`);
-      setSyncResultado(null);
-    } finally {
-      setSyncLoading(false);
-      setTimeout(() => setSyncResultado(null), 8000);
     }
   };
 
@@ -377,21 +338,6 @@ export default function UsuariosPanel() {
             <RefreshCw size={18} />
           </button>
           {esSuperAdmin && (
-            <button
-              onClick={handleSyncManual}
-              disabled={syncLoading}
-              className="flex items-center gap-2 border border-blue-200 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition font-semibold disabled:opacity-50"
-              title="Forzar sincronización inmediata con Tkinter (además de la automática cada 20 min)"
-            >
-              {syncLoading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <RefreshCw size={18} />
-              )}
-              {syncLoading ? "Sincronizando..." : "Sincronizar Tkinter"}
-            </button>
-          )}
-          {esSuperAdmin && (
             <div className="flex gap-2">
               <button
                 onClick={() => { setShowPapelera(p => !p); loadPapelera(); }}
@@ -426,15 +372,6 @@ export default function UsuariosPanel() {
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 p-3 rounded-lg text-red-800 text-sm">
           ❌ {error}
-        </div>
-      )}
-      {syncResultado && (
-        <div className="mb-4 bg-blue-50 border border-blue-200 p-3 rounded-lg text-blue-800 text-sm flex flex-wrap gap-3">
-          <span>🔄 Sync Tkinter:</span>
-          <span>{syncResultado.usuarios ?? 0} usuarios</span>
-          <span>· {syncResultado.eventos ?? 0} eventos</span>
-          <span>· {syncResultado.asistencia ?? 0} asistencias</span>
-          <span>· {syncResultado.duracion_seg ?? "?"}s</span>
         </div>
       )}
 
@@ -475,10 +412,7 @@ export default function UsuariosPanel() {
             {seleccionados.size} usuario{seleccionados.size !== 1 ? "s" : ""} seleccionado{seleccionados.size !== 1 ? "s" : ""}
           </span>
           <div className="flex gap-2">
-            <button
-              onClick={limpiarSeleccion}
-              className="text-sm text-blue-700 hover:text-blue-900 px-3 py-1.5 font-medium"
-            >
+            <button onClick={limpiarSeleccion} className="text-sm text-blue-700 hover:text-blue-900 px-3 py-1.5 font-medium">
               Cancelar
             </button>
             <button
@@ -500,13 +434,8 @@ export default function UsuariosPanel() {
               <tr className="bg-gray-50 border-b text-gray-600 text-xs uppercase tracking-wide">
                 {esSuperAdmin && (
                   <th className="px-4 py-3 text-center w-10">
-                    <button
-                      onClick={toggleSeleccionarTodos}
-                      title="Seleccionar / deseleccionar todos los visibles"
-                      className="text-gray-500 hover:text-blue-600 transition"
-                    >
-                      {usuariosFiltrados.length > 0 &&
-                        usuariosFiltrados.every((u) => seleccionados.has(u.id)) ? (
+                    <button onClick={toggleSeleccionarTodos} title="Seleccionar / deseleccionar todos" className="text-gray-500 hover:text-blue-600 transition">
+                      {usuariosFiltrados.length > 0 && usuariosFiltrados.every((u) => seleccionados.has(u.id)) ? (
                         <CheckSquare size={16} />
                       ) : (
                         <Square size={16} />
@@ -540,20 +469,12 @@ export default function UsuariosPanel() {
                 usuariosFiltrados.map((user) => (
                   <tr
                     key={user.id}
-                    className={`border-b hover:bg-gray-50 transition ${seleccionados.has(user.id) ? "bg-blue-50" : ""
-                      }`}
+                    className={`border-b hover:bg-gray-50 transition ${seleccionados.has(user.id) ? "bg-blue-50" : ""}`}
                   >
                     {esSuperAdmin && (
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => toggleSeleccion(user.id)}
-                          className="text-gray-400 hover:text-blue-600 transition"
-                        >
-                          {seleccionados.has(user.id) ? (
-                            <CheckSquare size={16} className="text-blue-600" />
-                          ) : (
-                            <Square size={16} />
-                          )}
+                        <button onClick={() => toggleSeleccion(user.id)} className="text-gray-400 hover:text-blue-600 transition">
+                          {seleccionados.has(user.id) ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
                         </button>
                       </td>
                     )}
@@ -826,10 +747,7 @@ export default function UsuariosPanel() {
           MODAL: CONFIRMAR ELIMINACIÓN MASIVA
           ====================================================== */}
       {showDeleteMasivo && (
-        <Modal
-          title="Confirmar Eliminación Masiva"
-          onClose={() => !deleteMasivoLoading && setShowDeleteMasivo(false)}
-        >
+        <Modal title="Confirmar Eliminación Masiva" onClose={() => !deleteMasivoLoading && setShowDeleteMasivo(false)}>
           <div className="flex items-start gap-3 mb-6">
             <div className="bg-red-100 p-2 rounded-full shrink-0">
               <AlertCircle className="text-red-600" size={20} />
@@ -839,8 +757,8 @@ export default function UsuariosPanel() {
                 ¿Eliminar {seleccionados.size} usuario{seleccionados.size !== 1 ? "s" : ""}?
               </p>
               <p className="text-sm text-red-600 mt-2">
-                Esta acción desactivará todas las cuentas seleccionadas y las moverá a
-                la papelera. No podrán iniciar sesión hasta ser restauradas.
+                Esta acción desactivará todas las cuentas seleccionadas y las moverá a la papelera.
+                No podrán iniciar sesión hasta ser restauradas.
               </p>
             </div>
           </div>
@@ -852,10 +770,7 @@ export default function UsuariosPanel() {
                 <span>{deleteMasivoProgreso}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-red-600 h-2 rounded-full transition-all"
-                  style={{ width: `${deleteMasivoProgreso}%` }}
-                />
+                <div className="bg-red-600 h-2 rounded-full transition-all" style={{ width: `${deleteMasivoProgreso}%` }} />
               </div>
             </div>
           )}

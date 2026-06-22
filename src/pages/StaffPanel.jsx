@@ -13,9 +13,9 @@ import {
   AlertCircle,
   RefreshCw,
   CheckCircle,
+  Activity,
   UserX,
   Search,
-  Activity,
   UserCheck,
 } from "lucide-react";
 
@@ -27,18 +27,20 @@ export default function StaffPanel() {
   const [checkins, setCheckins] = useState([]);
   const [sessionStats, setSessionStats] = useState([]);
   const [cursoStats, setCursoStats] = useState([]);
-  const [flaskStats, setFlaskStats] = useState(null);   // datos del Tkinter
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("resumen");
 
-  // ── Estado para "Quién no llegó" ──────────────────────────
+  // Tkinter Live (lectura en vivo de cmc-mobile)
+  const [tkinterLive, setTkinterLive] = useState(null);
+
+  // Quién No Llegó
   const [noLlegaron, setNoLlegaron] = useState(null);
-  const [diaFiltro, setDiaFiltro] = useState(""); // "" = todos los días
+  const [diaFiltro, setDiaFiltro] = useState("");
   const [loadingNoLlegaron, setLoadingNoLlegaron] = useState(false);
   const [busquedaNoLlegaron, setBusquedaNoLlegaron] = useState("");
-  const [registrandoId, setRegistrandoId] = useState(null); // usuario_id que se está registrando ahora
-  const [registroMsg, setRegistroMsg] = useState(null);     // { tipo: 'ok'|'error', texto }
+  const [registrandoId, setRegistrandoId] = useState(null);
+  const [registroMsg, setRegistroMsg] = useState(null);
 
   // ========================================================
   // Cargar datos al montar
@@ -60,13 +62,13 @@ export default function StaffPanel() {
       console.log("📊 Cargando datos de staff...");
 
       // Cargar en paralelo
-      const [statsRes, resumenRes, checkinsRes, sessionsRes, cursosRes, flaskRes] = await Promise.all([
+      const [statsRes, resumenRes, checkinsRes, sessionsRes, cursosRes, tkinterRes] = await Promise.all([
         API.get("/staff/stats").catch(() => null),
         API.get("/staff/resumen-diario").catch(() => null),
         API.get("/staff/checkins?limit=20").catch(() => null),
         API.get("/staff/sessions-stats").catch(() => null),
         API.get("/staff/cursos-stats").catch(() => null),
-        API.get("/staff/flask-stats").catch(() => null),
+        API.get("/staff/tkinter-live").catch(() => null),
       ]);
 
       if (statsRes) setStats(statsRes.data);
@@ -74,7 +76,7 @@ export default function StaffPanel() {
       if (checkinsRes) setCheckins(checkinsRes.data.checkins || []);
       if (sessionsRes) setSessionStats(sessionsRes.data.sessions || []);
       if (cursosRes) setCursoStats(cursosRes.data.cursos || []);
-      if (flaskRes) setFlaskStats(flaskRes.data);
+      if (tkinterRes) setTkinterLive(tkinterRes.data);
 
       console.log("✅ Datos cargados");
     } catch (err) {
@@ -86,8 +88,7 @@ export default function StaffPanel() {
   };
 
   // ========================================================
-  // Cargar "Quién no llegó" — se llama al entrar al tab
-  // y cada vez que cambia el filtro de día
+  // Quién No Llegó — carga y acciones
   // ========================================================
   const loadNoLlegaron = async (dia = diaFiltro) => {
     try {
@@ -103,21 +104,18 @@ export default function StaffPanel() {
     }
   };
 
-  // Cargar al entrar al tab por primera vez
   useEffect(() => {
     if (activeTab === "no_llegaron" && noLlegaron === null && userProfile) {
       loadNoLlegaron();
     }
   }, [activeTab, userProfile]);
 
-  // Recargar cuando cambia el filtro de día (solo si ya se entró al tab)
   useEffect(() => {
     if (activeTab === "no_llegaron" && userProfile) {
       loadNoLlegaron(diaFiltro);
     }
   }, [diaFiltro]);
 
-  // Filtrado en vivo por nombre/email/empresa (sin nueva llamada al backend)
   const noLlegaronFiltrados = (noLlegaron?.usuarios || []).filter((u) => {
     if (!busquedaNoLlegaron.trim()) return true;
     const q = busquedaNoLlegaron.toLowerCase();
@@ -128,15 +126,16 @@ export default function StaffPanel() {
     );
   });
 
-  // Exportar la lista visible a CSV simple
   const exportarNoLlegaronCSV = () => {
     const filas = noLlegaronFiltrados;
     if (!filas.length) return;
     const header = "Nombre,Email,Empresa,Tipo de Pase,Sede\n";
     const body = filas
-      .map((u) => [u.nombre, u.email, u.empresa || "", u.tipo_pase || "", u.sede || ""]
-        .map((v) => `"${(v || "").replace(/"/g, '""')}"`)
-        .join(","))
+      .map((u) =>
+        [u.nombre, u.email, u.empresa || "", u.tipo_pase || "", u.sede || ""]
+          .map((v) => `"${(v || "").replace(/"/g, '""')}"`)
+          .join(",")
+      )
       .join("\n");
     const blob = new Blob([header + body], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -150,18 +149,12 @@ export default function StaffPanel() {
     URL.revokeObjectURL(url);
   };
 
-  // ========================================================
-  // Registrar manualmente a un asistente como presente
-  // (se usa el día de hoy automáticamente — el backend lo calcula)
-  // ========================================================
   const registrarManual = async (usuario) => {
     setRegistrandoId(usuario.id);
     setRegistroMsg(null);
     try {
       const res = await API.post("/staff/registro-manual", { usuario_id: usuario.id });
       setRegistroMsg({ tipo: "ok", texto: res.data.message });
-
-      // Quitar a esa persona de la lista visible sin tener que recargar todo
       setNoLlegaron((prev) =>
         prev
           ? {
@@ -249,7 +242,7 @@ export default function StaffPanel() {
       <div className="flex gap-2 border-b">
         {[
           { id: "resumen", label: "📊 Resumen Hoy", icon: "📊" },
-          { id: "flask", label: "🔄 Tkinter Live", icon: "🔄" },
+          { id: "tkinter_live", label: "🔄 Tkinter Live", icon: "🔄" },
           { id: "no_llegaron", label: "🚫 Quién No Llegó", icon: "🚫" },
           { id: "general", label: "📈 Estadísticas", icon: "📈" },
           { id: "checkins", label: "✅ Check-ins", icon: "✅" },
@@ -327,35 +320,36 @@ export default function StaffPanel() {
       )}
 
       {/* ========================================================
-          TKINTER LIVE — datos del Flask / JSONB sincronizado
+          TKINTER LIVE — lectura en vivo de cmc-mobile, sin copiar
           ======================================================== */}
-      {activeTab === "flask" && (
+      {activeTab === "tkinter_live" && (
         <div className="space-y-6">
-          {!flaskStats ? (
+          {!tkinterLive ? (
             <div className="bg-amber-50 border border-amber-200 p-6 rounded-lg text-center">
               <Activity className="mx-auto mb-2 text-amber-500" size={32} />
-              <p className="text-amber-800 font-semibold">Sin datos del Tkinter todavía</p>
+              <p className="text-amber-800 font-semibold">Sin datos disponibles</p>
               <p className="text-amber-700 text-sm mt-1">
-                El sync aún no ha recibido estadísticas desde el Flask. Asegúrate de que el Flask
-                esté corriendo y que se haya ejecutado al menos un sync.
+                No se pudo leer información desde cmc-mobile en este momento.
               </p>
             </div>
           ) : (
             <>
-              {/* Totales generales del JSONB */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard icon={Users} label="Total Asistentes" value={flaskStats.total_attendees ?? "—"} color="blue" />
-                <StatCard icon={CheckCircle} label="Escaneos Entrada" value={flaskStats.entry_scans ?? "—"} color="green" />
-                <StatCard icon={Building2} label="Expositores" value={flaskStats.total_exhibitors ?? "—"} color="orange" />
-                <StatCard icon={Activity} label="Última Sync" value={flaskStats.synced_at ? new Date(flaskStats.synced_at).toLocaleTimeString("es-MX") : "—"} color="purple" />
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <StatCard icon={Users} label="Total Asistentes" value={tkinterLive.total_attendees ?? "—"} color="blue" />
+                <StatCard icon={CheckCircle} label="Escaneos Entrada" value={tkinterLive.entry_scans ?? "—"} color="green" />
+                <StatCard
+                  icon={Activity}
+                  label="Última Actualización"
+                  value={tkinterLive.updated_at ? new Date(tkinterLive.updated_at).toLocaleTimeString("es-MX") : "—"}
+                  color="purple"
+                />
               </div>
 
-              {/* Asistencia por día */}
-              {flaskStats.daily_summary && Object.keys(flaskStats.daily_summary).length > 0 && (
+              {tkinterLive.daily_summary && Object.keys(tkinterLive.daily_summary).length > 0 && (
                 <div className="bg-white rounded-lg shadow p-6">
                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                     <BarChart3 size={22} className="text-blue-600" />
-                    Asistencia por Día (Tkinter)
+                    Asistencia por Día (en vivo)
                   </h2>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -369,67 +363,36 @@ export default function StaffPanel() {
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(flaskStats.daily_summary)
+                        {Object.entries(tkinterLive.daily_summary)
                           .sort(([a], [b]) => a.localeCompare(b))
                           .map(([dia, conteos]) => (
                             <tr key={dia} className="border-b hover:bg-gray-50">
-                              <td className="px-4 py-3 font-semibold capitalize">
-                                {dia.replace("day_", "Día ")}
+                              <td className="px-4 py-3 font-semibold capitalize">{dia.replace("day_", "Día ")}</td>
+                              <td className="px-4 py-3">
+                                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-bold text-sm">{conteos.general}</span>
                               </td>
                               <td className="px-4 py-3">
-                                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-bold text-sm">
-                                  {conteos.general}
-                                </span>
+                                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full font-bold text-sm">{conteos.sessions}</span>
                               </td>
                               <td className="px-4 py-3">
-                                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full font-bold text-sm">
-                                  {conteos.sessions}
-                                </span>
+                                <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full font-bold text-sm">{conteos.courses}</span>
                               </td>
                               <td className="px-4 py-3">
-                                <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full font-bold text-sm">
-                                  {conteos.courses}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="bg-gray-200 text-gray-800 px-3 py-1 rounded-full font-bold text-sm">
-                                  {conteos.total}
-                                </span>
+                                <span className="bg-gray-200 text-gray-800 px-3 py-1 rounded-full font-bold text-sm">{conteos.total}</span>
                               </td>
                             </tr>
                           ))}
                       </tbody>
-                      <tfoot>
-                        <tr className="bg-gray-50 font-bold border-t-2">
-                          <td className="px-4 py-3">TOTAL</td>
-                          <td className="px-4 py-3 text-blue-700">
-                            {Object.values(flaskStats.daily_summary).reduce((s, d) => s + (d.general || 0), 0)}
-                          </td>
-                          <td className="px-4 py-3 text-green-700">
-                            {Object.values(flaskStats.daily_summary).reduce((s, d) => s + (d.sessions || 0), 0)}
-                          </td>
-                          <td className="px-4 py-3 text-orange-700">
-                            {Object.values(flaskStats.daily_summary).reduce((s, d) => s + (d.courses || 0), 0)}
-                          </td>
-                          <td className="px-4 py-3">
-                            {Object.values(flaskStats.daily_summary).reduce((s, d) => s + (d.total || 0), 0)}
-                          </td>
-                        </tr>
-                      </tfoot>
                     </table>
                   </div>
                 </div>
               )}
 
-              {/* Lista de asistentes escaneados */}
-              {flaskStats.attendees && flaskStats.attendees.length > 0 && (
+              {tkinterLive.attendees && tkinterLive.attendees.length > 0 && (
                 <div className="bg-white rounded-lg shadow p-6">
                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                     <Users size={22} className="text-green-600" />
-                    Asistentes Registrados por Tkinter
-                    <span className="text-sm font-normal text-gray-500 ml-2">
-                      ({flaskStats.attendees.length} personas)
-                    </span>
+                    Asistentes — {tkinterLive.attendees.length} personas
                   </h2>
                   <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                     <table className="w-full text-sm">
@@ -446,25 +409,17 @@ export default function StaffPanel() {
                         </tr>
                       </thead>
                       <tbody>
-                        {flaskStats.attendees.map((a, idx) => (
+                        {tkinterLive.attendees.map((a, idx) => (
                           <tr key={idx} className="border-b hover:bg-gray-50">
                             <td className="px-3 py-2 font-mono text-xs text-gray-500">{a.ID}</td>
-                            <td className="px-3 py-2 font-medium">
-                              {a["Nombre(s)"]} {a["Apellido(s)"]}
-                            </td>
+                            <td className="px-3 py-2 font-medium">{a["Nombre(s)"]} {a["Apellido(s)"]}</td>
                             <td className="px-3 py-2 text-gray-600 text-xs">{a.Empresa}</td>
                             <td className="px-3 py-2">
-                              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">
-                                {a["Tipo de Asistente"]}
-                              </span>
+                              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">{a["Tipo de Asistente"]}</span>
                             </td>
                             {["Día 1", "Día 2", "Día 3", "Día 4"].map((d) => (
                               <td key={d} className="px-3 py-2 text-center">
-                                {a[d] === "X" ? (
-                                  <span className="text-green-600 font-bold text-base">✓</span>
-                                ) : (
-                                  <span className="text-gray-300">—</span>
-                                )}
+                                {a[d] === "X" ? <span className="text-green-600 font-bold text-base">✓</span> : <span className="text-gray-300">—</span>}
                               </td>
                             ))}
                           </tr>
@@ -481,29 +436,16 @@ export default function StaffPanel() {
 
       {/* ========================================================
           QUIÉN NO LLEGÓ
-          Cruza users contra sync_asistencia (datos del Tkinter)
           ======================================================== */}
       {activeTab === "no_llegaron" && (
         <div className="space-y-6">
-
-          {/* Mensaje de registro manual reciente */}
           {registroMsg && (
-            <div
-              className={`p-4 rounded-lg border flex items-center gap-2 ${registroMsg.tipo === "ok"
-                  ? "bg-green-50 border-green-200 text-green-800"
-                  : "bg-red-50 border-red-200 text-red-800"
-                }`}
-            >
-              {registroMsg.tipo === "ok" ? (
-                <CheckCircle size={18} />
-              ) : (
-                <AlertCircle size={18} />
-              )}
+            <div className={`p-4 rounded-lg border flex items-center gap-2 ${registroMsg.tipo === "ok" ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"}`}>
+              {registroMsg.tipo === "ok" ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
               <span className="text-sm font-medium">{registroMsg.texto}</span>
             </div>
           )}
 
-          {/* Filtros: día + búsqueda + exportar */}
           <div className="bg-white rounded-lg shadow p-4 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <Calendar size={18} className="text-gray-500" />
@@ -558,7 +500,6 @@ export default function StaffPanel() {
             </div>
           ) : (
             <>
-              {/* Resumen */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white rounded-lg shadow p-6 flex items-center justify-between">
                   <div>
@@ -576,10 +517,7 @@ export default function StaffPanel() {
                   <p className="text-gray-600 text-sm mb-2">Por tipo de pase</p>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(noLlegaron.porTipoPase || {}).map(([tipo, cantidad]) => (
-                      <span
-                        key={tipo}
-                        className="bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-semibold"
-                      >
+                      <span key={tipo} className="bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-semibold">
                         {tipo}: {cantidad}
                       </span>
                     ))}
@@ -590,13 +528,10 @@ export default function StaffPanel() {
                 </div>
               </div>
 
-              {/* Tabla */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-bold mb-4">
                   Lista de asistentes sin registro
-                  <span className="text-sm font-normal text-gray-500 ml-2">
-                    ({noLlegaronFiltrados.length} mostrados)
-                  </span>
+                  <span className="text-sm font-normal text-gray-500 ml-2">({noLlegaronFiltrados.length} mostrados)</span>
                 </h2>
                 {noLlegaronFiltrados.length > 0 ? (
                   <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
@@ -618,9 +553,7 @@ export default function StaffPanel() {
                             <td className="px-4 py-2 text-blue-600">{u.email}</td>
                             <td className="px-4 py-2 text-gray-600">{u.empresa || "—"}</td>
                             <td className="px-4 py-2">
-                              <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-semibold">
-                                {u.tipo_pase || "—"}
-                              </span>
+                              <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-semibold">{u.tipo_pase || "—"}</span>
                             </td>
                             <td className="px-4 py-2 capitalize">{u.sede || "—"}</td>
                             <td className="px-4 py-2 text-center">
@@ -631,13 +564,9 @@ export default function StaffPanel() {
                                 title="Marcar como presente hoy"
                               >
                                 {registrandoId === u.id ? (
-                                  <>
-                                    <RefreshCw size={14} className="animate-spin" /> Registrando...
-                                  </>
+                                  <><RefreshCw size={14} className="animate-spin" /> Registrando...</>
                                 ) : (
-                                  <>
-                                    <UserCheck size={14} /> Marcar presente
-                                  </>
+                                  <><UserCheck size={14} /> Marcar presente</>
                                 )}
                               </button>
                             </td>
@@ -648,9 +577,7 @@ export default function StaffPanel() {
                   </div>
                 ) : (
                   <p className="text-gray-600 text-center py-8">
-                    {busquedaNoLlegaron
-                      ? "Ningún resultado coincide con la búsqueda"
-                      : "🎉 Todos los asistentes tienen registro"}
+                    {busquedaNoLlegaron ? "Ningún resultado coincide con la búsqueda" : "🎉 Todos los asistentes tienen registro"}
                   </p>
                 )}
               </div>
@@ -662,81 +589,82 @@ export default function StaffPanel() {
       {/* ========================================================
           ESTADÍSTICAS GENERALES
           ======================================================== */}
-      {activeTab === "general" && (<div className="space-y-6">
-        {/* Cards principales */}
-        {stats && (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <StatCard
-                icon={Users}
-                label="Usuarios Totales"
-                value={stats.totalUsers}
-                color="blue"
-              />
-              <StatCard
-                icon={CheckCircle}
-                label="Check-ins Totales"
-                value={stats.totalCheckins}
-                color="green"
-              />
-              <StatCard
-                icon={Calendar}
-                label="Asistencias a Cursos"
-                value={stats.attendanceByType.cursos}
-                color="orange"
-              />
-              <StatCard
-                icon={Award}
-                label="Asistencias a Sesiones"
-                value={stats.attendanceByType.sesiones}
-                color="purple"
-              />
-            </div>
-
-            {/* Usuarios por tipo de pase */}
-            {Object.keys(stats.byTipoPase).length > 0 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <BarChart3 size={24} className="text-blue-600" />
-                  Usuarios por Tipo de Pase
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(stats.byTipoPase).map(([pase, cantidad]) => (
-                    <div
-                      key={pase}
-                      className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200"
-                    >
-                      <p className="text-3xl font-bold text-blue-600">{cantidad}</p>
-                      <p className="text-sm text-gray-600 capitalize mt-1">{pase}</p>
-                    </div>
-                  ))}
-                </div>
+      {activeTab === "general" && (
+        <div className="space-y-6">
+          {/* Cards principales */}
+          {stats && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <StatCard
+                  icon={Users}
+                  label="Usuarios Totales"
+                  value={stats.totalUsers}
+                  color="blue"
+                />
+                <StatCard
+                  icon={CheckCircle}
+                  label="Check-ins Totales"
+                  value={stats.totalCheckins}
+                  color="green"
+                />
+                <StatCard
+                  icon={Calendar}
+                  label="Asistencias a Cursos"
+                  value={stats.attendanceByType.cursos}
+                  color="orange"
+                />
+                <StatCard
+                  icon={Award}
+                  label="Asistencias a Sesiones"
+                  value={stats.attendanceByType.sesiones}
+                  color="purple"
+                />
               </div>
-            )}
 
-            {/* Usuarios por sede */}
-            {Object.keys(stats.bySede).length > 0 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Building2 size={24} className="text-orange-600" />
-                  Usuarios por Sede
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(stats.bySede).map(([sede, cantidad]) => (
-                    <div
-                      key={sede}
-                      className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200"
-                    >
-                      <p className="text-3xl font-bold text-orange-600">{cantidad}</p>
-                      <p className="text-sm text-gray-600 capitalize mt-1">{sede}</p>
-                    </div>
-                  ))}
+              {/* Usuarios por tipo de pase */}
+              {Object.keys(stats.byTipoPase).length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <BarChart3 size={24} className="text-blue-600" />
+                    Usuarios por Tipo de Pase
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {Object.entries(stats.byTipoPase).map(([pase, cantidad]) => (
+                      <div
+                        key={pase}
+                        className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200"
+                      >
+                        <p className="text-3xl font-bold text-blue-600">{cantidad}</p>
+                        <p className="text-sm text-gray-600 capitalize mt-1">{pase}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+              )}
+
+              {/* Usuarios por sede */}
+              {Object.keys(stats.bySede).length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Building2 size={24} className="text-orange-600" />
+                    Usuarios por Sede
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {Object.entries(stats.bySede).map(([sede, cantidad]) => (
+                      <div
+                        key={sede}
+                        className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200"
+                      >
+                        <p className="text-3xl font-bold text-orange-600">{cantidad}</p>
+                        <p className="text-sm text-gray-600 capitalize mt-1">{sede}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {/* ========================================================
