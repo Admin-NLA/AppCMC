@@ -40,8 +40,14 @@ router.get("/events", (req, res) => {
 /**
  * Función interna para enviar SSE a todos los clientes conectados
  * @param {Object} data - Datos a enviar (automaticamente serializado a JSON)
+ *
+ * FIX URGENTE: esta función se usa desde server.js y desde el cron
+ * (import { sendSSE } from "./routes/notificaciones.js") pero nunca
+ * estaba exportada — solo definida localmente. Esto rompía el arranque
+ * completo del backend en producción con:
+ *   SyntaxError: The requested module does not provide an export named 'sendSSE'
  */
-function sendSSE(data, targetUserId = null) {
+export function sendSSE(data, targetUserId = null) {
   const message = `data: ${JSON.stringify(data)}\n\n`;
   clients.forEach(client => {
     try {
