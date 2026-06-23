@@ -48,6 +48,11 @@ export default function StaffPanel() {
   const [registrandoId, setRegistrandoId] = useState(null);
   const [registroMsg, setRegistroMsg] = useState(null);
 
+  // Resumen del Evento (estadísticas-evento) — carga diferida
+  const [resumenEvento, setResumenEvento] = useState(null);
+  const [loadingResumenEvento, setLoadingResumenEvento] = useState(false);
+  const [descargandoExcel, setDescargandoExcel] = useState(false);
+
   // ========================================================
   // Cargar datos al montar
   // ========================================================
@@ -165,6 +170,55 @@ export default function StaffPanel() {
       loadSpeakers();
     }
   }, [activeTab, userProfile]);
+
+  // ========================================================
+  // Resumen del Evento — carga diferida al entrar al tab
+  // ========================================================
+  const loadResumenEvento = async () => {
+    try {
+      setLoadingResumenEvento(true);
+      const res = await API.get("/staff/estadisticas-evento");
+      setResumenEvento(res.data);
+    } catch (err) {
+      console.error("❌ Error cargando resumen del evento:", err);
+      setResumenEvento(null);
+    } finally {
+      setLoadingResumenEvento(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "resumen_evento" && resumenEvento === null && userProfile) {
+      loadResumenEvento();
+    }
+  }, [activeTab, userProfile]);
+
+  // ========================================================
+  // Descargar Excel de estadísticas completas (4 hojas)
+  // El backend responde con el archivo binario directamente,
+  // así que se pide como blob y se dispara la descarga en el navegador.
+  // ========================================================
+  const descargarExcelEstadisticas = async () => {
+    try {
+      setDescargandoExcel(true);
+      const res = await API.get("/excel/estadisticas", { responseType: "blob" });
+
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      const fecha = new Date().toISOString().split("T")[0];
+      link.download = `estadisticas_cmc_${fecha}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("❌ Error descargando Excel:", err);
+      setError("No se pudo generar el archivo Excel");
+    } finally {
+      setDescargandoExcel(false);
+    }
+  };
 
   const noLlegaronFiltrados = (noLlegaron?.usuarios || []).filter((u) => {
     if (!busquedaNoLlegaron.trim()) return true;
@@ -292,6 +346,7 @@ export default function StaffPanel() {
       <div className="flex gap-2 border-b">
         {[
           { id: "resumen", label: "📊 Resumen Hoy", icon: "📊" },
+          { id: "resumen_evento", label: "📑 Resumen del Evento", icon: "📑" },
           { id: "tkinter_live", label: "🔄 Tkinter Live", icon: "🔄" },
           { id: "tkinter_expositores", label: "🏢 Expositores", icon: "🏢" },
           { id: "tkinter_speakers", label: "🎤 Speakers", icon: "🎤" },
@@ -367,6 +422,142 @@ export default function StaffPanel() {
                 ))}
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
+          RESUMEN DEL EVENTO — vista completa + descarga Excel
+          ======================================================== */}
+      {activeTab === "resumen_evento" && (
+        <div className="space-y-6">
+          {/* Botón de descarga, siempre visible en este tab */}
+          <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold">Reporte completo del evento</h2>
+              <p className="text-sm text-gray-500">Excel con 4 hojas: escaneos, estadísticos, asistentes y cursos</p>
+            </div>
+            <button
+              onClick={descargarExcelEstadisticas}
+              disabled={descargandoExcel}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50"
+            >
+              {descargandoExcel ? (
+                <><RefreshCw size={16} className="animate-spin" /> Generando...</>
+              ) : (
+                <><Download size={16} /> Descargar Excel</>
+              )}
+            </button>
+          </div>
+
+          {loadingResumenEvento ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="animate-spin h-10 w-10 border-b-2 border-blue-600 rounded-full" />
+            </div>
+          ) : !resumenEvento ? (
+            <div className="bg-amber-50 border border-amber-200 p-6 rounded-lg text-center">
+              <AlertCircle className="mx-auto mb-2 text-amber-500" size={32} />
+              <p className="text-amber-800 font-semibold">Sin datos disponibles</p>
+            </div>
+          ) : (
+            <>
+              {/* Totales generales */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard icon={Users} label="Total Entradas" value={resumenEvento.totalEntradas ?? "—"} color="blue" />
+                <StatCard
+                  icon={Calendar}
+                  label="Día Actual del Evento"
+                  value={resumenEvento.diaActual ? `Día ${resumenEvento.diaActual}` : "—"}
+                  color="green"
+                />
+                <StatCard icon={Award} label="Citas Networking" value={resumenEvento.networking?.total ?? 0} color="purple" />
+                <StatCard
+                  icon={Activity}
+                  label="Fecha"
+                  value={resumenEvento.fechaHoy ? new Date(resumenEvento.fechaHoy).toLocaleDateString("es-MX") : "—"}
+                  color="orange"
+                />
+              </div>
+
+              {/* Resumen por día */}
+              {resumenEvento.resumenPorDia && resumenEvento.resumenPorDia.length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <BarChart3 size={22} className="text-blue-600" />
+                    Entradas por Día y Tipo de Pase
+                  </h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-100 border-b text-left">
+                          <th className="px-4 py-3 font-semibold">Día</th>
+                          <th className="px-4 py-3 font-semibold">Combo</th>
+                          <th className="px-4 py-3 font-semibold">Sesiones</th>
+                          <th className="px-4 py-3 font-semibold">Curso</th>
+                          <th className="px-4 py-3 font-semibold">Expositor</th>
+                          <th className="px-4 py-3 font-semibold">Ponente</th>
+                          <th className="px-4 py-3 font-semibold">Staff</th>
+                          <th className="px-4 py-3 font-semibold">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resumenEvento.resumenPorDia.map((d) => (
+                          <tr
+                            key={d.dia}
+                            className={`border-b hover:bg-gray-50 ${d.esDiaActual ? "bg-blue-50" : ""}`}
+                          >
+                            <td className="px-4 py-3 font-semibold">
+                              Día {d.dia} {d.esDiaActual && <span className="text-blue-600 text-xs">(hoy)</span>}
+                            </td>
+                            <td className="px-4 py-3">{d.combo}</td>
+                            <td className="px-4 py-3">{d.sesiones}</td>
+                            <td className="px-4 py-3">{d.curso}</td>
+                            <td className="px-4 py-3">{d.expositor}</td>
+                            <td className="px-4 py-3">{d.ponente}</td>
+                            <td className="px-4 py-3">{d.staff}</td>
+                            <td className="px-4 py-3 font-bold">{d.total}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Usuarios registrados por tipo */}
+              {resumenEvento.usuariosRegistrados && Object.keys(resumenEvento.usuariosRegistrados).length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Users size={22} className="text-blue-600" />
+                    Usuarios Registrados por Tipo de Pase
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {Object.entries(resumenEvento.usuariosRegistrados).map(([tipo, cantidad]) => (
+                      <div key={tipo} className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                        <p className="text-3xl font-bold text-blue-600">{cantidad}</p>
+                        <p className="text-sm text-gray-600 capitalize mt-1">{tipo}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Networking */}
+              {resumenEvento.networking && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Award size={22} className="text-purple-600" />
+                    Citas de Networking
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <StatCard icon={Award} label="Total" value={resumenEvento.networking.total} color="purple" />
+                    <StatCard icon={CheckCircle} label="Confirmadas" value={resumenEvento.networking.confirmadas} color="green" />
+                    <StatCard icon={Clock} label="Pendientes" value={resumenEvento.networking.pendientes} color="orange" />
+                    <StatCard icon={AlertCircle} label="Rechazadas" value={resumenEvento.networking.rechazadas} color="blue" />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
