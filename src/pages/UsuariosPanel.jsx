@@ -88,6 +88,13 @@ export default function UsuariosPanel() {
   const [showPapelera, setShowPapelera] = useState(false);
   const [loadingPapelera, setLoadingPapelera] = useState(false);
 
+  // Selección múltiple dentro de la Papelera (restaurar / eliminar definitivo en grupo)
+  const [seleccionadosPapelera, setSeleccionadosPapelera] = useState(new Set());
+  const [showRestaurarMasivo, setShowRestaurarMasivo] = useState(false);
+  const [showEliminarMasivoDefinitivo, setShowEliminarMasivoDefinitivo] = useState(false);
+  const [papeleraMasivoLoading, setPapeleraMasivoLoading] = useState(false);
+  const [papeleraMasivoProgreso, setPapeleraMasivoProgreso] = useState(0);
+
   // Selección múltiple / borrado masivo
   const [seleccionados, setSeleccionados] = useState(new Set());
   const [showDeleteMasivo, setShowDeleteMasivo] = useState(false);
@@ -214,6 +221,106 @@ export default function UsuariosPanel() {
       showSuccess(`${user.nombre} eliminado permanentemente`);
       loadPapelera();
     } catch (err) { setError(err.response?.data?.error || 'Error al eliminar'); }
+  };
+
+  // --------------------------------------------------------
+  // SELECCIÓN MÚLTIPLE — PAPELERA
+  // --------------------------------------------------------
+  const toggleSeleccionPapelera = (id) => {
+    setSeleccionadosPapelera((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSeleccionarTodosPapelera = () => {
+    setSeleccionadosPapelera((prev) => {
+      const ids = papelera.map((u) => u.id);
+      const todos = ids.length > 0 && ids.every((id) => prev.has(id));
+      if (todos) return new Set();
+      return new Set(ids);
+    });
+  };
+
+  const limpiarSeleccionPapelera = () => setSeleccionadosPapelera(new Set());
+
+  // --------------------------------------------------------
+  // RESTAURAR MASIVO
+  // --------------------------------------------------------
+  const handleRestaurarMasivo = async () => {
+    const ids = Array.from(seleccionadosPapelera);
+    if (ids.length === 0) return;
+
+    try {
+      setPapeleraMasivoLoading(true);
+      setPapeleraMasivoProgreso(0);
+      let exitos = 0;
+      let fallos = 0;
+
+      for (let i = 0; i < ids.length; i++) {
+        try {
+          await API.post(`/users/${ids[i]}/restaurar`);
+          exitos++;
+        } catch {
+          fallos++;
+        }
+        setPapeleraMasivoProgreso(Math.round(((i + 1) / ids.length) * 100));
+      }
+
+      setShowRestaurarMasivo(false);
+      limpiarSeleccionPapelera();
+      loadPapelera();
+      loadUsers();
+
+      if (fallos === 0) {
+        showSuccess(`${exitos} usuario${exitos !== 1 ? "s" : ""} restaurado${exitos !== 1 ? "s" : ""} ✅`);
+      } else {
+        setError(`${exitos} restaurados, ${fallos} fallaron`);
+      }
+    } finally {
+      setPapeleraMasivoLoading(false);
+      setPapeleraMasivoProgreso(0);
+    }
+  };
+
+  // --------------------------------------------------------
+  // ELIMINAR DEFINITIVO MASIVO
+  // --------------------------------------------------------
+  const handleEliminarMasivoDefinitivo = async () => {
+    const ids = Array.from(seleccionadosPapelera);
+    if (ids.length === 0) return;
+
+    try {
+      setPapeleraMasivoLoading(true);
+      setPapeleraMasivoProgreso(0);
+      let exitos = 0;
+      let fallos = 0;
+
+      for (let i = 0; i < ids.length; i++) {
+        try {
+          await API.delete(`/users/${ids[i]}/permanente`);
+          exitos++;
+        } catch {
+          fallos++;
+        }
+        setPapeleraMasivoProgreso(Math.round(((i + 1) / ids.length) * 100));
+      }
+
+      setShowEliminarMasivoDefinitivo(false);
+      limpiarSeleccionPapelera();
+      loadPapelera();
+
+      if (fallos === 0) {
+        showSuccess(`${exitos} usuario${exitos !== 1 ? "s" : ""} eliminado${exitos !== 1 ? "s" : ""} permanentemente`);
+      } else {
+        setError(`${exitos} eliminados, ${fallos} fallaron`);
+      }
+    } finally {
+      setPapeleraMasivoLoading(false);
+      setPapeleraMasivoProgreso(0);
+    }
   };
 
   const handleDelete = async () => {
@@ -794,6 +901,106 @@ export default function UsuariosPanel() {
         </Modal>
       )}
 
+      {/* ======================================================
+          MODAL: CONFIRMAR RESTAURAR MASIVO (Papelera)
+          ====================================================== */}
+      {showRestaurarMasivo && (
+        <Modal title="Confirmar Restauración Masiva" onClose={() => !papeleraMasivoLoading && setShowRestaurarMasivo(false)}>
+          <div className="flex items-start gap-3 mb-6">
+            <div className="bg-green-100 p-2 rounded-full shrink-0">
+              <RotateCcw className="text-green-600" size={20} />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-800">
+                ¿Restaurar {seleccionadosPapelera.size} usuario{seleccionadosPapelera.size !== 1 ? "s" : ""}?
+              </p>
+              <p className="text-sm text-green-600 mt-2">
+                Volverán a estar activos y podrán iniciar sesión normalmente.
+              </p>
+            </div>
+          </div>
+
+          {papeleraMasivoLoading && (
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>Restaurando...</span>
+                <span>{papeleraMasivoProgreso}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-green-600 h-2 rounded-full transition-all" style={{ width: `${papeleraMasivoProgreso}%` }} />
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleRestaurarMasivo}
+              disabled={papeleraMasivoLoading}
+              className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition font-semibold"
+            >
+              {papeleraMasivoLoading ? "Restaurando..." : `Sí, restaurar ${seleccionadosPapelera.size}`}
+            </button>
+            <button
+              onClick={() => setShowRestaurarMasivo(false)}
+              disabled={papeleraMasivoLoading}
+              className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300 transition disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ======================================================
+          MODAL: CONFIRMAR ELIMINACIÓN DEFINITIVA MASIVA (Papelera)
+          ====================================================== */}
+      {showEliminarMasivoDefinitivo && (
+        <Modal title="Confirmar Eliminación Definitiva" onClose={() => !papeleraMasivoLoading && setShowEliminarMasivoDefinitivo(false)}>
+          <div className="flex items-start gap-3 mb-6">
+            <div className="bg-red-100 p-2 rounded-full shrink-0">
+              <AlertCircle className="text-red-600" size={20} />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-800">
+                ⚠️ ¿Eliminar PERMANENTEMENTE {seleccionadosPapelera.size} usuario{seleccionadosPapelera.size !== 1 ? "s" : ""}?
+              </p>
+              <p className="text-sm text-red-600 mt-2">
+                Se borrarán TODOS sus datos. Esta acción NO se puede deshacer.
+              </p>
+            </div>
+          </div>
+
+          {papeleraMasivoLoading && (
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>Eliminando...</span>
+                <span>{papeleraMasivoProgreso}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-red-600 h-2 rounded-full transition-all" style={{ width: `${papeleraMasivoProgreso}%` }} />
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleEliminarMasivoDefinitivo}
+              disabled={papeleraMasivoLoading}
+              className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition font-semibold"
+            >
+              {papeleraMasivoLoading ? "Eliminando..." : `Sí, eliminar definitivamente ${seleccionadosPapelera.size}`}
+            </button>
+            <button
+              onClick={() => setShowEliminarMasivoDefinitivo(false)}
+              disabled={papeleraMasivoLoading}
+              className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300 transition disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {/* ══════════════════════════════════════════════════
           PAPELERA DE USUARIOS
           ══════════════════════════════════════════════════ */}
@@ -823,68 +1030,113 @@ export default function UsuariosPanel() {
               <p className="text-sm mt-1">No hay usuarios eliminados</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    {["Nombre", "Email", "Rol", "Sede", "Eliminado el", "Acciones"].map(h => (
-                      <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {papelera.map(user => {
-                    const diasRestantes = user.fecha_eliminado
-                      ? Math.max(0, 30 - Math.floor((Date.now() - new Date(user.fecha_eliminado)) / (1000 * 60 * 60 * 24)))
-                      : null;
-                    return (
-                      <tr key={user.id} className="hover:bg-red-50/50 dark:hover:bg-red-900/10 transition">
-                        <td className="px-4 py-3">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white">{user.nombre}</p>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{user.email}</td>
-                        <td className="px-4 py-3">
-                          <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full capitalize">
-                            {user.rol}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500 capitalize">{user.sede || "—"}</td>
-                        <td className="px-4 py-3">
-                          <div className="text-xs text-gray-500">
-                            {user.fecha_eliminado
-                              ? new Date(user.fecha_eliminado).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" })
-                              : "—"}
-                          </div>
-                          {diasRestantes !== null && (
-                            <div className={`text-xs font-semibold mt-0.5 ${diasRestantes <= 7 ? "text-red-500" : "text-gray-400"}`}>
-                              {diasRestantes > 0 ? `Se elimina en ${diasRestantes} día${diasRestantes !== 1 ? "s" : ""}` : "Pendiente de eliminar"}
-                            </div>
+            <>
+              {/* Barra de acciones masivas — solo visible con selección activa */}
+              {seleccionadosPapelera.size > 0 && (
+                <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-5 py-3">
+                  <span className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                    {seleccionadosPapelera.size} seleccionado{seleccionadosPapelera.size !== 1 ? "s" : ""}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={limpiarSeleccionPapelera}
+                      className="text-sm text-blue-700 dark:text-blue-300 hover:text-blue-900 px-3 py-1.5 font-medium"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => setShowRestaurarMasivo(true)}
+                      className="flex items-center gap-1.5 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition text-sm font-semibold"
+                    >
+                      <RotateCcw size={14} /> Restaurar seleccionados
+                    </button>
+                    <button
+                      onClick={() => setShowEliminarMasivoDefinitivo(true)}
+                      className="flex items-center gap-1.5 bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition text-sm font-semibold"
+                    >
+                      <Trash2 size={14} /> Eliminar definitivo
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                      <th className="px-4 py-2.5 text-center w-10">
+                        <button onClick={toggleSeleccionarTodosPapelera} title="Seleccionar / deseleccionar todos" className="text-gray-500 hover:text-blue-600 transition">
+                          {papelera.length > 0 && papelera.every((u) => seleccionadosPapelera.has(u.id)) ? (
+                            <CheckSquare size={16} />
+                          ) : (
+                            <Square size={16} />
                           )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleRestaurar(user)}
-                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 font-semibold transition"
-                              title="Restaurar usuario"
-                            >
-                              <RotateCcw size={13} /> Restaurar
+                        </button>
+                      </th>
+                      {["Nombre", "Email", "Rol", "Sede", "Eliminado el", "Acciones"].map(h => (
+                        <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {papelera.map(user => {
+                      const diasRestantes = user.fecha_eliminado
+                        ? Math.max(0, 30 - Math.floor((Date.now() - new Date(user.fecha_eliminado)) / (1000 * 60 * 60 * 24)))
+                        : null;
+                      return (
+                        <tr key={user.id} className={`hover:bg-red-50/50 dark:hover:bg-red-900/10 transition ${seleccionadosPapelera.has(user.id) ? "bg-blue-50 dark:bg-blue-900/10" : ""}`}>
+                          <td className="px-4 py-3 text-center">
+                            <button onClick={() => toggleSeleccionPapelera(user.id)} className="text-gray-400 hover:text-blue-600 transition">
+                              {seleccionadosPapelera.has(user.id) ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
                             </button>
-                            <button
-                              onClick={() => handleEliminarPermanente(user)}
-                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 font-semibold transition"
-                              title="Eliminar permanentemente"
-                            >
-                              <Trash2 size={13} /> Eliminar definitivo
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">{user.nombre}</p>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{user.email}</td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full capitalize">
+                              {user.rol}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 capitalize">{user.sede || "—"}</td>
+                          <td className="px-4 py-3">
+                            <div className="text-xs text-gray-500">
+                              {user.fecha_eliminado
+                                ? new Date(user.fecha_eliminado).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" })
+                                : "—"}
+                            </div>
+                            {diasRestantes !== null && (
+                              <div className={`text-xs font-semibold mt-0.5 ${diasRestantes <= 7 ? "text-red-500" : "text-gray-400"}`}>
+                                {diasRestantes > 0 ? `Se elimina en ${diasRestantes} día${diasRestantes !== 1 ? "s" : ""}` : "Pendiente de eliminar"}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleRestaurar(user)}
+                                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 font-semibold transition"
+                                title="Restaurar usuario"
+                              >
+                                <RotateCcw size={13} /> Restaurar
+                              </button>
+                              <button
+                                onClick={() => handleEliminarPermanente(user)}
+                                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 font-semibold transition"
+                                title="Eliminar permanentemente"
+                              >
+                                <Trash2 size={13} /> Eliminar definitivo
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}

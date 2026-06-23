@@ -292,60 +292,6 @@ router.get('/cursos-stats', authRequired, requireStaff, async (req, res) => {
 });
 
 // ========================================================
-// GET /api/staff/usuarios-tipo-pase - Usuarios por tipo de pase
-// ========================================================
-router.get('/usuarios-tipo-pase', authRequired, requireStaff, async (req, res) => {
-  try {
-    console.log('[Staff Usuarios Pase] Obteniendo usuarios por tipo de pase...');
-
-    const tipoPase = req.query.tipo_pase;
-    const limit = req.query.limit || 100;
-    const offset = req.query.offset || 0;
-
-    let query = `
-      SELECT 
-        id,
-        nombre,
-        email,
-        tipo_pase,
-        rol,
-        sede,
-        empresa,
-        created_at
-      FROM users
-      WHERE activo = true
-    `;
-
-    const params = [];
-
-    if (tipoPase) {
-      query += ` AND tipo_pase = $${params.length + 1}`;
-      params.push(tipoPase);
-    }
-
-    query += ` ORDER BY nombre ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
-
-    const result = await pool.query(query, params);
-
-    console.log('[Staff Usuarios Pase] ✅ Obtenidos:', result.rows.length);
-
-    res.json({
-      usuarios: result.rows,
-      total: result.rows.length,
-      tipo_pase: tipoPase || 'todos'
-    });
-
-  } catch (error) {
-    console.error('❌ Error en GET /staff/usuarios-tipo-pase:', error.message);
-    res.status(500).json({
-      error: 'Error al obtener usuarios',
-      details: error.message
-    });
-  }
-});
-
-// ========================================================
 // GET /api/staff/resumen-diario - Resumen del día
 // ========================================================
 router.get('/resumen-diario', authRequired, requireStaff, async (req, res) => {
@@ -425,57 +371,6 @@ router.get('/resumen-diario', authRequired, requireStaff, async (req, res) => {
   }
 });
 
-// ================== AJUSTE NUEVO WEB APP CMC=======================================================>
-// GET /api/staff/checkins-recientes - Últimos check-ins
-// ========================================================
-router.get('/checkins-recientes', authRequired, requireStaff, async (req, res) => {
-  try {
-    const { sede, limit: limitParam } = req.query;
-    const limit = parseInt(limitParam) || 10;
-
-    const result = await pool.query(`
-      SELECT nombre, email, sesion, fecha, tipo_pase, origen FROM (
-        SELECT
-          u.nombre,
-          u.email,
-          CONCAT('Entrada Día ', e.dia) AS sesion,
-          e.created_at AS fecha,
-          u.tipo_pase,
-          'entrada' AS origen,
-          e.dia AS dia
-        FROM entradas e
-        JOIN users u ON u.id = e.user_id
-        UNION ALL
-        SELECT
-          u.nombre,
-          u.email,
-          ag.title AS sesion,
-          a.fecha,
-          u.tipo_pase,
-          'sesion' AS origen,
-          ag.dia AS dia
-        FROM asistencias_sesion a
-        LEFT JOIN users u ON u.id = a.user_id
-        LEFT JOIN agenda ag ON ag.id = a.session_id
-      ) t
-      ORDER BY fecha DESC
-      LIMIT $1
-    `, [limit]);
-
-    res.json({
-      checkins: result.rows,
-      total: result.rows.length
-    });
-
-  } catch (error) {
-    console.error('❌ Error en GET /staff/checkins-recientes:', error.message);
-    res.status(500).json({
-      error: 'Error al obtener checkins recientes',
-      details: error.message
-    });
-  }
-});
-
 // ========================================================
 // GET /api/staff/estadisticas-evento - Estadísticas completas
 // Replica lo que muestra App Mobile + totales del evento
@@ -483,7 +378,9 @@ router.get('/checkins-recientes', authRequired, requireStaff, async (req, res) =
 router.get('/estadisticas-evento', authRequired, requireStaff, async (req, res) => {
   try {
     const { sede } = req.query;
-    const sedeFilter = sede ? `AND e.sede = '${sede}'` : '';
+    // FIX SEGURIDAD: antes se interpolaba `sede` directo en el SQL
+    // (`AND e.sede = '${sede}'`), permitiendo inyección SQL vía query
+    // string. Ahora todo usa $1 parametrizado.
 
     // Día actual del evento (basado en calendario_sedes)
     const calendarioRes = await pool.query(`
@@ -512,10 +409,10 @@ router.get('/estadisticas-evento', authRequired, requireStaff, async (req, res) 
         COUNT(*) as total
       FROM entradas e
       JOIN users u ON u.id = e.user_id
-      WHERE 1=1 ${sedeFilter}
+      WHERE ($1::text IS NULL OR e.sede = $1)
       GROUP BY e.dia, u.tipo_pase
       ORDER BY e.dia
-    `);
+    `, [sede || null]);
 
     // Construir estructura por día
     const diasMap = { 1: {}, 2: {}, 3: {}, 4: {} };
@@ -546,8 +443,8 @@ router.get('/estadisticas-evento', authRequired, requireStaff, async (req, res) 
     // Totales generales del evento
     const totalEventoRes = await pool.query(`
       SELECT COUNT(*) as total FROM entradas e
-      WHERE 1=1 ${sedeFilter}
-    `);
+      WHERE ($1::text IS NULL OR e.sede = $1)
+    `, [sede || null]);
     const totalEvento = parseInt(totalEventoRes.rows[0]?.total || 0);
 
     // Asistencias a sesiones por día
@@ -644,6 +541,7 @@ router.get('/tkinter-live', authRequired, requireStaff, async (req, res) => {
     const stats = row.stats || {};
 
     // Resumen por día a partir de daily_attendee_type_scans
+    // (incluye combo, que antes faltaba en el desglose)
     const dailyRaw = stats.daily_attendee_type_scans || {};
     const dailySummary = {};
     for (const [diaKey, conteos] of Object.entries(dailyRaw)) {
@@ -651,16 +549,20 @@ router.get('/tkinter-live', authRequired, requireStaff, async (req, res) => {
         general: conteos.general || 0,
         sessions: conteos.sessions || 0,
         courses: conteos.courses || 0,
+        combo: conteos.combo || 0,
         total:
           (conteos.general || 0) +
           (conteos.sessions || 0) +
           (conteos.courses || 0) +
+          (conteos.combo || 0) +
           (conteos['s/d'] || 0),
       };
     }
 
     res.json({
       total_attendees: stats.total_attendees ?? null,
+      total_exhibitors: stats.total_exhibitors ?? null,
+      total_speakers: stats.total_speakers ?? null,
       entry_scans: stats.entry_scans ?? null,
       daily_summary: dailySummary,
       attendees: stats.attendees_scan_stats ?? [],
@@ -688,6 +590,83 @@ router.get('/tkinter-live', authRequired, requireStaff, async (req, res) => {
 // Soporta ?dia=N (1-4) para filtrar por un día específico, o sin
 // parámetro para "nunca ha llegado ningún día".
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// GET /api/staff/tkinter-expositores
+//
+// Lee EN VIVO la lista de expositores (personal de stands) desde
+// cmc-mobile. Campo real en el JSONB: exhibitor_scan_stats
+// (confirmado directo de la estructura real de statistics.stats).
+// Cada expositor tiene Día 3 / Día 4 únicamente (no Día 1/2),
+// ya que el expo normalmente abre los últimos días del evento.
+// ════════════════════════════════════════════════════════════
+router.get('/tkinter-expositores', authRequired, requireStaff, async (req, res) => {
+  try {
+    console.log('[Staff TkinterExpositores] Consultando cmc-mobile en vivo...');
+
+    const result = await pool1.query(`
+      SELECT s.stats, s.updated_at
+      FROM statistics s
+      ORDER BY s.updated_at DESC
+      LIMIT 1
+    `);
+
+    if (result.rows.length === 0) {
+      return res.json(null);
+    }
+
+    const stats = result.rows[0].stats || {};
+
+    res.json({
+      total_exhibitors: stats.total_exhibitors ?? null,
+      total_scanned_exhibitors: stats.total_scanned_exhibitors ?? 0,
+      daily_exhibitor_stats: stats.daily_exhibitor_stats ?? {},
+      exhibitor_companies: stats.exhibitor_companies ?? [],
+      exhibitors: stats.exhibitor_scan_stats ?? [],
+      updated_at: result.rows[0].updated_at,
+    });
+  } catch (error) {
+    console.error('❌ Error en GET /staff/tkinter-expositores:', error.message);
+    res.status(500).json({ error: 'Error al consultar expositores', details: error.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// GET /api/staff/tkinter-speakers
+//
+// Lee EN VIVO la lista de speakers/ponentes desde cmc-mobile.
+// Campo real en el JSONB: speakers_scan_stats (con "s" al final,
+// distinto de exhibitor_scan_stats que va en singular).
+// ════════════════════════════════════════════════════════════
+router.get('/tkinter-speakers', authRequired, requireStaff, async (req, res) => {
+  try {
+    console.log('[Staff TkinterSpeakers] Consultando cmc-mobile en vivo...');
+
+    const result = await pool1.query(`
+      SELECT s.stats, s.updated_at
+      FROM statistics s
+      ORDER BY s.updated_at DESC
+      LIMIT 1
+    `);
+
+    if (result.rows.length === 0) {
+      return res.json(null);
+    }
+
+    const stats = result.rows[0].stats || {};
+
+    res.json({
+      total_speakers: stats.total_speakers ?? null,
+      total_scanned_speakers: stats.total_scanned_speakers ?? 0,
+      daily_speaker_stats: stats.daily_speaker_stats ?? {},
+      speakers: stats.speakers_scan_stats ?? [],
+      updated_at: result.rows[0].updated_at,
+    });
+  } catch (error) {
+    console.error('❌ Error en GET /staff/tkinter-speakers:', error.message);
+    res.status(500).json({ error: 'Error al consultar speakers', details: error.message });
+  }
+});
+
 router.get('/quien-no-llego', authRequired, requireStaff, async (req, res) => {
   try {
     const { sede, dia } = req.query;
@@ -749,7 +728,7 @@ router.get('/quien-no-llego', authRequired, requireStaff, async (req, res) => {
        FROM users u
        WHERE u.activo = true
          AND u.qr_code IS NOT NULL
-         AND u.rol = 'asistente'
+         AND u.rol LIKE 'asistente%'
          ${sedeFilter}
          AND NOT EXISTS (
            SELECT 1 FROM entradas e

@@ -498,51 +498,6 @@ router.delete('/favorite/:id', authRequired, async (req, res) => {
   }
 });
 
-// ============================================================
-// POST /checkin — Registrar asistencia por QR
-// ============================================================
-router.post('/checkin', authRequired, async (req, res) => {
-  try {
-    const { qr, userId } = req.body;
-
-    if (!qr || !userId) {
-      return res.status(400).json({ error: 'Datos incompletos' });
-    }
-
-    const sessionResult = await pool.query(
-      `SELECT id, title AS titulo FROM agenda WHERE qr_sala = $1`,
-      [qr]
-    );
-
-    if (sessionResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Código QR inválido' });
-    }
-
-    const session = sessionResult.rows[0];
-
-    const exists = await pool.query(
-      `SELECT 1 FROM asistencias_sesion WHERE session_id = $1 AND user_id = $2`,
-      [session.id, userId]
-    );
-
-    if (exists.rows.length > 0) {
-      return res.status(400).json({ error: 'Ya registraste asistencia' });
-    }
-
-    await pool.query(
-      `INSERT INTO asistencias_sesion (id, session_id, user_id, fecha)
-       VALUES (gen_random_uuid(), $1, $2, NOW())`,
-      [session.id, userId]
-    );
-
-    res.json({ ok: true, session: { id: session.id, titulo: session.titulo } });
-
-  } catch (err) {
-    console.error('❌ Error en check-in:', err);
-    res.status(500).json({ error: 'Error al registrar asistencia' });
-  }
-});
-
 
 // ============================================================
 // POST /sessions/sync-wp — Forzar re-sincronización con WP

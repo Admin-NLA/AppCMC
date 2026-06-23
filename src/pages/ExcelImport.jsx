@@ -1,6 +1,6 @@
 import { useState } from "react";
 import * as XLSX from "xlsx";
-import { Upload, AlertCircle, CheckCircle, X } from "lucide-react";
+import { Upload, AlertCircle, CheckCircle } from "lucide-react";
 import API from "../services/api";
 
 export default function ExcelImport() {
@@ -12,6 +12,10 @@ export default function ExcelImport() {
   const [success, setSuccess] = useState(null);
   const [progress, setProgress] = useState(0);
 
+  // Estado específico del tab "Asistentes CMC" (Tkinter) — 3 hojas a la vez
+  const [cmcResumen, setCmcResumen] = useState(null); // { asistentes: [...], expositores: [...], speakers: [...] }
+  const [cmcSeleccion, setCmcSeleccion] = useState({ asistentes: true, expositores: true, speakers: true });
+
   // ========================================================
   // LEER ARCHIVO EXCEL
   // ========================================================
@@ -21,6 +25,11 @@ export default function ExcelImport() {
 
     if (!selectedFile.name.match(/\.(xlsx|xls|csv)$/)) {
       setError("Por favor selecciona un archivo Excel (.xlsx, .xls) o CSV");
+      return;
+    }
+
+    if (activeTab === "asistentes_cmc") {
+      handleFileCMC(selectedFile);
       return;
     }
 
@@ -49,6 +58,243 @@ export default function ExcelImport() {
       }
     };
     reader.readAsBinaryString(file);
+  };
+
+  // ========================================================
+  // ASISTENTES CMC (Tkinter) — lee 3 hojas del mismo Excel:
+  // "Asistentes", "Expositores", "Ponentes y Staff"
+  // ========================================================
+
+  // Busca la fila de encabezados reales (las primeras filas pueden
+  // tener fórmulas/títulos antes de la fila real de columnas)
+  const findHeaderRowIndex = (rows, requiredCols) => {
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      const row = rows[i] || [];
+      const upper = row.map((c) => String(c || "").trim().toUpperCase());
+      if (requiredCols.every((col) => upper.some((c) => c.includes(col)))) {
+        return i;
+      }
+    }
+    return -1;
+  };
+
+  const sheetToObjects = (workbook, sheetName, requiredCols) => {
+    if (!workbook.SheetNames.includes(sheetName)) return [];
+    const ws = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+    const headerIdx = findHeaderRowIndex(rows, requiredCols);
+    if (headerIdx === -1) return [];
+
+    const headers = rows[headerIdx].map((h) => String(h || "").trim());
+    const dataRows = rows.slice(headerIdx + 1);
+
+    return dataRows
+      .map((r) => {
+        const obj = {};
+        headers.forEach((h, idx) => {
+          if (h) obj[h] = r[idx] !== undefined ? r[idx] : "";
+        });
+        return obj;
+      })
+      .filter((obj) => Object.values(obj).some((v) => String(v).trim() !== ""));
+  };
+
+  const limpiarEmail = (v) => String(v || "").trim().toLowerCase();
+  const limpiarTexto = (v) => String(v || "").trim();
+
+  // El backend exige contraseña mínima de 8 caracteres. Los ID del Excel
+  // (ej: "0001") son más cortos, así que se prefija con "cmc-" para
+  // garantizar el mínimo sin perder la relación directa con su ID
+  // (la persona puede deducir su contraseña fácilmente: cmc-<su ID>).
+  const passwordDesdeId = (id) => {
+    const limpio = String(id || "").trim();
+    const candidato = `cmc-${limpio}`;
+    return candidato.length >= 8 ? candidato : candidato.padEnd(8, "0");
+  };
+
+  // Mapear hoja "Asistentes" → payload de usuario
+  const mapAsistente = (row) => {
+    const id = limpiarTexto(row["ID"]);
+    const correo = limpiarEmail(row["CORREO "] || row["CORREO"]);
+    const nombre = limpiarTexto(row["NOMBRE(S) ASISTENTE "] || row["NOMBRE(S) ASISTENTE"] || row["NOMBRE(S)"]);
+    const apellido = limpiarTexto(row["APELLIDO (S)"] || row["APELLIDOS"]);
+    const empresa = limpiarTexto(row["EMPRESA"]);
+    const telefono = limpiarTexto(row["TELÉFONO"] || row["TELEFONO"]);
+    const curso = limpiarTexto(row["CURSO"]);
+    const sesiones = limpiarTexto(row["SESIONES"]);
+
+    if (!id || !correo) return null;
+
+    let tipo_pase = "general";
+    if (curso && sesiones) tipo_pase = "combo";
+    else if (curso) tipo_pase = "curso";
+    else if (sesiones) tipo_pase = "sesiones";
+
+    return {
+      _grupo: "asistentes",
+      qr_code: id,
+      email: correo,
+      password: passwordDesdeId(id), // ej: "cmc-0001" — garantiza mínimo 8 caracteres
+      nombre: `${nombre} ${apellido}`.trim(),
+      rol: `asistente_${tipo_pase === "combo" ? "combo" : tipo_pase === "curso" ? "curso" : tipo_pase === "sesiones" ? "sesiones" : "general"}`,
+      tipo_pase,
+      empresa,
+      telefono,
+      sede: "colombia",
+    };
+  };
+
+  // Mapear hoja "Expositores" → payload de usuario
+  const mapExpositor = (row) => {
+    const id = limpiarTexto(row["ID"]);
+    const correo = limpiarEmail(row["CORREO"]);
+    const nombre = limpiarTexto(row["NOMBRE(S)"]);
+    const apellido = limpiarTexto(row["APELLIDOS"] || row["APELLIDO (S)"]);
+    const empresa = limpiarTexto(row["EMPRESA"]);
+    const telefono = limpiarTexto(row["TELEFONO"] || row["TELÉFONO"]);
+
+    if (!id || !correo) return null;
+
+    return {
+      _grupo: "expositores",
+      qr_code: id,
+      email: correo,
+      password: passwordDesdeId(id),
+      nombre: `${nombre} ${apellido}`.trim(),
+      rol: "expositor",
+      tipo_pase: "expositor",
+      empresa,
+      telefono,
+      sede: "colombia",
+    };
+  };
+
+  // Mapear hoja "Ponentes y Staff" → payload de usuario
+  // Solo se importan filas con TIPO DE ASISTENCIA = "PONENTE"
+  // (el Staff interno no necesita cuenta de asistente en la App Web)
+  const mapSpeaker = (row) => {
+    const id = limpiarTexto(row["FOLIO"]);
+    const correo = limpiarEmail(row["CORREO"]);
+    const nombre = limpiarTexto(row["NOMBRE(S)"]);
+    const apellido = limpiarTexto(row["APELLIDO (S)"] || row["APELLIDOS"]);
+    const empresa = limpiarTexto(row["EMPRESA"]);
+    const telefono = limpiarTexto(row["TELEFONO"] || row["TELÉFONO"]);
+    const tipoAsistencia = limpiarTexto(row["TIPO DE ASISTENCIA"]).toUpperCase();
+
+    if (!id || !correo) return null;
+    if (tipoAsistencia && tipoAsistencia !== "PONENTE") return null; // omitir Staff
+
+    return {
+      _grupo: "speakers",
+      qr_code: id,
+      email: correo,
+      password: passwordDesdeId(id),
+      nombre: `${nombre} ${apellido}`.trim(),
+      rol: "speaker",
+      tipo_pase: "speaker",
+      empresa,
+      telefono,
+      sede: "colombia",
+    };
+  };
+
+  // Leer las 3 hojas del archivo y construir el resumen para preview
+  const handleFileCMC = (selectedFile) => {
+    setFile(selectedFile);
+    setError(null);
+    setSuccess(null);
+    setCmcResumen(null);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const workbook = XLSX.read(e.target.result, { type: "binary" });
+
+        const asistentesRaw = sheetToObjects(workbook, "Asistentes", ["ID", "CORREO"]);
+        const expositoresRaw = sheetToObjects(workbook, "Expositores", ["ID", "CORREO"]);
+        const speakersRaw = sheetToObjects(workbook, "Ponentes y Staff", ["FOLIO", "CORREO"]);
+
+        const asistentes = asistentesRaw.map(mapAsistente).filter(Boolean);
+        const expositores = expositoresRaw.map(mapExpositor).filter(Boolean);
+        const speakers = speakersRaw.map(mapSpeaker).filter(Boolean);
+
+        if (asistentes.length === 0 && expositores.length === 0 && speakers.length === 0) {
+          setError(
+            "No se encontraron filas válidas. Verifica que el archivo tenga las hojas " +
+            '"Asistentes", "Expositores" y/o "Ponentes y Staff" con columnas ID/FOLIO y CORREO.'
+          );
+          return;
+        }
+
+        setCmcResumen({ asistentes, expositores, speakers });
+        setPreview(
+          [...asistentes.slice(0, 2), ...expositores.slice(0, 2), ...speakers.slice(0, 2)].map((p) => ({
+            Grupo: p._grupo,
+            ID: p.qr_code,
+            Nombre: p.nombre,
+            Email: p.email,
+            Rol: p.rol,
+          }))
+        );
+      } catch (err) {
+        setError("Error al leer el archivo: " + err.message);
+      }
+    };
+    reader.readAsBinaryString(selectedFile);
+  };
+
+  // Importar los grupos seleccionados, uno por uno, omitiendo duplicados (409)
+  const importarCMC = async () => {
+    if (!cmcResumen) return;
+
+    const payloads = [
+      ...(cmcSeleccion.asistentes ? cmcResumen.asistentes : []),
+      ...(cmcSeleccion.expositores ? cmcResumen.expositores : []),
+      ...(cmcSeleccion.speakers ? cmcResumen.speakers : []),
+    ];
+
+    if (payloads.length === 0) {
+      setError("Selecciona al menos un grupo para importar");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    let creados = 0;
+    let omitidos = 0;
+    let errores = 0;
+    const detalleErrores = [];
+
+    for (let i = 0; i < payloads.length; i++) {
+      const { _grupo, ...payload } = payloads[i];
+      try {
+        await API.post("/users", payload);
+        creados++;
+      } catch (err) {
+        const status = err.response?.status;
+        if (status === 409) {
+          omitidos++; // ya existía (email o qr_code duplicado) — esperado en re-importaciones
+        } else {
+          errores++;
+          detalleErrores.push(`${payload.email}: ${err.response?.data?.error || err.message}`);
+        }
+      }
+      setProgress(Math.round(((i + 1) / payloads.length) * 100));
+    }
+
+    setLoading(false);
+    setProgress(0);
+    setSuccess(
+      `✅ ${creados} usuarios creados, ${omitidos} ya existían (omitidos)${errores > 0 ? `, ${errores} con error` : ""}`
+    );
+    if (detalleErrores.length > 0) {
+      console.error("Errores de importación CMC:", detalleErrores);
+    }
+    setFile(null);
+    setPreview([]);
+    setCmcResumen(null);
   };
 
   // ========================================================
@@ -136,253 +382,34 @@ export default function ExcelImport() {
   // ========================================================
   // IMPORTAR EXPOSITORES
   // ========================================================
-  const importExpositores = async () => {
-    if (!file) {
-      setError("Selecciona un archivo primero");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      setSuccess(null);
-
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const workbook = XLSX.read(e.target.result, { type: "binary" });
-          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const datos = XLSX.utils.sheet_to_json(worksheet);
-
-          console.log("📝 Importando expositores:", datos.length);
-
-          let successCount = 0;
-          let errorCount = 0;
-          const errors = [];
-
-          for (let i = 0; i < datos.length; i++) {
-            const row = datos[i];
-            setProgress(Math.round(((i + 1) / datos.length) * 100));
-
-            if (!row.nombre || !row.categoria) {
-              errors.push(`Fila ${i + 2}: Nombre y categoría son requeridos`);
-              errorCount++;
-              continue;
-            }
-
-            try {
-              await API.post("/expositores", {
-                nombre: row.nombre.trim(),
-                categoria: row.categoria.trim(),
-                logo_url: row.logo_url || "",
-                website: row.website_url || row.website || "",
-                stand: row.stand || "",
-                descripcion: row.descripcion || "",
-                sede: row.sede || "chile",
-              });
-              successCount++;
-            } catch (err) {
-              errorCount++;
-              errors.push(
-                `Fila ${i + 2} (${row.nombre}): ${err.response?.data?.error || err.message}`
-              );
-            }
-          }
-
-          setSuccess(
-            `✅ Importación completada: ${successCount} expositores creados, ${errorCount} errores`
-          );
-          if (errors.length > 0) {
-            console.error("Errores:", errors);
-          }
-
-          setFile(null);
-          setPreview([]);
-          setProgress(0);
-        } catch (err) {
-          setError("Error al procesar el archivo: " + err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
-      reader.readAsBinaryString(file);
-    } catch (err) {
-      setError("Error: " + err.message);
-      setLoading(false);
-    }
-  };
-
-  // ========================================================
-  // IMPORTAR SPEAKERS
-  // ========================================================
-  const importSpeakers = async () => {
-    if (!file) {
-      setError("Selecciona un archivo primero");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      setSuccess(null);
-
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const workbook = XLSX.read(e.target.result, { type: "binary" });
-          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const datos = XLSX.utils.sheet_to_json(worksheet);
-
-          console.log("📝 Importando speakers:", datos.length);
-
-          let successCount = 0;
-          let errorCount = 0;
-          const errors = [];
-
-          for (let i = 0; i < datos.length; i++) {
-            const row = datos[i];
-            setProgress(Math.round(((i + 1) / datos.length) * 100));
-
-            if (!row.nombre) {
-              errors.push(`Fila ${i + 2}: Nombre es requerido`);
-              errorCount++;
-              continue;
-            }
-
-            try {
-              await API.post("/speakers", {
-                nombre: row.nombre.trim(),
-                bio: row.bio || "",
-                cargo: row.cargo || "",
-                company: row.company || row.empresa || "",
-                photo_url: row.photo_url || "",
-                email: row.email || "",
-                telefono: row.telefono || "",
-                linkedin_url: row.linkedin_url || row.linkedin || "",
-                twitter_url: row.twitter_url || row.twitter || "",
-                website_url: row.website_url || row.website || "",
-                sede: row.sede || "chile",
-                edicion: row.edicion || 2025,
-              });
-              successCount++;
-            } catch (err) {
-              errorCount++;
-              errors.push(
-                `Fila ${i + 2} (${row.nombre}): ${err.response?.data?.error || err.message}`
-              );
-            }
-          }
-
-          setSuccess(
-            `✅ Importación completada: ${successCount} speakers creados, ${errorCount} errores`
-          );
-          if (errors.length > 0) {
-            console.error("Errores:", errors);
-          }
-
-          setFile(null);
-          setPreview([]);
-          setProgress(0);
-        } catch (err) {
-          setError("Error al procesar el archivo: " + err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
-      reader.readAsBinaryString(file);
-    } catch (err) {
-      setError("Error: " + err.message);
-      setLoading(false);
-    }
-  };
-
-  // ========================================================
-  // DESCARGAR TEMPLATE
-  // ========================================================
-  const downloadTemplate = (tipo) => {
-    let data = [];
-
-    if (tipo === "usuarios") {
-      data = [
-        {
-          email: "usuario@ejemplo.com",
-          nombre: "Juan Pérez",
-          password: "MiPassword123!",
-          rol: "asistente",
-          tipo_pase: "general",
-          sede: "chile",
-          empresa: "Acme Corp",
-          movil: "+56912345678",
-        },
-        {
-          email: "admin@ejemplo.com",
-          nombre: "Admin User",
-          password: "AdminPass123!",
-          rol: "admin",
-          tipo_pase: "vip",
-          sede: "mexico",
-          empresa: "Admin Inc",
-          movil: "+524771234567",
-        },
-      ];
-    } else if (tipo === "expositores") {
-      data = [
-        {
-          nombre: "Empresa Tech",
-          categoria: "Tecnología",
-          logo_url: "https://ejemplo.com/logo.png",
-          website_url: "https://empresatech.com",
-          stand: "A-101",
-          descripcion: "Empresa de soluciones tecnológicas",
-          sede: "chile",
-        },
-        {
-          nombre: "Consultora Innovación",
-          categoria: "Consultoría",
-          logo_url: "https://ejemplo.com/logo2.png",
-          website_url: "https://consultora.com",
-          stand: "B-205",
-          descripcion: "Consultora en innovación digital",
-          sede: "mexico",
-        },
-      ];
-    } else if (tipo === "speakers") {
-      data = [
-        {
-          nombre: "María García",
-          bio: "Experta en transformación digital",
-          cargo: "Directora de Innovación",
-          company: "Tech Solutions",
-          photo_url: "https://ejemplo.com/maria.jpg",
-          email: "maria@tech.com",
-          telefono: "+56912345678",
-          linkedin_url: "https://linkedin.com/in/maria",
-          twitter_url: "https://twitter.com/maria",
-          website_url: "https://mariagarcia.com",
-          sede: "chile",
-          edicion: 2025,
-        },
-        {
-          nombre: "Carlos López",
-          bio: "Especialista en IA y Machine Learning",
-          cargo: "Tech Lead",
-          company: "AI Labs",
-          photo_url: "https://ejemplo.com/carlos.jpg",
-          email: "carlos@ailabs.com",
-          telefono: "+524771234567",
-          linkedin_url: "https://linkedin.com/in/carlos",
-          twitter_url: "https://twitter.com/carlos",
-          website_url: "https://carloslopez.dev",
-          sede: "mexico",
-          edicion: 2025,
-        },
-      ];
-    }
+  const downloadTemplate = () => {
+    const data = [
+      {
+        email: "usuario@ejemplo.com",
+        nombre: "Juan Pérez",
+        password: "MiPassword123!",
+        rol: "asistente",
+        tipo_pase: "general",
+        sede: "chile",
+        empresa: "Acme Corp",
+        movil: "+56912345678",
+      },
+      {
+        email: "admin@ejemplo.com",
+        nombre: "Admin User",
+        password: "AdminPass123!",
+        rol: "admin",
+        tipo_pase: "vip",
+        sede: "mexico",
+        empresa: "Admin Inc",
+        movil: "+524771234567",
+      },
+    ];
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
-    XLSX.writeFile(workbook, `template_${tipo}.xlsx`);
+    XLSX.writeFile(workbook, "template_usuarios.xlsx");
   };
 
   return (
@@ -398,43 +425,27 @@ export default function ExcelImport() {
             setPreview([]);
             setError(null);
           }}
-          className={`px-4 py-2 rounded-lg font-semibold transition ${
-            activeTab === "usuarios"
+          className={`px-4 py-2 rounded-lg font-semibold transition ${activeTab === "usuarios"
               ? "bg-blue-600 text-white"
               : "bg-white text-gray-700 hover:bg-gray-200"
-          }`}
+            }`}
         >
           👥 Usuarios
         </button>
         <button
           onClick={() => {
-            setActiveTab("expositores");
+            setActiveTab("asistentes_cmc");
             setFile(null);
             setPreview([]);
             setError(null);
+            setCmcResumen(null);
           }}
-          className={`px-4 py-2 rounded-lg font-semibold transition ${
-            activeTab === "expositores"
+          className={`px-4 py-2 rounded-lg font-semibold transition ${activeTab === "asistentes_cmc"
               ? "bg-blue-600 text-white"
               : "bg-white text-gray-700 hover:bg-gray-200"
-          }`}
+            }`}
         >
-          🏢 Expositores
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab("speakers");
-            setFile(null);
-            setPreview([]);
-            setError(null);
-          }}
-          className={`px-4 py-2 rounded-lg font-semibold transition ${
-            activeTab === "speakers"
-              ? "bg-blue-600 text-white"
-              : "bg-white text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          🎤 Speakers
+          🎟 Asistentes CMC
         </button>
       </div>
 
@@ -460,16 +471,40 @@ export default function ExcelImport() {
           </div>
         )}
 
-        {/* Descarga de template */}
-        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-          <p className="font-semibold text-blue-900 mb-2">📥 Descarga un template</p>
-          <button
-            onClick={() => downloadTemplate(activeTab)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-semibold"
-          >
-            Descargar Template Excel
-          </button>
-        </div>
+        {/* Descarga de template — no aplica al tab Asistentes CMC */}
+        {activeTab !== "asistentes_cmc" && (
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+            <p className="font-semibold text-blue-900 mb-2">📥 Descarga un template</p>
+            <button
+              onClick={() => downloadTemplate()}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-semibold"
+            >
+              Descargar Template Excel
+            </button>
+          </div>
+        )}
+
+        {activeTab === "asistentes_cmc" && (
+          <div className="bg-amber-50 border border-amber-300 p-4 rounded-lg">
+            <p className="font-semibold text-amber-900 mb-1">
+              🎟 Importar desde el Excel del Tkinter
+            </p>
+            <p className="text-amber-800 text-sm">
+              Sube directamente el archivo de Lista de Asistentes que usa el Tkinter
+              (el mismo Excel del evento). El sistema detecta automáticamente las hojas{" "}
+              <code className="bg-amber-200 px-1 rounded">Asistentes</code>,{" "}
+              <code className="bg-amber-200 px-1 rounded">Expositores</code> y{" "}
+              <code className="bg-amber-200 px-1 rounded">Ponentes y Staff</code>.
+            </p>
+            <ul className="text-amber-800 text-sm mt-2 space-y-1 list-disc list-inside">
+              <li>La contraseña inicial será <code className="bg-amber-200 px-1 rounded">cmc-</code> + su ID/FOLIO (ej: <code className="bg-amber-200 px-1 rounded">cmc-0001</code>)</li>
+              <li>El ID/FOLIO se guarda como <code>qr_code</code> para que el QR de la App Web funcione con el escáner del Tkinter</li>
+              <li>Solo se importan filas con CORREO poblado</li>
+              <li>De "Ponentes y Staff" solo se importan los marcados como PONENTE</li>
+              <li>Si alguien ya existe (mismo email o ID), se omite sin error</li>
+            </ul>
+          </div>
+        )}
 
         {/* Upload */}
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition cursor-pointer">
@@ -489,6 +524,34 @@ export default function ExcelImport() {
             <p className="text-sm text-gray-500">Formatos soportados: .xlsx, .xls, .csv</p>
           </label>
         </div>
+
+        {/* Resumen por grupo — solo tab Asistentes CMC */}
+        {activeTab === "asistentes_cmc" && cmcResumen && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { key: "asistentes", label: "👥 Asistentes", activeCls: "border-blue-500 bg-blue-50" },
+              { key: "expositores", label: "🏢 Expositores", activeCls: "border-green-500 bg-green-50" },
+              { key: "speakers", label: "🎤 Speakers", activeCls: "border-purple-500 bg-purple-50" },
+            ].map(({ key, label, activeCls }) => (
+              <label
+                key={key}
+                className={`flex items-center justify-between p-4 rounded-lg border-2 cursor-pointer transition ${cmcSeleccion[key] ? activeCls : "border-gray-200 bg-gray-50"
+                  }`}
+              >
+                <div>
+                  <p className="font-semibold text-gray-800">{label}</p>
+                  <p className="text-sm text-gray-500">{cmcResumen[key].length} listos para importar</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={cmcSeleccion[key]}
+                  onChange={(e) => setCmcSeleccion({ ...cmcSeleccion, [key]: e.target.checked })}
+                  className="w-5 h-5"
+                />
+              </label>
+            ))}
+          </div>
+        )}
 
         {/* Preview */}
         {preview.length > 0 && (
@@ -545,19 +608,23 @@ export default function ExcelImport() {
             <button
               onClick={() => {
                 if (activeTab === "usuarios") importUsuarios();
-                else if (activeTab === "expositores") importExpositores();
-                else if (activeTab === "speakers") importSpeakers();
+                else if (activeTab === "asistentes_cmc") importarCMC();
               }}
-              disabled={loading}
+              disabled={loading || (activeTab === "asistentes_cmc" && !cmcResumen)}
               className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold disabled:opacity-50"
             >
-              {loading ? "Importando..." : `✅ Importar ${activeTab}`}
+              {loading
+                ? "Importando..."
+                : activeTab === "asistentes_cmc"
+                  ? `✅ Importar seleccionados`
+                  : `✅ Importar usuarios`}
             </button>
             <button
               onClick={() => {
                 setFile(null);
                 setPreview([]);
                 setError(null);
+                setCmcResumen(null);
               }}
               disabled={loading}
               className="bg-gray-400 text-white px-6 py-3 rounded-lg hover:bg-gray-500 font-semibold disabled:opacity-50"
@@ -571,15 +638,26 @@ export default function ExcelImport() {
       {/* Instrucciones */}
       <div className="mt-6 bg-white p-6 rounded-lg shadow-md">
         <h3 className="font-bold text-lg mb-3">📖 Instrucciones:</h3>
-        <ol className="space-y-2 text-sm text-gray-700">
-          <li>1. Selecciona el tipo de dato que quieres importar (Usuarios, Expositores o Speakers)</li>
-          <li>2. Descarga el template Excel haciendo click en "Descargar Template Excel"</li>
-          <li>3. Abre el template en Excel y completa tus datos</li>
-          <li>4. Guarda el archivo en formato .xlsx</li>
-          <li>5. Sube el archivo en la zona de carga</li>
-          <li>6. Verifica la vista previa y haz click en "Importar"</li>
-          <li>7. ¡Listo! Los datos se importarán automáticamente</li>
-        </ol>
+
+        {activeTab === "asistentes_cmc" ? (
+          <ol className="space-y-2 text-sm text-gray-700">
+            <li>1. Abre el Excel de Lista de Asistentes que usa el Tkinter</li>
+            <li>2. Sube el archivo completo aquí — no hace falta modificarlo ni separar hojas</li>
+            <li>3. Verifica el resumen por grupo (Asistentes, Expositores, Speakers)</li>
+            <li>4. Marca o desmarca los grupos que quieras importar</li>
+            <li>5. Haz click en "Importar seleccionados"</li>
+            <li>6. Cada persona podrá iniciar sesión con su email y la contraseña "cmc-" + su ID/FOLIO</li>
+          </ol>
+        ) : (
+          <ol className="space-y-2 text-sm text-gray-700">
+            <li>1. Descarga el template Excel haciendo click en "Descargar Template Excel"</li>
+            <li>2. Abre el template en Excel y completa tus datos</li>
+            <li>3. Guarda el archivo en formato .xlsx</li>
+            <li>4. Sube el archivo en la zona de carga</li>
+            <li>5. Verifica la vista previa y haz click en "Importar"</li>
+            <li>6. ¡Listo! Los datos se importarán automáticamente</li>
+          </ol>
+        )}
       </div>
 
       {/* Campos requeridos por tipo */}
@@ -599,32 +677,16 @@ export default function ExcelImport() {
           </ul>
         )}
 
-        {activeTab === "expositores" && (
+        {activeTab === "asistentes_cmc" && (
           <ul className="text-sm space-y-1 text-gray-700">
-            <li>✓ <strong>nombre</strong> - Nombre de la empresa</li>
-            <li>✓ <strong>categoria</strong> - Categoría</li>
-            <li>○ logo_url</li>
-            <li>○ website_url</li>
-            <li>○ stand</li>
-            <li>○ descripcion</li>
-            <li>○ sede - Default: chile</li>
-          </ul>
-        )}
-
-        {activeTab === "speakers" && (
-          <ul className="text-sm space-y-1 text-gray-700">
-            <li>✓ <strong>nombre</strong> - Nombre completo</li>
-            <li>○ bio</li>
-            <li>○ cargo</li>
-            <li>○ company - Empresa</li>
-            <li>○ photo_url</li>
-            <li>○ email</li>
-            <li>○ telefono</li>
-            <li>○ linkedin_url</li>
-            <li>○ twitter_url</li>
-            <li>○ website_url</li>
-            <li>○ sede - Default: chile</li>
-            <li>○ edicion - Default: 2025</li>
+            <li>✓ <strong>ID / FOLIO</strong> — se usa para generar la contraseña inicial ("cmc-" + ID) y como qr_code</li>
+            <li>✓ <strong>CORREO</strong> — email del usuario, único por persona</li>
+            <li>○ Hoja "Asistentes": APELLIDO (S), NOMBRE(S) ASISTENTE, EMPRESA, CURSO, SESIONES</li>
+            <li>○ Hoja "Expositores": APELLIDOS, NOMBRE(S), EMPRESA</li>
+            <li>○ Hoja "Ponentes y Staff": solo filas con TIPO DE ASISTENCIA = PONENTE</li>
+            <li className="mt-2 text-gray-500 italic">
+              Sede fija: <strong>colombia</strong> · No requiere template — se usa el Excel real del Tkinter
+            </li>
           </ul>
         )}
       </div>

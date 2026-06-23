@@ -34,6 +34,12 @@ export default function StaffPanel() {
   // Tkinter Live (lectura en vivo de cmc-mobile)
   const [tkinterLive, setTkinterLive] = useState(null);
 
+  // Expositores y Speakers (carga diferida, solo al entrar al tab)
+  const [tkinterExpositores, setTkinterExpositores] = useState(null);
+  const [loadingExpositores, setLoadingExpositores] = useState(false);
+  const [tkinterSpeakers, setTkinterSpeakers] = useState(null);
+  const [loadingSpeakers, setLoadingSpeakers] = useState(false);
+
   // Quién No Llegó
   const [noLlegaron, setNoLlegaron] = useState(null);
   const [diaFiltro, setDiaFiltro] = useState("");
@@ -115,6 +121,50 @@ export default function StaffPanel() {
       loadNoLlegaron(diaFiltro);
     }
   }, [diaFiltro]);
+
+  // ========================================================
+  // Expositores — carga diferida al entrar al tab
+  // ========================================================
+  const loadExpositores = async () => {
+    try {
+      setLoadingExpositores(true);
+      const res = await API.get("/staff/tkinter-expositores");
+      setTkinterExpositores(res.data);
+    } catch (err) {
+      console.error("❌ Error cargando expositores:", err);
+      setTkinterExpositores(null);
+    } finally {
+      setLoadingExpositores(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "tkinter_expositores" && tkinterExpositores === null && userProfile) {
+      loadExpositores();
+    }
+  }, [activeTab, userProfile]);
+
+  // ========================================================
+  // Speakers — carga diferida al entrar al tab
+  // ========================================================
+  const loadSpeakers = async () => {
+    try {
+      setLoadingSpeakers(true);
+      const res = await API.get("/staff/tkinter-speakers");
+      setTkinterSpeakers(res.data);
+    } catch (err) {
+      console.error("❌ Error cargando speakers:", err);
+      setTkinterSpeakers(null);
+    } finally {
+      setLoadingSpeakers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "tkinter_speakers" && tkinterSpeakers === null && userProfile) {
+      loadSpeakers();
+    }
+  }, [activeTab, userProfile]);
 
   const noLlegaronFiltrados = (noLlegaron?.usuarios || []).filter((u) => {
     if (!busquedaNoLlegaron.trim()) return true;
@@ -243,6 +293,8 @@ export default function StaffPanel() {
         {[
           { id: "resumen", label: "📊 Resumen Hoy", icon: "📊" },
           { id: "tkinter_live", label: "🔄 Tkinter Live", icon: "🔄" },
+          { id: "tkinter_expositores", label: "🏢 Expositores", icon: "🏢" },
+          { id: "tkinter_speakers", label: "🎤 Speakers", icon: "🎤" },
           { id: "no_llegaron", label: "🚫 Quién No Llegó", icon: "🚫" },
           { id: "general", label: "📈 Estadísticas", icon: "📈" },
           { id: "checkins", label: "✅ Check-ins", icon: "✅" },
@@ -420,6 +472,182 @@ export default function StaffPanel() {
                             {["Día 1", "Día 2", "Día 3", "Día 4"].map((d) => (
                               <td key={d} className="px-3 py-2 text-center">
                                 {a[d] === "X" ? <span className="text-green-600 font-bold text-base">✓</span> : <span className="text-gray-300">—</span>}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
+          EXPOSITORES — lectura en vivo de cmc-mobile
+          ======================================================== */}
+      {activeTab === "tkinter_expositores" && (
+        <div className="space-y-6">
+          {loadingExpositores ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="animate-spin h-10 w-10 border-b-2 border-blue-600 rounded-full" />
+            </div>
+          ) : !tkinterExpositores ? (
+            <div className="bg-amber-50 border border-amber-200 p-6 rounded-lg text-center">
+              <Building2 className="mx-auto mb-2 text-amber-500" size={32} />
+              <p className="text-amber-800 font-semibold">Sin datos disponibles</p>
+              <p className="text-amber-700 text-sm mt-1">
+                No se pudo leer información de expositores desde cmc-mobile en este momento.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <StatCard icon={Building2} label="Total Expositores" value={tkinterExpositores.total_exhibitors ?? "—"} color="blue" />
+                <StatCard icon={CheckCircle} label="Ya Escaneados" value={tkinterExpositores.total_scanned_exhibitors ?? 0} color="green" />
+                <StatCard
+                  icon={Activity}
+                  label="Última Actualización"
+                  value={tkinterExpositores.updated_at ? new Date(tkinterExpositores.updated_at).toLocaleTimeString("es-MX") : "—"}
+                  color="purple"
+                />
+              </div>
+
+              {tkinterExpositores.daily_exhibitor_stats && Object.keys(tkinterExpositores.daily_exhibitor_stats).length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <BarChart3 size={22} className="text-blue-600" />
+                    Asistencia de Expositores por Día
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {Object.entries(tkinterExpositores.daily_exhibitor_stats).map(([dia, conteo]) => (
+                      <div key={dia} className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200 text-center">
+                        <p className="text-2xl font-bold text-blue-600">{conteo.actual ?? 0} / {conteo.expected ?? 0}</p>
+                        <p className="text-sm text-gray-600 capitalize mt-1">{dia.replace("day_", "Día ")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tkinterExpositores.exhibitors && tkinterExpositores.exhibitors.length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Building2 size={22} className="text-blue-600" />
+                    Personal de Expositores — {tkinterExpositores.exhibitors.length} personas
+                  </h2>
+                  <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-gray-100">
+                        <tr className="border-b text-left">
+                          <th className="px-3 py-2">ID</th>
+                          <th className="px-3 py-2">Nombre</th>
+                          <th className="px-3 py-2">Empresa</th>
+                          <th className="px-3 py-2 text-center">Día 3</th>
+                          <th className="px-3 py-2 text-center">Día 4</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tkinterExpositores.exhibitors.map((e, idx) => (
+                          <tr key={idx} className="border-b hover:bg-gray-50">
+                            <td className="px-3 py-2 font-mono text-xs text-gray-500">{e.ID}</td>
+                            <td className="px-3 py-2 font-medium">{e["Nombre(s)"]} {e["Apellido(s)"]}</td>
+                            <td className="px-3 py-2 text-gray-600 text-xs">{e.Empresa}</td>
+                            {["Día 3", "Día 4"].map((d) => (
+                              <td key={d} className="px-3 py-2 text-center">
+                                {e[d] === "X" ? <span className="text-green-600 font-bold text-base">✓</span> : <span className="text-gray-300">—</span>}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
+          SPEAKERS / PONENTES — lectura en vivo de cmc-mobile
+          ======================================================== */}
+      {activeTab === "tkinter_speakers" && (
+        <div className="space-y-6">
+          {loadingSpeakers ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="animate-spin h-10 w-10 border-b-2 border-blue-600 rounded-full" />
+            </div>
+          ) : !tkinterSpeakers ? (
+            <div className="bg-amber-50 border border-amber-200 p-6 rounded-lg text-center">
+              <Users className="mx-auto mb-2 text-amber-500" size={32} />
+              <p className="text-amber-800 font-semibold">Sin datos disponibles</p>
+              <p className="text-amber-700 text-sm mt-1">
+                No se pudo leer información de speakers desde cmc-mobile en este momento.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <StatCard icon={Users} label="Total Speakers" value={tkinterSpeakers.total_speakers ?? "—"} color="blue" />
+                <StatCard icon={CheckCircle} label="Ya Escaneados" value={tkinterSpeakers.total_scanned_speakers ?? 0} color="green" />
+                <StatCard
+                  icon={Activity}
+                  label="Última Actualización"
+                  value={tkinterSpeakers.updated_at ? new Date(tkinterSpeakers.updated_at).toLocaleTimeString("es-MX") : "—"}
+                  color="purple"
+                />
+              </div>
+
+              {tkinterSpeakers.daily_speaker_stats && Object.keys(tkinterSpeakers.daily_speaker_stats).length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <BarChart3 size={22} className="text-blue-600" />
+                    Asistencia de Speakers por Día
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {Object.entries(tkinterSpeakers.daily_speaker_stats).map(([dia, conteo]) => (
+                      <div key={dia} className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200 text-center">
+                        <p className="text-2xl font-bold text-purple-600">{conteo.actual ?? 0} / {conteo.expected ?? 0}</p>
+                        <p className="text-sm text-gray-600 capitalize mt-1">{dia.replace("day_", "Día ")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tkinterSpeakers.speakers && tkinterSpeakers.speakers.length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Users size={22} className="text-purple-600" />
+                    Speakers / Ponentes — {tkinterSpeakers.speakers.length} personas
+                  </h2>
+                  <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-gray-100">
+                        <tr className="border-b text-left">
+                          <th className="px-3 py-2">ID</th>
+                          <th className="px-3 py-2">Nombre</th>
+                          <th className="px-3 py-2">Empresa</th>
+                          <th className="px-3 py-2 text-center">Día 1</th>
+                          <th className="px-3 py-2 text-center">Día 2</th>
+                          <th className="px-3 py-2 text-center">Día 3</th>
+                          <th className="px-3 py-2 text-center">Día 4</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tkinterSpeakers.speakers.map((s, idx) => (
+                          <tr key={idx} className="border-b hover:bg-gray-50">
+                            <td className="px-3 py-2 font-mono text-xs text-gray-500">{s.ID}</td>
+                            <td className="px-3 py-2 font-medium">{s["Nombre(s)"]} {s["Apellido(s)"]}</td>
+                            <td className="px-3 py-2 text-gray-600 text-xs">{s.Empresa}</td>
+                            {["Día 1", "Día 2", "Día 3", "Día 4"].map((d) => (
+                              <td key={d} className="px-3 py-2 text-center">
+                                {s[d] === "X" ? <span className="text-green-600 font-bold text-base">✓</span> : <span className="text-gray-300">—</span>}
                               </td>
                             ))}
                           </tr>

@@ -127,20 +127,4 @@ export async function sendPushBroadcast(userIds, payload) {
     await Promise.all(userIds.map(id => sendPushToUser(id, payload)));
 }
 
-// ── POST /api/push/test ───────────────────────────────────
-router.post('/test', authRequired, async (req, res) => {
-    if (req.user.rol !== 'super_admin')
-        return res.status(403).json({ error: 'Solo super_admin' });
-    try {
-        await sendPushToUser(req.user.id, {
-            titulo: '🧪 Test de Push',
-            mensaje: 'Las notificaciones push funcionan correctamente',
-            tipo: 'info',
-        });
-        res.json({ ok: true, message: 'Push de prueba enviado' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 export default router;

@@ -145,18 +145,6 @@ router.get('/ediciones', authRequired, async (req, res) => {
 // ============================================================
 // GET /api/config/calendario (compatibilidad con versión anterior)
 // ============================================================
-router.get('/calendario', authRequired, async (req, res) => {
-  try {
-    const r = await pool.query(
-      `SELECT * FROM calendario_sedes WHERE activo = true ORDER BY fecha_inicio ASC`
-    ).catch(() => ({ rows: [] }));
-    res.json({ success: true, count: r.rows.length, data: r.rows });
-  } catch (err) {
-    res.json({ success: true, count: 0, data: [] });
-  }
-});
-
-
 // ============================================================
 // GET /config/wp-config — leer configuración de WordPress
 // ============================================================

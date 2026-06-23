@@ -10,7 +10,6 @@ import authRoutes from "./routes/auth.js";
 import agendaRoutes from "./routes/agenda.js";
 import speakersRoutes from "./routes/speakers.routes.js";
 import expositoresRoutes from "./routes/expositores.routes.js";
-import dashboardRoutes from "./routes/dashboard.js";
 import notificacionesRoutes from "./routes/notificaciones.js";
 import configRoutes from "./routes/config.js";
 import usersRoutes from "./routes/users.routes.js";
@@ -18,7 +17,6 @@ import statsRoutes from "./routes/stats.js";
 import uploadRoutes from "./routes/upload.js";
 import staffRoutes from "./routes/staff.js";
 import { authRequired } from "./utils/authMiddleware.js";
-import qrRoutes from "./routes/qr.js";
 import misRegistrosRoutes from "./routes/mis-registros.js";
 import networkingRoutes from "./routes/networking.js";
 import networkingExpoRoutes from "./routes/networking-expo.js";
@@ -31,6 +29,7 @@ import mapaRoutes from "./routes/mapa.js";
 import eventosRoutes from "./routes/eventos.routes.js";
 import pushRoutes from "./routes/push.js";
 import excelRoutes from "./routes/excel.js";
+import { eliminarUsuarioDefinitivo } from "./utils/eliminarUsuario.js";
 
 import { sendSSE } from "./routes/notificaciones.js";
 import { procesarNotificacionesProgramadas } from "./cron/notificacionesCron.js";
@@ -96,106 +95,19 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/agenda", agendaRoutes);
 app.use("/api/speakers", speakersRoutes);
-// ── Endpoints críticos expositores (inline para garantizar deploy) ──
-app.patch("/api/expositores/:id/estado", authRequired, async (req, res) => {
-  try {
-    const rol = req.user?.rol;
-    if (!["super_admin", "staff"].includes(rol))
-      return res.status(403).json({ error: "Sin permisos" });
-    const { id } = req.params;
-    const { estado_stand } = req.body;
-    const valid = ["libre", "solicitado", "ocupado", "no_disponible"];
-    if (!valid.includes(estado_stand))
-      return res.status(400).json({ error: `Estado inválido. Usa: ${valid.join(", ")}` });
-    const r = await pool.query(
-      `UPDATE expositores SET estado_stand=$1 WHERE id=$2 RETURNING id, nombre, estado_stand`,
-      [estado_stand, id]
-    );
-    if (!r.rows.length) return res.status(404).json({ error: "No encontrado" });
-    console.log(`[Expo] Estado actualizado: ${r.rows[0].nombre} → ${estado_stand}`);
-    res.json({ ok: true, expositor: r.rows[0] });
-  } catch (err) {
-    console.error("[Expo] Error PATCH estado:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.patch("/api/expositores/:id/posicion", authRequired, async (req, res) => {
-  try {
-    const rol = req.user?.rol;
-    if (!["super_admin", "staff"].includes(rol))
-      return res.status(403).json({ error: "Sin permisos" });
-    const { id } = req.params;
-    const { grid_col, grid_fila, ancho_celdas, alto_celdas } = req.body;
-    const r = await pool.query(
-      `UPDATE expositores SET
-        grid_col     = $1,
-        grid_fila    = $2,
-        ancho_celdas = COALESCE($3, 1),
-        alto_celdas  = COALESCE($4, 1)
-       WHERE id = $5
-       RETURNING id, nombre, grid_col, grid_fila, ancho_celdas, alto_celdas`,
-      [
-        grid_col != null ? parseInt(grid_col) : null,
-        grid_fila != null ? parseInt(grid_fila) : null,
-        ancho_celdas ? parseInt(ancho_celdas) : null,
-        alto_celdas ? parseInt(alto_celdas) : null,
-        id,
-      ]
-    );
-    if (!r.rows.length) return res.status(404).json({ error: "No encontrado" });
-    console.log(`[Expo] Posición actualizada: ${r.rows[0].nombre} → (${grid_col},${grid_fila})`);
-    res.json({ ok: true, expositor: r.rows[0] });
-  } catch (err) {
-    console.error("[Expo] Error PATCH posicion:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post("/api/expositores/:id/visita", authRequired, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { tipo = "visita" } = req.body;
-    await pool.query(
-      `INSERT INTO expositores_metrica (expositor_id, user_id, tipo) VALUES ($1,$2,$3)`,
-      [id, req.user.id, tipo]
-    ).catch(() => { });
-    res.json({ ok: true, message: `${tipo} registrado` });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.put("/api/expositores/mapa-config/:sede", authRequired, async (req, res) => {
-  try {
-    if (!["super_admin", "staff"].includes(req.user?.rol))
-      return res.status(403).json({ error: "Sin permisos" });
-    const { sede } = req.params;
-    const { edicion = 2026, grid_cols, grid_filas } = req.body;
-    await pool.query(
-      `INSERT INTO mapa_config (sede, edicion, grid_cols, grid_filas)
-       VALUES (LOWER($1), $2, $3, $4)
-       ON CONFLICT (sede, edicion)
-       DO UPDATE SET grid_cols=$3, grid_filas=$4, updated_at=NOW()`,
-      [sede, parseInt(edicion), parseInt(grid_cols) || 46, parseInt(grid_filas) || 22]
-    );
-    console.log(`[MapaConfig] Guardado: ${sede} → ${grid_cols}×${grid_filas}`);
-    res.json({ ok: true, config: { sede, edicion, grid_cols, grid_filas } });
-  } catch (err) {
-    console.error("[MapaConfig] Error PUT:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
+// FIX: los 4 endpoints de expositores (estado, posicion, visita,
+// mapa-config) vivían inline aquí Y en expositores.routes.js.
+// Como esta sección se ejecutaba primero, las versiones de
+// expositores.routes.js nunca se alcanzaban — código duplicado
+// e inalcanzable. Se elimina la copia inline; expositores.routes.js
+// ya tiene la misma lógica (verificada) y ahora sí se ejecuta.
 app.use("/api/expositores", expositoresRoutes);
-app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/notificaciones", notificacionesRoutes);
 app.use("/api/config", configRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/staff", staffRoutes);
-app.use("/api/qr", qrRoutes);
 app.use("/api/mis-registros", misRegistrosRoutes);
 app.use("/api/networking", networkingRoutes);
 app.use("/api/networking-expo", networkingExpoRoutes);
@@ -279,27 +191,41 @@ app.use((err, req, res, next) => {
 // ════════════════════════════════════════════════════════════
 // CRON: Limpieza automática de papelera cada 24 horas
 // Elimina permanentemente usuarios con activo=false por >30 días
+//
+// FIX: antes hacía DELETE FROM users directo, sin desvincular las
+// tablas relacionadas (expositores, entradas, encuestas, etc.) —
+// fallaba con foreign key constraint igual que el botón manual.
+// Ahora usa la misma función compartida que /users/:id/permanente,
+// para que ambos caminos de borrado nunca vuelvan a divergir.
 // ════════════════════════════════════════════════════════════
 const limpiarPapelera = async () => {
   try {
-    // Intentar con fecha_eliminado primero
-    const r = await pool.query(`
-      DELETE FROM users
+    const candidatos = await pool.query(`
+      SELECT id, email FROM users
       WHERE activo = false
-        AND fecha_eliminado IS NOT NULL
-        AND fecha_eliminado < NOW() - INTERVAL '30 days'
-      RETURNING id, email
-    `).catch(() =>
-      // Si fecha_eliminado no existe, usar created_at como fallback
-      pool.query(`
-        DELETE FROM users
-        WHERE activo = false
-          AND created_at < NOW() - INTERVAL '30 days'
-        RETURNING id, email
-      `)
-    );
-    if (r.rows.length > 0) {
-      console.log(`[Cron] 🗑️ Papelera: ${r.rows.length} usuario(s) eliminados permanentemente`);
+        AND COALESCE(fecha_eliminado, created_at) < NOW() - INTERVAL '30 days'
+    `);
+
+    if (candidatos.rows.length === 0) return;
+
+    let eliminados = 0;
+    let fallidos = 0;
+
+    for (const candidato of candidatos.rows) {
+      const resultado = await eliminarUsuarioDefinitivo(pool, candidato.id);
+      if (resultado.ok) {
+        eliminados++;
+      } else {
+        fallidos++;
+        console.error(`[Cron] No se pudo eliminar ${candidato.email}: ${resultado.error}`);
+      }
+    }
+
+    if (eliminados > 0) {
+      console.log(`[Cron] 🗑️ Papelera: ${eliminados} usuario(s) eliminados permanentemente`);
+    }
+    if (fallidos > 0) {
+      console.log(`[Cron] ⚠️ Papelera: ${fallidos} usuario(s) no se pudieron eliminar`);
     }
   } catch (err) {
     console.error('[Cron] Error en limpieza de papelera:', err.message);
@@ -322,6 +248,6 @@ app.listen(PORT, () => {
   console.log("📋 Rutas disponibles:");
   console.log("  /api/auth      /api/agenda     /api/speakers");
   console.log("  /api/users     /api/stats      /api/staff");
-  console.log("  /api/qr        /api/networking /api/mi-marca");
+  console.log("  /api/networking /api/mi-marca");
   console.log("  /api/mi-sesion /api/mis-registros");
 });

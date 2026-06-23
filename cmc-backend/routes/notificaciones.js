@@ -117,42 +117,6 @@ router.get("/", authRequired, async (req, res) => {
   }
 });
 
-/**
- * GET /notificaciones/:id
- * Obtiene una notificación específica por ID
- */
-router.get("/:id", authRequired, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await pool.query(
-      `SELECT 
-        id,
-        titulo,
-        mensaje,
-        tipo,
-        enviada,
-        activa,
-        created_at,
-        created_by,
-        meta
-       FROM notificaciones
-       WHERE id = $1 AND activa = true`,
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Notificación no encontrada" });
-    }
-
-    res.json(result.rows[0]);
-
-  } catch (err) {
-    console.error("❌ [GET /:id] Error:", err.message);
-    res.status(500).json({ error: "Error obteniendo notificación", details: err.message });
-  }
-});
-
 /* ============================================
    ✍️  CREAR NOTIFICACIÓN
 ============================================ */
@@ -229,58 +193,6 @@ router.post("/", authRequired, async (req, res) => {
   }
 });
 
-/**
- * POST /notificaciones/broadcast
- * Envía notificación a múltiples usuarios
- * Solo: super_admin, staff
- */
-router.post("/broadcast", authRequired, async (req, res) => {
-  try {
-    const user = req.user;
-
-    if (user.rol !== "super_admin" && user.rol !== "staff") {
-      return res.status(403).json({ error: "Permiso denegado" });
-    }
-
-    const { usuarios, titulo, mensaje, tipo = "info" } = req.body;
-
-    if (!usuarios || usuarios.length === 0 || !titulo || !mensaje) {
-      return res.status(400).json({
-        error: "Campos requeridos: usuarios[], titulo, mensaje"
-      });
-    }
-
-    console.log(`📢 [BROADCAST] Enviando a ${usuarios.length} usuarios`);
-
-    const result = await pool.query(
-      `INSERT INTO notificaciones
-       (id, titulo, mensaje, tipo, tipo_usuario, sede, activa, created_by, created_at, enviada)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, 'todos', true, $5, NOW(), true)
-       RETURNING id`,
-      [titulo, mensaje, tipo, usuarios, user.id]
-    );
-
-    // Enviar por SSE
-    sendSSE({
-      tipo: "BROADCAST_NOTIFICATION",
-      usuarios,
-      data: { titulo, mensaje, tipo }
-    });
-
-    console.log(`✅ [BROADCAST] ${usuarios.length} usuarios notificados`);
-    res.status(201).json({
-      ok: true,
-      count: usuarios.length,
-      message: `Notificación enviada a ${usuarios.length} usuarios`,
-      id: result.rows[0].id
-    });
-
-  } catch (err) {
-    console.error("❌ [BROADCAST] Error:", err.message);
-    res.status(500).json({ error: "Error en broadcast", details: err.message });
-  }
-});
-
 /* ============================================
    🔄 ACTUALIZAR NOTIFICACIÓN
 ============================================ */
@@ -324,56 +236,6 @@ router.put("/:id/leida", authRequired, async (req, res) => {
  * Actualiza una notificación existente
  * Solo: super_admin, staff
  */
-router.put("/:id", authRequired, async (req, res) => {
-  try {
-    const user = req.user;
-
-    if (user.rol !== "super_admin" && user.rol !== "staff") {
-      return res.status(403).json({ error: "Permiso denegado" });
-    }
-
-    const { id } = req.params;
-    const {
-      titulo,
-      mensaje,
-      tipo,
-      tipo_usuario,
-      sede,
-      meta,
-      programada_para
-    } = req.body;
-
-    console.log(`✏️ [PUT] Actualizando notificación: ${id}`);
-
-    const result = await pool.query(
-      `UPDATE notificaciones
-       SET 
-         titulo = COALESCE($1, titulo),
-         mensaje = COALESCE($2, mensaje),
-         tipo = COALESCE($3, tipo),
-         tipo_usuario = COALESCE($4, tipo_usuario),
-         sede = COALESCE($5, sede),
-         meta = COALESCE($6, meta),
-         programada_para = $7,
-         enviada = false
-       WHERE id = $8
-       RETURNING *`,
-      [titulo, mensaje, tipo, tipo_usuario, sede, meta, programada_para || null, id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Notificación no encontrada" });
-    }
-
-    console.log(`✅ [PUT] Notificación actualizada: ${id}`);
-    res.json({ ok: true, notificacion: result.rows[0] });
-
-  } catch (err) {
-    console.error("❌ [PUT] Error:", err.message);
-    res.status(500).json({ error: "Error actualizando notificación", details: err.message });
-  }
-});
-
 /**
  * POST /notificaciones/:id/vista
  * Marca una notificación como vista por el usuario
@@ -401,48 +263,6 @@ router.post("/:id/vista", authRequired, async (req, res) => {
     res.status(500).json({ error: "Error marcando vista", details: err.message });
   }
 });
-
-/**
- * PUT /notificaciones/:id/estado
- * Activa o desactiva una notificación
- */
-router.put("/:id/estado", authRequired, async (req, res) => {
-  try {
-    const user = req.user;
-
-    if (user.rol !== "super_admin" && user.rol !== "staff") {
-      return res.status(403).json({ error: "Permiso denegado" });
-    }
-
-    const { id } = req.params;
-    const { activa } = req.body;
-
-    console.log(`⚙️ [ESTADO] Cambiando estado de ${id} a activa=${activa}`);
-
-    const result = await pool.query(
-      `UPDATE notificaciones 
-       SET activa = $1 
-       WHERE id = $2 
-       RETURNING *`,
-      [activa, id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Notificación no encontrada" });
-    }
-
-    console.log(`✅ [ESTADO] Actualizado`);
-    res.json({ ok: true, notificacion: result.rows[0] });
-
-  } catch (err) {
-    console.error("❌ [ESTADO] Error:", err.message);
-    res.status(500).json({ error: "Error actualizando estado", details: err.message });
-  }
-});
-
-/* ============================================
-   🗑️ ELIMINAR NOTIFICACIÓN
-============================================ */
 
 /**
  * DELETE /notificaciones/:id
@@ -488,38 +308,4 @@ router.delete("/:id", authRequired, async (req, res) => {
   }
 });
 
-/* ============================================
-   📊 HISTORIAL Y UTILIDADES
-============================================ */
-
-/**
- * GET /notificaciones/historial/completo
- * Obtiene el historial completo del usuario
- */
-router.get("/historial/completo", authRequired, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const result = await pool.query(
-      `SELECT 
-        n.*,
-        CASE WHEN nv.vista_at IS NOT NULL THEN true ELSE false END AS leida,
-        nv.vista_at
-       FROM notificaciones n
-       LEFT JOIN notificaciones_vistas nv
-         ON nv.notificacion_id = n.id
-        AND nv.user_id = $1
-       ORDER BY n.created_at DESC`,
-      [userId]
-    );
-
-    res.json({ ok: true, historial: result.rows });
-
-  } catch (err) {
-    console.error("❌ [HISTORIAL] Error:", err.message);
-    res.status(500).json({ error: "Error en historial", details: err.message });
-  }
-});
-
-export { sendSSE };
 export default router;

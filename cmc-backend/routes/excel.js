@@ -18,8 +18,11 @@ const requireStaff = (req, res, next) => {
 router.get('/estadisticas', authRequired, requireStaff, async (req, res) => {
     try {
         const { sede } = req.query;
-        const sedeFilter = sede ? `AND u.sede = '${sede}'` : '';
-        const sedeFilterE = sede ? `AND e.sede = '${sede}'` : '';
+
+        // FIX SEGURIDAD: la versión anterior interpolaba `sede` directo
+        // dentro del SQL (`AND u.sede = '${sede}'`), lo que permitía
+        // inyección SQL vía query string. Ahora se usa $1 parametrizado
+        // en cada consulta — Postgres nunca interpreta el valor como SQL.
 
         // ── Datos ──────────────────────────────────────────
         const [checkinsRes, usersRes, sesionesRes, cursosRes, networkingRes] = await Promise.all([
@@ -29,14 +32,15 @@ router.get('/estadisticas', authRequired, requireStaff, async (req, res) => {
           u.nombre, u.email, u.tipo_pase, u.empresa
         FROM entradas e
         JOIN users u ON u.id = e.user_id
-        WHERE 1=1 ${sedeFilterE}
+        WHERE ($1::text IS NULL OR e.sede = $1)
         ORDER BY e.created_at DESC
-      `),
+      `, [sede || null]),
             pool.query(`
         SELECT id, nombre, email, tipo_pase, empresa, sede, created_at
-        FROM users WHERE activo = true ${sede ? `AND sede = '${sede}'` : ''}
+        FROM users
+        WHERE activo = true AND ($1::text IS NULL OR sede = $1)
         ORDER BY nombre ASC
-      `),
+      `, [sede || null]),
             pool.query(`
         SELECT a.id, a.user_id, a.fecha, ag.title AS sesion, ag.dia, ag.sala,
           u.nombre, u.email, u.tipo_pase, u.empresa
@@ -59,8 +63,9 @@ router.get('/estadisticas', authRequired, requireStaff, async (req, res) => {
           COUNT(CASE WHEN status = 'confirmada' THEN 1 END) AS confirmadas,
           COUNT(CASE WHEN status = 'pendiente' THEN 1 END) AS pendientes,
           COUNT(CASE WHEN status = 'rechazada' THEN 1 END) AS rechazadas
-        FROM networking ${sede ? `WHERE sede = '${sede}'` : ''}
-      `)
+        FROM networking
+        WHERE ($1::text IS NULL OR sede = $1)
+      `, [sede || null])
         ]);
 
         const checkins = checkinsRes.rows;

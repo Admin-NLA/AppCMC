@@ -52,17 +52,6 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 // ── GET /api/eventos/activo ────────────────────────────── (público)
-router.get('/activo', async (req, res) => {
-  try {
-    const r = await pool.query(
-      `SELECT * FROM eventos WHERE es_activo = true LIMIT 1`
-    );
-    res.json({ ok: true, evento: r.rows[0] || null });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── POST /api/eventos ──────────────────────────────────── (super_admin)
 router.post('/', authRequired, async (req, res) => {
   try {

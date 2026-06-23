@@ -2,6 +2,7 @@ import express from 'express';
 import pool from '../db.js';
 import { authRequired } from '../utils/authMiddleware.js';
 import bcrypt from 'bcryptjs';
+import { eliminarUsuarioDefinitivo } from '../utils/eliminarUsuario.js';
 
 const router = express.Router();
 
@@ -64,6 +65,7 @@ router.post('/', authRequired, async (req, res) => {
       edicion = 2026,
       empresa = '',
       telefono = '',
+      qr_code = null,
     } = req.body;
 
     // Calcular sede principal y array de sedes
@@ -94,14 +96,27 @@ router.post('/', authRequired, async (req, res) => {
 
     const password_hash = await bcrypt.hash(password, 10);
 
+    // qr_code tiene constraint UNIQUE — verificar duplicado antes de insertar
+    // para dar un mensaje claro en vez de un error genérico de Postgres
+    if (qr_code) {
+      const qrExists = await pool.query(
+        'SELECT id FROM users WHERE qr_code = $1',
+        [qr_code]
+      );
+      if (qrExists.rows.length > 0) {
+        return res.status(409).json({ error: `El qr_code "${qr_code}" ya está asignado a otro usuario` });
+      }
+    }
+
     // multi_sedes es ARRAY en PostgreSQL — pasar como texto[] no como JSON
+    // qr_code: ID/FOLIO del Excel del Tkinter — clave de cruce con cmc-mobile
     const result = await pool.query(
       `INSERT INTO users
-        (email, password_hash, nombre, rol, tipo_pase, sede, empresa, movil, activo, edicion, multi_sedes, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, NOW())
-       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, edicion, created_at`,
+        (email, password_hash, nombre, rol, tipo_pase, sede, empresa, movil, activo, edicion, multi_sedes, qr_code, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, $11, NOW())
+       RETURNING id, nombre, email, rol, tipo_pase, sede, empresa, activo, edicion, qr_code, created_at`,
       [email.toLowerCase().trim(), password_hash, nombre, rol, tipo_pase, sedePrincipal,
-        empresa, telefono, parseInt(edicion) || 2026, sedesParsed]
+        empresa, telefono, parseInt(edicion) || 2026, sedesParsed, qr_code]
     );
 
     console.log(`[Users] ✅ Usuario creado: ${email} (${rol})`);
@@ -314,7 +329,6 @@ router.post('/:id/restaurar', authRequired, async (req, res) => {
 
 // DELETE /users/:id/permanente — eliminar definitivamente (hard delete)
 router.delete('/:id/permanente', authRequired, async (req, res) => {
-  const client = await pool.connect();
   try {
     if (req.user.rol !== 'super_admin')
       return res.status(403).json({ error: 'Solo super_admin' });
@@ -323,48 +337,21 @@ router.delete('/:id/permanente', authRequired, async (req, res) => {
     if (req.user.id === id)
       return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
 
-    const check = await client.query(
-      'SELECT email, nombre FROM users WHERE id=$1', [id]
-    );
-    if (!check.rows.length)
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+    // Logica de borrado compartida con el cron automatico de papelera
+    // (ver utils/eliminarUsuario.js) - desvincula todas las FKs antes
+    // de borrar, para evitar el error de foreign key constraint.
+    const resultado = await eliminarUsuarioDefinitivo(pool, id);
 
-    await client.query('BEGIN');
-
-    // Limpiar todas las tablas relacionadas
-    const tablas = [
-      'user_sedes',
-      'favoritos',
-      'asistencias_sesion',
-      'asistencias_curso',
-      'notificaciones_vistas',
-      'stand_visitas',
-      'respuestas_encuesta',
-      'entradas',
-    ];
-    for (const tabla of tablas) {
-      await client.query(
-        `DELETE FROM ${tabla} WHERE user_id = $1`, [id]
-      ).catch(() => { }); // ignorar si la tabla no tiene esa columna
+    if (!resultado.ok) {
+      const status = resultado.error === 'Usuario no encontrado' ? 404 : 500;
+      return res.status(status).json({ error: resultado.error });
     }
 
-    // Networking: usa solicitante_id
-    await client.query(
-      `DELETE FROM networking WHERE solicitante_id = $1`, [id]
-    ).catch(() => { });
-
-    // Eliminar el usuario
-    await client.query('DELETE FROM users WHERE id = $1', [id]);
-    await client.query('COMMIT');
-
-    console.log(`[Users] 💀 Usuario eliminado permanentemente: ${check.rows[0].email}`);
-    res.json({ ok: true, message: `${check.rows[0].nombre} eliminado permanentemente` });
+    console.log(`[Users] Usuario eliminado permanentemente: ${resultado.email}`);
+    res.json({ ok: true, message: `${resultado.nombre} eliminado permanentemente` });
   } catch (err) {
-    await client.query('ROLLBACK');
     console.error('[Users] Error hard delete:', err.message);
     res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
   }
 });
 
