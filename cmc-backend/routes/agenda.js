@@ -64,14 +64,23 @@ function normalizarSede(sede) {
   return map[sede.toLowerCase()] || sede.toLowerCase();
 }
 
-/** Extrae sede, tipo, edición y categoría desde el class_list de WordPress */
+/** Extrae sede(s), tipo, edición y categoría desde el class_list de WordPress
+ *
+ * FIX: una sesión puede estar etiquetada con varias sedes a la vez
+ * (ej. un curso que se imparte en México Y Chile). La versión anterior
+ * sobrescribía `sede` en cada vuelta del forEach y se quedaba solo con
+ * la última encontrada, perdiendo las demás silenciosamente — por eso
+ * sesiones multi-sede solo aparecían en una de las sedes.
+ * Ahora se acumulan todas en `sedes` (array); `sede` se conserva como
+ * la primera encontrada, por compatibilidad con código existente que
+ * espera un valor único. */
 function parseSessionClassList(classList = []) {
-  let sede = null, tipo = null, edicion = null, categoria = 'sesion';
+  let sedes = [], tipo = null, edicion = null, categoria = 'sesion';
 
   classList.forEach((cls) => {
-    if (cls === 'events_category-chile') sede = 'chile';
-    if (cls === 'events_category-mexico') sede = 'mexico';
-    if (cls === 'events_category-colombia') sede = 'colombia';
+    if (cls === 'events_category-chile' && !sedes.includes('chile')) sedes.push('chile');
+    if (cls === 'events_category-mexico' && !sedes.includes('mexico')) sedes.push('mexico');
+    if (cls === 'events_category-colombia' && !sedes.includes('colombia')) sedes.push('colombia');
 
     if (cls.startsWith('events_category-') && /\d{4}/.test(cls)) {
       const tipoMatch = cls.match(/events_category-(brujula|toolbox|spark|orion|tracker|cursos)-/i);
@@ -81,15 +90,24 @@ function parseSessionClassList(classList = []) {
       }
       const paisMatch = cls.match(/-(cl|mx|co)-/i);
       if (paisMatch) {
-        const p = paisMatch[1].toLowerCase();
-        sede = normalizarSede(p);
+        const p = normalizarSede(paisMatch[1].toLowerCase());
+        if (!sedes.includes(p)) sedes.push(p);
       }
       const yearMatch = cls.match(/(\d{4})/);
       if (yearMatch) edicion = parseInt(yearMatch[1]);
     }
   });
 
-  return { sede, tipo, edicion, categoria };
+  return { sede: sedes[0] || null, sedes, tipo, edicion, categoria };
+}
+
+/** ¿La sesión pertenece a la sede buscada? Compatible con sesiones
+ *  de una sola sede (campo `sede`) y multi-sede (campo `sedes`). */
+function coincideSede(s, sedeBuscada) {
+  if (!sedeBuscada) return true;
+  const objetivo = sedeBuscada.toLowerCase();
+  if (Array.isArray(s.sedes) && s.sedes.length > 0) return s.sedes.includes(objetivo);
+  return s.sede === objetivo;
 }
 
 // ============================================================
@@ -193,7 +211,7 @@ async function cargarSesionesLocales(sede, edicion) {
   let sessions = [...Object.values(overridesMap), ...localSessions];
 
   if (sede) {
-    sessions = sessions.filter((s) => s.sede === sede.toLowerCase());
+    sessions = sessions.filter((s) => coincideSede(s, sede));
   }
   if (edicion) {
     sessions = sessions.filter((s) => s.edicion === parseInt(edicion));
@@ -255,6 +273,7 @@ router.get('/sessions', authRequired, async (req, res) => {
         tipo: parsed.tipo || 'general',
         categoria: parsed.categoria,
         sede: parsed.sede,
+        sedes: parsed.sedes,
         edicion: parsed.edicion,
         speakerNombre: post.acf?.speaker || '',
         speakerId: post.acf?.speaker_id || null,
@@ -264,7 +283,7 @@ router.get('/sessions', authRequired, async (req, res) => {
       };
     });
 
-    if (sede) wpSessions = wpSessions.filter((s) => s.sede === sede.toLowerCase());
+    if (sede) wpSessions = wpSessions.filter((s) => coincideSede(s, sede));
     if (edicion) wpSessions = wpSessions.filter((s) => s.edicion === parseInt(edicion));
 
   } catch (err) {
@@ -469,6 +488,29 @@ router.put('/sessions/:id', authRequired, async (req, res) => {
 // DELETE /sessions/:id — Eliminar sesión
 // ============================================================
 
+// ============================================================
+// GET /favorites — Lista de session_id favoritos del usuario
+//
+// FIX: Agenda.jsx intentaba leer los favoritos desde GET /users/:id
+// (res.data.favoritos), pero esa tabla/columna nunca existió ahí —
+// los favoritos viven en su propia tabla `favoritos` (user_id,
+// session_id). Por eso siempre caía al fallback de localStorage,
+// que no persiste entre dispositivos. Este endpoint lee la fuente
+// real para que el fallback deje de ser necesario.
+// ============================================================
+router.get('/favorites', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT session_id FROM favoritos WHERE user_id = $1`,
+      [req.user.id]
+    );
+    res.json({ ok: true, favoritos: result.rows.map(r => r.session_id) });
+  } catch (err) {
+    console.error('❌ Error obteniendo favoritos:', err);
+    res.status(500).json({ error: 'Error al obtener favoritos' });
+  }
+});
+
 router.post('/favorite/:id', authRequired, async (req, res) => {
   try {
     await pool.query(
@@ -572,7 +614,7 @@ router.post('/sessions/sync-wp', authRequired, async (req, res) => {
       // Si forzar_limpiar=true, actualizar TODOS los overrides desde WP (útil para resync completo)
       if (forzar_limpiar && sede) {
         const parsed = parseSessionClassList(post.class_list || []);
-        if (parsed.sede === sede || !sede) {
+        if (parsed.sedes.includes(sede.toLowerCase()) || !sede) {
           await pool.query(`UPDATE agenda SET wp_synced_at = NOW() WHERE wp_id = $1`, [post.id]);
           limpias++;
         }
